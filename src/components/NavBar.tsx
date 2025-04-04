@@ -12,6 +12,7 @@ const NavBar = () => {
   const links = [
     { text: 'Inicio', href: '/' },
     { text: 'Árbol Genealógico', href: '/arbol-genealogico' },
+    { text: 'Árbol Clásico', href: '/arbol-genealogico-clasico' },
     { text: 'Líneas Familiares', href: '/lineas-familiares' },
     { text: 'Determinación de Herederos', href: '/determinacion-herederos' },
   ];
