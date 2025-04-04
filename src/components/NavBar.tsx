@@ -27,7 +27,7 @@ const NavBar = () => {
     <nav className="bg-white shadow-md sticky top-0 z-50">
       <div className="container mx-auto px-4 py-2 flex items-center justify-between">
         <Link to="/" className="flex items-center">
-          <span className="text-xl font-serif font-bold text-legal-blue">HerenciaFD</span>
+          <span className="text-xl font-serif font-bold text-legal-blue">HerenciaRD</span>
           <span className="ml-1 text-sm text-legal-gold">2025</span>
         </Link>
         
