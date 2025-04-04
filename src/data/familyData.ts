@@ -30,8 +30,8 @@ export const familyData: Person = {
     {
       id: "vincenzo",
       name: "Vincenzo Sangiovanni",
-      birth: "18/08/1880",
-      death: "07/03/1958",
+      birth: "13/08/1880",
+      death: "07/02/1958",
       spouse: "María Balbina Pérez Álvarez",
       parentId: "domenico",
       children: [
@@ -81,7 +81,7 @@ export const familyData: Person = {
           id: "domingo-ramon",
           name: "Domingo Ramón Sangiovanni Pérez",
           birth: "11/07/1907",
-          death: "03/08/1981",
+          death: "03/09/1981",
           spouse: "María Francisca Gesualdo",
           parentId: "vincenzo",
           children: [
