@@ -1,13 +1,71 @@
 
-import React from 'react';
+import React, { useRef } from 'react';
 import { Link } from 'react-router-dom';
 import DocumentHeader from '@/components/DocumentHeader';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, FileText, Users } from 'lucide-react';
+import { useToast } from "@/components/ui/use-toast";
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 const DeterminacionHerederos = () => {
+  const contentRef = useRef<HTMLDivElement>(null);
+  const { toast } = useToast();
+
+  const generatePDF = async () => {
+    if (!contentRef.current) return;
+
+    toast({
+      title: "Generando PDF",
+      description: "Por favor espere mientras se genera el documento...",
+    });
+
+    try {
+      const content = contentRef.current;
+      const canvas = await html2canvas(content, {
+        scale: 2,
+        logging: false,
+        useCORS: true,
+        allowTaint: true,
+      });
+      const imgData = canvas.toDataURL('image/png');
+      
+      // Configurar el documento PDF
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+      
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
+      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+      const imgX = (pdfWidth - imgWidth * ratio) / 2;
+      
+      pdf.addImage(imgData, 'PNG', imgX, 0, imgWidth * ratio, imgHeight * ratio);
+
+      // Guardar PDF
+      pdf.save('determinacion_herederos.pdf');
+
+      toast({
+        title: "PDF generado con éxito",
+        description: "El documento ha sido descargado",
+        variant: "default",
+      });
+    } catch (error) {
+      console.error('Error al generar el PDF:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo generar el PDF. Por favor intente nuevamente.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="container mx-auto px-4 py-8">
       <DocumentHeader 
@@ -17,7 +75,7 @@ const DeterminacionHerederos = () => {
       
       <div className="max-w-4xl mx-auto">
         <Card className="mb-8">
-          <CardContent className="p-6">
+          <CardContent className="p-6" ref={contentRef}>
             <div className="mb-6">
               <h2 className="text-2xl font-serif font-bold text-legal-blue mb-4">
                 Análisis del Caso
@@ -128,7 +186,10 @@ const DeterminacionHerederos = () => {
           </Link>
           
           <div className="flex flex-col md:flex-row gap-2">
-            <Button className="bg-legal-gold hover:bg-legal-gold/90 text-white">
+            <Button 
+              className="bg-legal-gold hover:bg-legal-gold/90 text-white"
+              onClick={generatePDF}
+            >
               <FileText className="mr-2 h-4 w-4" />
               Generar Documento PDF
             </Button>
