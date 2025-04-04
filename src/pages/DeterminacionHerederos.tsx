@@ -9,13 +9,16 @@ import { ArrowLeft, FileText, Users } from 'lucide-react';
 import { useToast } from "@/components/ui/use-toast";
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import ClassicFamilyTree from '@/components/ClassicFamilyTree';
+import { familyData } from '@/data/familyData';
 
 const DeterminacionHerederos = () => {
   const contentRef = useRef<HTMLDivElement>(null);
+  const treeRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
   const generatePDF = async () => {
-    if (!contentRef.current) return;
+    if (!contentRef.current || !treeRef.current) return;
 
     toast({
       title: "Generando PDF",
@@ -23,37 +26,79 @@ const DeterminacionHerederos = () => {
     });
 
     try {
+      // Configurar el documento PDF en formato carta (8.5 x 11 pulgadas)
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'in',
+        format: [8.5, 11]
+      });
+      
+      // Capturar la parte de determinación de herederos
       const content = contentRef.current;
-      const canvas = await html2canvas(content, {
+      const contentCanvas = await html2canvas(content, {
         scale: 2,
         logging: false,
         useCORS: true,
         allowTaint: true,
       });
-      const imgData = canvas.toDataURL('image/png');
+      const contentImgData = contentCanvas.toDataURL('image/png');
       
-      // Configurar el documento PDF
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4',
-      });
-      
+      // Calcular dimensiones para la parte de contenido
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
-      const imgWidth = canvas.width;
-      const imgHeight = canvas.height;
-      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
-      const imgX = (pdfWidth - imgWidth * ratio) / 2;
+      const contentWidth = contentCanvas.width;
+      const contentHeight = contentCanvas.height;
+      const contentRatio = Math.min(pdfWidth / contentWidth, (pdfHeight * 0.9) / contentHeight);
+      const contentImgWidth = contentWidth * contentRatio;
+      const contentImgHeight = contentHeight * contentRatio;
+      const contentX = (pdfWidth - contentImgWidth) / 2;
       
-      pdf.addImage(imgData, 'PNG', imgX, 0, imgWidth * ratio, imgHeight * ratio);
+      // Añadir la página de determinación de herederos
+      pdf.addImage(contentImgData, 'PNG', contentX, 0.5, contentImgWidth, contentImgHeight);
+      
+      // Preparar el árbol genealógico (puede requerir orientación horizontal)
+      const tree = treeRef.current;
+      const treeCanvas = await html2canvas(tree, {
+        scale: 1.5,
+        logging: false,
+        useCORS: true,
+        allowTaint: true,
+        width: tree.scrollWidth, // Capturar todo el ancho del árbol
+        height: tree.scrollHeight, // Capturar todo el alto del árbol
+      });
+      const treeImgData = treeCanvas.toDataURL('image/png');
+      
+      // Añadir una nueva página en orientación paisaje para el árbol
+      pdf.addPage([11, 8.5]); // Formato carta en orientación paisaje (11 x 8.5)
+      
+      // Añadir título para la página del árbol
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(16);
+      pdf.text("Árbol Genealógico Clásico", pdfWidth / 2, 0.5, { align: "center" });
+      
+      // Calcular dimensiones para el árbol (en orientación paisaje)
+      const landscapePdfWidth = 11;
+      const landscapePdfHeight = 8.5;
+      const treeWidth = treeCanvas.width;
+      const treeHeight = treeCanvas.height;
+      const treeRatio = Math.min(
+        (landscapePdfWidth - 1) / treeWidth, 
+        (landscapePdfHeight - 1.5) / treeHeight
+      );
+      const treeImgWidth = treeWidth * treeRatio;
+      const treeImgHeight = treeHeight * treeRatio;
+      const treeX = (landscapePdfWidth - treeImgWidth) / 2;
+      const treeY = 1; // Dejar espacio para el título
+      
+      // Añadir el árbol genealógico a la página en orientación paisaje
+      pdf.addImage(treeImgData, 'PNG', treeX, treeY, treeImgWidth, treeImgHeight);
 
       // Guardar PDF
-      pdf.save('determinacion_herederos.pdf');
+      pdf.save('determinacion_herederos_completa.pdf');
 
       toast({
         title: "PDF generado con éxito",
-        description: "El documento ha sido descargado",
+        description: "El documento completo ha sido descargado",
         variant: "default",
       });
     } catch (error) {
@@ -177,6 +222,18 @@ const DeterminacionHerederos = () => {
           </CardContent>
         </Card>
         
+        {/* Árbol genealógico (hidden para PDF) */}
+        <div className="hidden">
+          <div ref={treeRef} className="p-8 bg-white">
+            <h2 className="text-2xl font-serif font-bold text-legal-blue mb-4 text-center">
+              Árbol Genealógico Clásico - Familia Sangiovanni
+            </h2>
+            <div className="classic-family-tree p-8 overflow-visible">
+              <ClassicFamilyTree rootPerson={familyData} />
+            </div>
+          </div>
+        </div>
+        
         <div className="flex flex-col md:flex-row justify-between gap-4">
           <Link to="/lineas-familiares">
             <Button variant="outline" className="w-full md:w-auto">
@@ -194,10 +251,12 @@ const DeterminacionHerederos = () => {
               Generar Documento PDF
             </Button>
             
-            <Button className="bg-legal-blue hover:bg-legal-blue/90 text-white">
-              <Users className="mr-2 h-4 w-4" />
-              Ver Árbol Completo
-            </Button>
+            <Link to="/arbol-genealogico-clasico">
+              <Button className="bg-legal-blue hover:bg-legal-blue/90 text-white w-full">
+                <Users className="mr-2 h-4 w-4" />
+                Ver Árbol Completo
+              </Button>
+            </Link>
           </div>
         </div>
       </div>
