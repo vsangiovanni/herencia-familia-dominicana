@@ -35,7 +35,7 @@ const DeterminacionHerederos = () => {
       // Capturar la parte de determinación de herederos con mejor calidad
       const content = contentRef.current;
       const contentCanvas = await html2canvas(content, {
-        scale: 2, // Mayor calidad
+        scale: 2, 
         useCORS: true,
         allowTaint: true,
         backgroundColor: 'white',
@@ -48,55 +48,75 @@ const DeterminacionHerederos = () => {
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const contentWidth = contentCanvas.width;
       const contentHeight = contentCanvas.height;
-      const contentRatio = Math.min(pdfWidth / contentWidth, 8 / contentHeight); // Dejar margen para página carta
-      const contentImgWidth = contentWidth * contentRatio;
-      const contentImgHeight = contentHeight * contentRatio;
-      const contentX = (pdfWidth - contentImgWidth) / 2;
+      const contentRatio = Math.min(pdfWidth / contentWidth, 8 / contentHeight);
       
-      // Añadir la página de determinación de herederos
+      // Asegurarnos de que las dimensiones sean valores positivos válidos
+      const contentImgWidth = Math.max(contentWidth * contentRatio, 0.1); // Mínimo 0.1 pulgada
+      const contentImgHeight = Math.max(contentHeight * contentRatio, 0.1); // Mínimo 0.1 pulgada
+      const contentX = Math.max((pdfWidth - contentImgWidth) / 2, 0); // No debe ser negativo
+      
+      // Añadir la primera página (contenido) con coordenadas seguras
       pdf.addImage(contentImgData, 'PNG', contentX, 0.5, contentImgWidth, contentImgHeight);
-      
-      // Preparar el árbol genealógico en una página apaisada (landscape)
-      const tree = treeRef.current;
-      
-      // Capturar el árbol completo con mejor calidad
-      const treeCanvas = await html2canvas(tree, {
-        scale: 1.5,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: 'white',
-        logging: false,
-        width: tree.scrollWidth,
-        height: tree.scrollHeight,
-      });
-      
-      const treeImgData = treeCanvas.toDataURL('image/png');
       
       // Añadir una nueva página en orientación paisaje para el árbol
       pdf.addPage([11, 8.5]); // Formato carta en orientación paisaje
       
-      // Añadir título para la página del árbol
+      // Añadir título para la página del árbol con coordenadas seguras
+      const landscapePdfWidth = pdf.internal.pageSize.getWidth();
       pdf.setFont("helvetica", "bold");
       pdf.setFontSize(16);
-      pdf.text("Árbol Genealógico Familiar", pdf.internal.pageSize.getWidth() / 2, 0.5, { align: "center" });
+      pdf.text("Árbol Genealógico Familiar", landscapePdfWidth / 2, 0.5, { align: "center" });
       
-      // Calcular dimensiones para el árbol (en orientación paisaje)
-      const landscapePdfWidth = 11;
-      const landscapePdfHeight = 8.5;
-      const treeWidth = treeCanvas.width;
-      const treeHeight = treeCanvas.height;
-      const treeRatio = Math.min(
-        (landscapePdfWidth - 1) / treeWidth, 
-        (landscapePdfHeight - 1.5) / treeHeight
-      );
-      
-      const treeImgWidth = treeWidth * treeRatio;
-      const treeImgHeight = treeHeight * treeRatio;
-      const treeX = (landscapePdfWidth - treeImgWidth) / 2;
-      const treeY = 1; // Dejar espacio para el título
-      
-      // Añadir el árbol genealógico a la página en orientación paisaje
-      pdf.addImage(treeImgData, 'PNG', treeX, treeY, treeImgWidth, treeImgHeight);
+      try {
+        // Capturar el árbol con un tamaño fijo para evitar problemas
+        const tree = treeRef.current;
+        
+        const treeCanvas = await html2canvas(tree, {
+          scale: 1,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: 'white',
+          logging: true,
+        });
+        
+        const treeImgData = treeCanvas.toDataURL('image/png');
+        
+        // Configurar dimensiones seguras para el árbol
+        const landscapePdfHeight = pdf.internal.pageSize.getHeight();
+        const availableWidth = landscapePdfWidth - 1; // 0.5 pulgada de margen a cada lado
+        const availableHeight = landscapePdfHeight - 1.5; // 0.5 margen arriba + 1 abajo
+        
+        // Asegurarnos de tener dimensiones razonables y seguras
+        const treeWidth = treeCanvas.width || 1000; // Valor predeterminado si no hay ancho
+        const treeHeight = treeCanvas.height || 800; // Valor predeterminado si no hay altura
+        
+        // Calcular ratio para ajustar el árbol al espacio disponible
+        const treeRatio = Math.min(
+          availableWidth / treeWidth,
+          availableHeight / treeHeight
+        );
+        
+        // Asegurarnos de que las dimensiones sean positivas
+        const treeImgWidth = Math.max(treeWidth * treeRatio, 0.1);
+        const treeImgHeight = Math.max(treeHeight * treeRatio, 0.1);
+        
+        // Calcular posición centrada y asegurarnos de que esté dentro de los límites
+        const treeX = Math.max((landscapePdfWidth - treeImgWidth) / 2, 0);
+        const treeY = Math.max(1, 0); // Al menos 1 pulgada desde el tope para dejar espacio para el título
+        
+        // Añadir la imagen con coordenadas seguras
+        pdf.addImage(treeImgData, 'PNG', treeX, treeY, treeImgWidth, treeImgHeight);
+      } catch (treeError) {
+        console.error('Error al procesar el árbol:', treeError);
+        
+        // Si falla la captura del árbol, agregar un texto de error
+        pdf.setFontSize(14);
+        pdf.setTextColor(255, 0, 0);
+        pdf.text("No se pudo generar la visualización del árbol genealógico.", 0.5, 3);
+        pdf.setFontSize(12);
+        pdf.setTextColor(0, 0, 0);
+        pdf.text("Por favor, visite la sección 'Ver Árbol Completo' para visualizarlo.", 0.5, 3.5);
+      }
 
       // Guardar PDF
       pdf.save('determinacion_herederos_completa.pdf');
