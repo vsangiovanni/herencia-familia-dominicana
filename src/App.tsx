@@ -19,15 +19,15 @@ import UserProfile from "./pages/UserProfile";
 const queryClient = new QueryClient();
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AuthProvider>
+  <BrowserRouter>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <TooltipProvider>
           <div className="flex flex-col min-h-screen">
             <NavBar />
             <main className="flex-grow">
+              <Toaster />
+              <Sonner />
               <Routes>
                 <Route path="/" element={<Index />} />
                 <Route path="/auth" element={<Auth />} />
@@ -41,10 +41,10 @@ const App = () => (
             </main>
             <Footer />
           </div>
-        </AuthProvider>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
+        </TooltipProvider>
+      </AuthProvider>
+    </QueryClientProvider>
+  </BrowserRouter>
 );
 
 export default App;
