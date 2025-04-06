@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogIn, LogOut, User, ChevronDown } from "lucide-react";
+import { LogIn, LogOut, User, ChevronDown, Settings } from "lucide-react";
 
 const UserMenu = () => {
   const { user, signOut } = useAuth();
@@ -39,6 +39,12 @@ const UserMenu = () => {
       <DropdownMenuContent align="end">
         <DropdownMenuLabel>Mi cuenta</DropdownMenuLabel>
         <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link to="/perfil" className="flex items-center cursor-pointer">
+            <Settings className="mr-2 h-4 w-4" />
+            <span>Ver perfil</span>
+          </Link>
+        </DropdownMenuItem>
         <DropdownMenuItem className="text-destructive" onClick={() => signOut()}>
           <LogOut className="mr-2 h-4 w-4" />
           <span>Cerrar sesión</span>

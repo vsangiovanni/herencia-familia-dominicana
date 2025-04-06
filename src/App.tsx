@@ -14,6 +14,7 @@ import DeterminacionHerederos from "./pages/DeterminacionHerederos";
 import NotFound from "./pages/NotFound";
 import NavBar from "./components/NavBar";
 import Footer from "./components/Footer";
+import UserProfile from "./pages/UserProfile";
 
 const queryClient = new QueryClient();
 
@@ -34,6 +35,7 @@ const App = () => (
                 <Route path="/arbol-genealogico-clasico" element={<ArbolGenealogicoClasico />} />
                 <Route path="/lineas-familiares" element={<LineasFamiliares />} />
                 <Route path="/determinacion-herederos" element={<DeterminacionHerederos />} />
+                <Route path="/perfil" element={<UserProfile />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </main>
