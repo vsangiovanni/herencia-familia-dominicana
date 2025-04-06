@@ -1,4 +1,3 @@
-
 import React, { useRef } from 'react';
 import { Link } from 'react-router-dom';
 import DocumentHeader from '@/components/DocumentHeader';
@@ -33,22 +32,23 @@ const DeterminacionHerederos = () => {
         format: [8.5, 11]
       });
       
-      // Capturar la parte de determinación de herederos
+      // Capturar la parte de determinación de herederos con mejor calidad
       const content = contentRef.current;
       const contentCanvas = await html2canvas(content, {
-        scale: 2,
-        logging: false,
+        scale: 2, // Mayor calidad
         useCORS: true,
         allowTaint: true,
+        backgroundColor: 'white',
+        logging: false,
       });
+      
       const contentImgData = contentCanvas.toDataURL('image/png');
       
       // Calcular dimensiones para la parte de contenido
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
       const contentWidth = contentCanvas.width;
       const contentHeight = contentCanvas.height;
-      const contentRatio = Math.min(pdfWidth / contentWidth, (pdfHeight * 0.9) / contentHeight);
+      const contentRatio = Math.min(pdfWidth / contentWidth, 8 / contentHeight); // Dejar margen para página carta
       const contentImgWidth = contentWidth * contentRatio;
       const contentImgHeight = contentHeight * contentRatio;
       const contentX = (pdfWidth - contentImgWidth) / 2;
@@ -56,25 +56,29 @@ const DeterminacionHerederos = () => {
       // Añadir la página de determinación de herederos
       pdf.addImage(contentImgData, 'PNG', contentX, 0.5, contentImgWidth, contentImgHeight);
       
-      // Preparar el árbol genealógico (puede requerir orientación horizontal)
+      // Preparar el árbol genealógico en una página apaisada (landscape)
       const tree = treeRef.current;
+      
+      // Capturar el árbol completo con mejor calidad
       const treeCanvas = await html2canvas(tree, {
         scale: 1.5,
-        logging: false,
         useCORS: true,
         allowTaint: true,
-        width: tree.scrollWidth, // Capturar todo el ancho del árbol
-        height: tree.scrollHeight, // Capturar todo el alto del árbol
+        backgroundColor: 'white',
+        logging: false,
+        width: tree.scrollWidth,
+        height: tree.scrollHeight,
       });
+      
       const treeImgData = treeCanvas.toDataURL('image/png');
       
       // Añadir una nueva página en orientación paisaje para el árbol
-      pdf.addPage([11, 8.5]); // Formato carta en orientación paisaje (11 x 8.5)
+      pdf.addPage([11, 8.5]); // Formato carta en orientación paisaje
       
       // Añadir título para la página del árbol
       pdf.setFont("helvetica", "bold");
       pdf.setFontSize(16);
-      pdf.text("Árbol Genealógico Clásico", pdfWidth / 2, 0.5, { align: "center" });
+      pdf.text("Árbol Genealógico Familiar", pdf.internal.pageSize.getWidth() / 2, 0.5, { align: "center" });
       
       // Calcular dimensiones para el árbol (en orientación paisaje)
       const landscapePdfWidth = 11;
@@ -85,6 +89,7 @@ const DeterminacionHerederos = () => {
         (landscapePdfWidth - 1) / treeWidth, 
         (landscapePdfHeight - 1.5) / treeHeight
       );
+      
       const treeImgWidth = treeWidth * treeRatio;
       const treeImgHeight = treeHeight * treeRatio;
       const treeX = (landscapePdfWidth - treeImgWidth) / 2;
@@ -104,8 +109,8 @@ const DeterminacionHerederos = () => {
     } catch (error) {
       console.error('Error al generar el PDF:', error);
       toast({
-        title: "Error",
-        description: "No se pudo generar el PDF. Por favor intente nuevamente.",
+        title: "Error al generar PDF",
+        description: "Hubo un problema al crear el documento. Por favor intente nuevamente.",
         variant: "destructive",
       });
     }
@@ -222,13 +227,13 @@ const DeterminacionHerederos = () => {
           </CardContent>
         </Card>
         
-        {/* Árbol genealógico (hidden para PDF) */}
+        {/* Árbol genealógico para el PDF */}
         <div className="hidden">
           <div ref={treeRef} className="p-8 bg-white">
             <h2 className="text-2xl font-serif font-bold text-legal-blue mb-4 text-center">
               Árbol Genealógico Clásico - Familia Sangiovanni
             </h2>
-            <div className="classic-family-tree p-8 overflow-visible">
+            <div className="classic-family-tree-container overflow-visible" style={{ width: '1200px', height: '800px' }}>
               <ClassicFamilyTree rootPerson={familyData} />
             </div>
           </div>
