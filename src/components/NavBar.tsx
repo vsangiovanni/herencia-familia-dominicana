@@ -4,6 +4,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import UserMenu from "@/components/UserMenu";
 
 const NavBar = () => {
   const location = useLocation();
@@ -47,10 +48,16 @@ const NavBar = () => {
               {link.text}
             </Link>
           ))}
+          
+          {/* User Menu added here */}
+          <div className="ml-2">
+            <UserMenu />
+          </div>
         </div>
         
         {/* Mobile Menu Button */}
-        <div className="md:hidden">
+        <div className="md:hidden flex items-center gap-2">
+          <UserMenu />
           <Button
             variant="ghost"
             size="icon"
