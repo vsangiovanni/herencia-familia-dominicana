@@ -1,14 +1,35 @@
 
-import React from "react";
-import { Navigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import DocumentHeader from "@/components/DocumentHeader";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { useForm } from "react-hook-form";
+import { toast } from "@/components/ui/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+
+interface ProfileFormValues {
+  full_name: string;
+  phone: string;
+}
 
 const UserProfile = () => {
-  const { user } = useAuth();
+  const { user, refreshUserProfile } = useAuth();
+  const [isEditing, setIsEditing] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+
+  const { register, handleSubmit, setValue, formState: { errors } } = useForm<ProfileFormValues>({
+    defaultValues: {
+      full_name: "",
+      phone: ""
+    }
+  });
 
   // Redirect to login if not authenticated
   if (!user) {
@@ -18,6 +39,74 @@ const UserProfile = () => {
   // Get first letter of email for avatar fallback
   const userInitial = user.email?.[0]?.toUpperCase() || "U";
   const username = user.email?.split("@")[0] || "Usuario";
+
+  // Load user data
+  useEffect(() => {
+    const loadUserProfile = async () => {
+      try {
+        if (!user?.id) return;
+        
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('full_name, phone')
+          .eq('id', user.id)
+          .single();
+
+        if (error) {
+          console.error("Error al cargar el perfil:", error);
+          return;
+        }
+
+        if (data) {
+          // Actualizar los campos del formulario con los datos existentes
+          setValue('full_name', data.full_name || '');
+          setValue('phone', data.phone || '');
+        }
+      } catch (error) {
+        console.error("Error al obtener datos del perfil:", error);
+      }
+    };
+
+    loadUserProfile();
+  }, [user?.id, setValue]);
+
+  const onSubmit = async (data: ProfileFormValues) => {
+    if (!user?.id) return;
+    
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          full_name: data.full_name,
+          phone: data.phone,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id);
+
+      if (error) throw error;
+      
+      toast({
+        title: "Perfil actualizado",
+        description: "Sus datos han sido actualizados correctamente.",
+      });
+      
+      // Refresh user data in context
+      if (refreshUserProfile) {
+        await refreshUserProfile();
+      }
+      
+      setIsEditing(false);
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error al actualizar",
+        description: error.message || "No se pudieron guardar los cambios.",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -44,28 +133,72 @@ const UserProfile = () => {
                   <p className="text-sm text-muted-foreground">{user.email}</p>
                 </div>
                 
-                <div>
-                  <h4 className="text-sm font-medium mb-2">Detalles de la cuenta</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-y-2">
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground">ID de usuario</p>
-                      <p className="text-sm">{user.id}</p>
+                {isEditing ? (
+                  <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="full_name">Nombre completo</Label>
+                      <Input
+                        id="full_name"
+                        {...register('full_name')}
+                        placeholder="Ingrese su nombre completo"
+                      />
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground">Estado</p>
-                      <Badge variant="outline" className="bg-green-50 text-green-700 hover:bg-green-50">
-                        Activo
-                      </Badge>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="phone">Teléfono</Label>
+                      <Input
+                        id="phone"
+                        {...register('phone')}
+                        placeholder="Ingrese su número de teléfono"
+                      />
                     </div>
-                  </div>
-                </div>
-                
-                <div className="pt-2">
-                  <p className="text-sm text-muted-foreground">
-                    Esta es la información básica de su cuenta. Próximamente habilitaremos más opciones
-                    de personalización de perfil.
-                  </p>
-                </div>
+                    
+                    <div className="flex space-x-2">
+                      <Button type="submit" disabled={loading}>
+                        {loading ? "Guardando..." : "Guardar cambios"}
+                      </Button>
+                      <Button variant="outline" type="button" onClick={() => setIsEditing(false)}>
+                        Cancelar
+                      </Button>
+                    </div>
+                  </form>
+                ) : (
+                  <>
+                    <div>
+                      <h4 className="text-sm font-medium mb-2">Detalles de la cuenta</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-y-2">
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">ID de usuario</p>
+                          <p className="text-sm">{user.id}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">Estado</p>
+                          <Badge variant="outline" className="bg-green-50 text-green-700 hover:bg-green-50">
+                            Activo
+                          </Badge>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">Nombre</p>
+                          <p className="text-sm" id="profile-name">
+                            {/* Mostrar "No especificado" si no hay nombre */}
+                            <span id="profile-name-value"></span>
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">Teléfono</p>
+                          <p className="text-sm" id="profile-phone">
+                            {/* Mostrar "No especificado" si no hay teléfono */}
+                            <span id="profile-phone-value"></span>
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <Button onClick={() => setIsEditing(true)} className="mt-4">
+                      Editar perfil
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
           </CardContent>
