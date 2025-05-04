@@ -19,7 +19,7 @@ interface ProfileFormValues {
 }
 
 const UserProfile = () => {
-  const { user, refreshUserProfile } = useAuth();
+  const { user, userProfile, refreshUserProfile } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -42,33 +42,11 @@ const UserProfile = () => {
 
   // Load user data
   useEffect(() => {
-    const loadUserProfile = async () => {
-      try {
-        if (!user?.id) return;
-        
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('full_name, phone')
-          .eq('id', user.id)
-          .single();
-
-        if (error) {
-          console.error("Error al cargar el perfil:", error);
-          return;
-        }
-
-        if (data) {
-          // Actualizar los campos del formulario con los datos existentes
-          setValue('full_name', data.full_name || '');
-          setValue('phone', data.phone || '');
-        }
-      } catch (error) {
-        console.error("Error al obtener datos del perfil:", error);
-      }
-    };
-
-    loadUserProfile();
-  }, [user?.id, setValue]);
+    if (userProfile) {
+      setValue('full_name', userProfile.full_name || '');
+      setValue('phone', userProfile.phone || '');
+    }
+  }, [userProfile, setValue]);
 
   const onSubmit = async (data: ProfileFormValues) => {
     if (!user?.id) return;
@@ -179,16 +157,14 @@ const UserProfile = () => {
                         </div>
                         <div>
                           <p className="text-sm font-medium text-muted-foreground">Nombre</p>
-                          <p className="text-sm" id="profile-name">
-                            {/* Mostrar "No especificado" si no hay nombre */}
-                            <span id="profile-name-value"></span>
+                          <p className="text-sm">
+                            {userProfile?.full_name || "No especificado"}
                           </p>
                         </div>
                         <div>
                           <p className="text-sm font-medium text-muted-foreground">Teléfono</p>
-                          <p className="text-sm" id="profile-phone">
-                            {/* Mostrar "No especificado" si no hay teléfono */}
-                            <span id="profile-phone-value"></span>
+                          <p className="text-sm">
+                            {userProfile?.phone || "No especificado"}
                           </p>
                         </div>
                       </div>
