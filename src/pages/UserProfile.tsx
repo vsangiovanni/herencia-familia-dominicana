@@ -1,325 +1,364 @@
 
-import React, { useState, useEffect } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
-import { useAuth } from "@/context/AuthContext";
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import DocumentHeader from "@/components/DocumentHeader";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { useForm } from "react-hook-form";
-import { toast } from "@/components/ui/use-toast";
-import { supabase } from "@/integrations/supabase/client";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import React, { useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import DocumentHeader from '@/components/DocumentHeader';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { toast } from '@/components/ui/use-toast';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogFooter, DialogTitle } from '@/components/ui/dialog';
+import { AlertCircle } from 'lucide-react';
 
-interface ProfileFormValues {
-  full_name: string;
-  phone: string;
-}
+const profileSchema = z.object({
+  full_name: z.string().optional(),
+  phone: z.string().optional(),
+});
 
-interface PasswordFormValues {
-  currentPassword: string;
-  newPassword: string;
-  confirmPassword: string;
-}
+const passwordSchema = z.object({
+  password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres'),
+  confirmPassword: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres'),
+}).refine(data => data.password === data.confirmPassword, {
+  message: 'Las contraseñas no coinciden',
+  path: ['confirmPassword'],
+});
+
+type ProfileFormValues = z.infer<typeof profileSchema>;
+type PasswordFormValues = z.infer<typeof passwordSchema>;
 
 const UserProfile = () => {
   const { user, userProfile, refreshUserProfile } = useAuth();
-  const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
-  const [isPasswordLoading, setIsPasswordLoading] = useState(false);
-  const [isSuccessDialogOpen, setIsSuccessDialogOpen] = useState(false);
-  const navigate = useNavigate();
-
-  const { register, handleSubmit, setValue, formState: { errors } } = useForm<ProfileFormValues>({
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [successDialogOpen, setSuccessDialogOpen] = useState(false);
+  
+  const profileForm = useForm<ProfileFormValues>({
+    resolver: zodResolver(profileSchema),
     defaultValues: {
-      full_name: "",
-      phone: ""
-    }
+      full_name: '',
+      phone: '',
+    },
   });
 
   const passwordForm = useForm<PasswordFormValues>({
+    resolver: zodResolver(passwordSchema),
     defaultValues: {
-      currentPassword: "",
-      newPassword: "",
-      confirmPassword: ""
-    }
+      password: '',
+      confirmPassword: '',
+    },
   });
 
-  // Redirect to login if not authenticated
-  if (!user) {
-    return <Navigate to="/auth" />;
-  }
-
-  // Get first letter of email for avatar fallback
-  const userInitial = user.email?.[0]?.toUpperCase() || "U";
-  const username = user.email?.split("@")[0] || "Usuario";
-
-  // Load user data
   useEffect(() => {
     if (userProfile) {
-      setValue('full_name', userProfile.full_name || '');
-      setValue('phone', userProfile.phone || '');
+      profileForm.reset({
+        full_name: userProfile.full_name || '',
+        phone: userProfile.phone || '',
+      });
     }
-  }, [userProfile, setValue]);
+  }, [userProfile, profileForm]);
 
   const onSubmit = async (data: ProfileFormValues) => {
-    if (!user?.id) return;
+    if (!user) return;
     
-    setLoading(true);
     try {
+      setLoading(true);
       const { error } = await supabase
         .from('profiles')
         .update({
-          full_name: data.full_name,
-          phone: data.phone,
-          updated_at: new Date().toISOString()
+          full_name: data.full_name || null,
+          phone: data.phone || null,
         })
         .eq('id', user.id);
 
       if (error) throw error;
+
+      await refreshUserProfile();
       
       toast({
-        title: "Perfil actualizado",
-        description: "Sus datos han sido actualizados correctamente.",
+        title: 'Perfil actualizado',
+        description: 'Tu información ha sido actualizada exitosamente.',
       });
-      
-      // Refresh user data in context
-      if (refreshUserProfile) {
-        await refreshUserProfile();
-      }
-      
-      setIsEditing(false);
     } catch (error: any) {
       toast({
-        variant: "destructive",
-        title: "Error al actualizar",
-        description: error.message || "No se pudieron guardar los cambios.",
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'No se pudo actualizar el perfil',
       });
     } finally {
       setLoading(false);
     }
   };
 
-  const onPasswordSubmit = async (data: PasswordFormValues) => {
-    if (data.newPassword !== data.confirmPassword) {
-      passwordForm.setError('confirmPassword', {
-        type: 'manual',
-        message: 'Las contraseñas no coinciden'
-      });
-      return;
-    }
-
-    if (data.newPassword.length < 6) {
-      passwordForm.setError('newPassword', {
-        type: 'manual',
-        message: 'La contraseña debe tener al menos 6 caracteres'
-      });
-      return;
-    }
-
-    setIsPasswordLoading(true);
+  const handlePasswordChange = async (data: PasswordFormValues) => {
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: data.newPassword
+      setLoading(true);
+      const { error } = await supabase.auth.updateUser({ 
+        password: data.password 
       });
 
       if (error) throw error;
       
-      setIsPasswordDialogOpen(false);
+      // Cerrar diálogo de cambio de contraseña
+      setPasswordDialogOpen(false);
+      
+      // Abrir diálogo de éxito
+      setSuccessDialogOpen(true);
+      
+      // Reiniciar formulario
       passwordForm.reset();
-      setIsSuccessDialogOpen(true);
     } catch (error: any) {
       toast({
-        variant: "destructive",
-        title: "Error al cambiar contraseña",
-        description: error.message || "No se pudo actualizar la contraseña.",
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'No se pudo cambiar la contraseña',
       });
     } finally {
-      setIsPasswordLoading(false);
+      setLoading(false);
     }
   };
+
+  if (!user || !userProfile) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex justify-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-legal-blue"></div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Mostrar pantalla especial para usuarios pendientes de aprobación
+  if (!userProfile.is_approved) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <DocumentHeader 
+          title="Perfil de Usuario" 
+          subtitle="Cuenta pendiente de aprobación"
+        />
+        
+        <div className="max-w-2xl mx-auto">
+          <Card className="border-yellow-300 bg-yellow-50">
+            <CardContent className="p-6">
+              <div className="flex items-start space-x-4">
+                <div className="rounded-full bg-yellow-100 p-2">
+                  <AlertCircle className="h-6 w-6 text-yellow-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-medium text-yellow-800">Cuenta pendiente de aprobación</h3>
+                  <p className="mt-2 text-sm text-yellow-700">
+                    Tu cuenta está pendiente de aprobación por un administrador. Una vez aprobada, 
+                    podrás acceder a todas las funcionalidades del sistema.
+                  </p>
+                  <p className="mt-4 text-sm text-yellow-700">
+                    Mientras tanto, puedes completar tu perfil para facilitar el proceso de aprobación.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="mt-6">
+            <CardContent className="p-6">
+              <h2 className="text-xl font-serif font-bold text-legal-blue mb-4">
+                Información Personal
+              </h2>
+              
+              <Form {...profileForm}>
+                <form onSubmit={profileForm.handleSubmit(onSubmit)} className="space-y-4">
+                  <FormField
+                    control={profileForm.control}
+                    name="full_name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Nombre completo</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={profileForm.control}
+                    name="phone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Teléfono</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <div className="flex justify-between items-center pt-4">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setPasswordDialogOpen(true)}
+                    >
+                      Cambiar contraseña
+                    </Button>
+                    
+                    <Button type="submit" disabled={loading}>
+                      {loading ? 'Guardando...' : 'Guardar cambios'}
+                    </Button>
+                  </div>
+                </form>
+              </Form>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">
       <DocumentHeader 
         title="Perfil de Usuario" 
-        subtitle="Administre su información personal y preferencias" 
+        subtitle="Administra tu información personal"
       />
-
-      <div className="max-w-3xl mx-auto mt-8">
+      
+      <div className="max-w-2xl mx-auto">
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-2xl">Información de Cuenta</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col md:flex-row gap-6 items-start">
-              <Avatar className="w-24 h-24">
-                <AvatarImage src={`https://avatar.vercel.sh/${user.id}.png`} />
-                <AvatarFallback className="text-2xl">{userInitial}</AvatarFallback>
-              </Avatar>
-              
-              <div className="space-y-4 flex-1">
-                <div>
-                  <h3 className="text-lg font-medium">{username}</h3>
-                  <p className="text-sm text-muted-foreground">{user.email}</p>
+          <CardContent className="p-6">
+            <h2 className="text-xl font-serif font-bold text-legal-blue mb-4">
+              Información Personal
+            </h2>
+            
+            <Form {...profileForm}>
+              <form onSubmit={profileForm.handleSubmit(onSubmit)} className="space-y-4">
+                <div className="p-4 rounded bg-gray-50 mb-4">
+                  <p className="text-gray-600"><span className="font-medium">Correo electrónico:</span> {user.email}</p>
+                  <p className="text-gray-600 mt-1"><span className="font-medium">Rol:</span> {userProfile.role === 'admin' ? 'Administrador' : 'Usuario Regular'}</p>
                 </div>
                 
-                {isEditing ? (
-                  <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="full_name">Nombre completo</Label>
-                      <Input
-                        id="full_name"
-                        {...register('full_name')}
-                        placeholder="Ingrese su nombre completo"
-                      />
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="phone">Teléfono</Label>
-                      <Input
-                        id="phone"
-                        {...register('phone')}
-                        placeholder="Ingrese su número de teléfono"
-                      />
-                    </div>
-                    
-                    <div className="flex space-x-2">
-                      <Button type="submit" disabled={loading}>
-                        {loading ? "Guardando..." : "Guardar cambios"}
-                      </Button>
-                      <Button variant="outline" type="button" onClick={() => setIsEditing(false)}>
-                        Cancelar
-                      </Button>
-                    </div>
-                  </form>
-                ) : (
-                  <>
-                    <div>
-                      <h4 className="text-sm font-medium mb-2">Detalles de la cuenta</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-y-2">
-                        <div>
-                          <p className="text-sm font-medium text-muted-foreground">ID de usuario</p>
-                          <p className="text-sm">{user.id}</p>
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-muted-foreground">Estado</p>
-                          <Badge variant="outline" className="bg-green-50 text-green-700 hover:bg-green-50">
-                            Activo
-                          </Badge>
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-muted-foreground">Nombre</p>
-                          <p className="text-sm">
-                            {userProfile?.full_name || "No especificado"}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-muted-foreground">Teléfono</p>
-                          <p className="text-sm">
-                            {userProfile?.phone || "No especificado"}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex flex-col sm:flex-row gap-3">
-                      <Button onClick={() => setIsEditing(true)}>
-                        Editar perfil
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        onClick={() => setIsPasswordDialogOpen(true)}
-                      >
-                        Cambiar contraseña
-                      </Button>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
+                <FormField
+                  control={profileForm.control}
+                  name="full_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Nombre completo</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={profileForm.control}
+                  name="phone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Teléfono</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <div className="flex justify-between items-center pt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setPasswordDialogOpen(true)}
+                  >
+                    Cambiar contraseña
+                  </Button>
+                  
+                  <Button type="submit" disabled={loading}>
+                    {loading ? 'Guardando...' : 'Guardar cambios'}
+                  </Button>
+                </div>
+              </form>
+            </Form>
           </CardContent>
         </Card>
       </div>
-
-      {/* Password Change Dialog */}
-      <Dialog open={isPasswordDialogOpen} onOpenChange={setIsPasswordDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+      
+      {/* Diálogo de cambio de contraseña */}
+      <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Cambiar contraseña</DialogTitle>
             <DialogDescription>
-              Ingrese su nueva contraseña para actualizar sus credenciales.
+              Introduce tu nueva contraseña. Debe tener al menos 6 caracteres.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={passwordForm.handleSubmit(onPasswordSubmit)} className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="newPassword">Nueva contraseña</Label>
-              <Input
-                id="newPassword"
-                type="password"
-                {...passwordForm.register('newPassword')}
-                placeholder="Ingrese su nueva contraseña"
+          
+          <Form {...passwordForm}>
+            <form onSubmit={passwordForm.handleSubmit(handlePasswordChange)} className="space-y-4">
+              <FormField
+                control={passwordForm.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nueva contraseña</FormLabel>
+                    <FormControl>
+                      <Input type="password" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-              {passwordForm.formState.errors.newPassword && (
-                <p className="text-sm font-medium text-destructive">
-                  {passwordForm.formState.errors.newPassword.message}
-                </p>
-              )}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirmar contraseña</Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                {...passwordForm.register('confirmPassword')}
-                placeholder="Confirme su nueva contraseña"
+              
+              <FormField
+                control={passwordForm.control}
+                name="confirmPassword"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Confirmar nueva contraseña</FormLabel>
+                    <FormControl>
+                      <Input type="password" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-              {passwordForm.formState.errors.confirmPassword && (
-                <p className="text-sm font-medium text-destructive">
-                  {passwordForm.formState.errors.confirmPassword.message}
-                </p>
-              )}
-            </div>
-            <div className="flex justify-end space-x-2 pt-4">
-              <Button 
-                variant="outline" 
-                type="button"
-                onClick={() => {
-                  setIsPasswordDialogOpen(false);
-                  passwordForm.reset();
-                }}
-              >
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={isPasswordLoading}>
-                {isPasswordLoading ? "Actualizando..." : "Actualizar contraseña"}
-              </Button>
-            </div>
-          </form>
+              
+              <DialogFooter>
+                <Button variant="outline" type="button" onClick={() => setPasswordDialogOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={loading}>
+                  {loading ? 'Guardando...' : 'Cambiar contraseña'}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
-
-      {/* Success Dialog */}
-      <AlertDialog open={isSuccessDialogOpen} onOpenChange={setIsSuccessDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Contraseña actualizada</AlertDialogTitle>
-            <AlertDialogDescription>
-              Su contraseña ha sido actualizada exitosamente. Utilice su nueva contraseña la próxima vez que inicie sesión.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogAction onClick={() => setIsSuccessDialogOpen(false)}>
-              Entendido
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      
+      {/* Diálogo de éxito */}
+      <Dialog open={successDialogOpen} onOpenChange={setSuccessDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Contraseña actualizada</DialogTitle>
+            <DialogDescription>
+              Tu contraseña ha sido cambiada exitosamente.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <DialogFooter>
+            <Button onClick={() => setSuccessDialogOpen(false)}>Aceptar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

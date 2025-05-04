@@ -10,17 +10,30 @@ interface UserProfile {
   email: string;
   full_name?: string | null;
   phone?: string | null;
+  role?: "admin" | "regular";
+  is_approved?: boolean;
+}
+
+interface UserPage {
+  id: string;
+  name: string;
+  path: string;
+  description?: string | null;
 }
 
 type AuthContextType = {
   session: Session | null;
   user: User | null;
   userProfile: UserProfile | null;
+  userPages: UserPage[];
   signUp: (email: string, password: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   loading: boolean;
   refreshUserProfile: () => Promise<void>;
+  isAdmin: boolean;
+  isApproved: boolean;
+  hasAccess: (path: string) => boolean;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -29,14 +42,72 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [userPages, setUserPages] = useState<UserPage[]>([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  
+  const isAdmin = Boolean(userProfile?.role === "admin");
+  const isApproved = Boolean(userProfile?.is_approved);
+
+  const fetchUserPages = async (userId: string) => {
+    try {
+      // Primer enfoque: buscar páginas permitidas al usuario específicamente
+      const { data: userPermissions, error: permissionsError } = await supabase
+        .from('user_page_permissions')
+        .select('page_id')
+        .eq('user_id', userId);
+
+      if (permissionsError) {
+        console.error("Error obteniendo permisos del usuario:", permissionsError);
+        return;
+      }
+      
+      // Si el usuario es administrador, obtener todas las páginas
+      if (userProfile?.role === 'admin') {
+        const { data: allPages, error: allPagesError } = await supabase
+          .from('pages')
+          .select('*');
+
+        if (allPagesError) {
+          console.error("Error obteniendo páginas:", allPagesError);
+          return;
+        }
+
+        if (allPages) {
+          setUserPages(allPages as UserPage[]);
+        }
+      } 
+      // Si no es administrador pero tiene permisos específicos
+      else if (userPermissions && userPermissions.length > 0) {
+        const pageIds = userPermissions.map(p => p.page_id);
+        
+        const { data: pages, error: pagesError } = await supabase
+          .from('pages')
+          .select('*')
+          .in('id', pageIds);
+
+        if (pagesError) {
+          console.error("Error obteniendo páginas:", pagesError);
+          return;
+        }
+
+        if (pages) {
+          setUserPages(pages as UserPage[]);
+        }
+      } else {
+        // Si no es admin y no tiene permisos específicos, no tiene acceso a ninguna página
+        setUserPages([]);
+      }
+    } catch (error) {
+      console.error("Error en fetchUserPages:", error);
+    }
+  };
 
   const fetchUserProfile = async (userId: string) => {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, email, full_name, phone')
+        .select('id, email, full_name, phone, role, is_approved')
         .eq('id', userId)
         .single();
 
@@ -47,6 +118,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (data) {
         setUserProfile(data as UserProfile);
+        
+        // Obtener páginas permitidas para este usuario
+        await fetchUserPages(userId);
       }
     } catch (error) {
       console.error("Error in fetchUserProfile:", error);
@@ -75,6 +149,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           }, 0);
         } else {
           setUserProfile(null);
+          setUserPages([]);
         }
       }
     );
@@ -107,7 +182,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       
       toast({
         title: "Registro exitoso",
-        description: "Por favor revise su correo para verificar su cuenta.",
+        description: "Por favor espere a que un administrador apruebe su cuenta.",
       });
       
       navigate("/auth");
@@ -176,15 +251,33 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const hasAccess = (path: string) => {
+    // Siempre permitir acceso a la página de inicio y autenticación
+    if (path === '/' || path === '/auth') return true;
+    
+    // El administrador tiene acceso a todas las páginas
+    if (isAdmin) return true;
+    
+    // Para usuarios regulares, verificar si están aprobados y tienen permisos
+    if (!isApproved) return false;
+    
+    // Verificar si el usuario tiene permiso para acceder a la página
+    return userPages.some(page => path.startsWith(page.path));
+  };
+
   const value = {
     session,
     user,
     userProfile,
+    userPages,
     signUp,
     signIn,
     signOut,
     loading,
-    refreshUserProfile
+    refreshUserProfile,
+    isAdmin,
+    isApproved,
+    hasAccess
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

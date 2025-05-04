@@ -1,22 +1,30 @@
 
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, UserCog } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import UserMenu from "@/components/UserMenu";
+import { useAuth } from "@/context/AuthContext";
 
 const NavBar = () => {
   const location = useLocation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { isAdmin, isApproved, user } = useAuth();
 
   const links = [
     { text: 'Inicio', href: '/' },
-    { text: 'Árbol Genealógico', href: '/arbol-genealogico' },
-    { text: 'Árbol Clásico', href: '/arbol-genealogico-clasico' },
-    { text: 'Líneas Familiares', href: '/lineas-familiares' },
-    { text: 'Determinación de Herederos', href: '/determinacion-herederos' },
   ];
+
+  // Solo añadir enlaces a páginas si el usuario está autenticado y aprobado
+  if (user && isApproved) {
+    links.push(
+      { text: 'Árbol Genealógico', href: '/arbol-genealogico' },
+      { text: 'Árbol Clásico', href: '/arbol-genealogico-clasico' },
+      { text: 'Líneas Familiares', href: '/lineas-familiares' },
+      { text: 'Determinación de Herederos', href: '/determinacion-herederos' }
+    );
+  }
 
   const isActive = (path: string) => {
     if (path === '/' && location.pathname === '/') return true;
@@ -48,6 +56,22 @@ const NavBar = () => {
               {link.text}
             </Link>
           ))}
+          
+          {/* Admin link - only for admins */}
+          {isAdmin && (
+            <Link
+              to="/admin/usuarios"
+              className={cn(
+                "px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center",
+                location.pathname === "/admin/usuarios"
+                  ? "bg-legal-blue text-white"
+                  : "text-legal-dark hover:bg-legal-beige"
+              )}
+            >
+              <UserCog className="mr-1 h-4 w-4" />
+              <span>Admin</span>
+            </Link>
+          )}
           
           {/* User Menu added here */}
           <div className="ml-2">
@@ -88,6 +112,23 @@ const NavBar = () => {
                 {link.text}
               </Link>
             ))}
+            
+            {/* Admin link - only for admins */}
+            {isAdmin && (
+              <Link
+                to="/admin/usuarios"
+                className={cn(
+                  "px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center",
+                  location.pathname === "/admin/usuarios"
+                    ? "bg-legal-blue text-white"
+                    : "text-legal-dark hover:bg-legal-beige"
+                )}
+                onClick={() => setIsMenuOpen(false)}
+              >
+                <UserCog className="mr-1 h-4 w-4" />
+                <span>Administración</span>
+              </Link>
+            )}
           </div>
         </div>
       )}

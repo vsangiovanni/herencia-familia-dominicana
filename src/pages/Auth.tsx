@@ -4,7 +4,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuth } from "@/context/AuthContext";
-import { Navigate } from "react-router-dom";
+import { Navigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -20,6 +20,8 @@ const registerSchema = z.object({
   email: z.string().email("Correo electrónico inválido"),
   password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres"),
   confirmPassword: z.string().min(6, "La contraseña debe tener al menos 6 caracteres"),
+  fullName: z.string().optional(),
+  phone: z.string().optional(),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Las contraseñas no coinciden",
   path: ["confirmPassword"],
@@ -30,7 +32,9 @@ type RegisterFormValues = z.infer<typeof registerSchema>;
 
 const Auth = () => {
   const { user, signIn, signUp, loading } = useAuth();
-  const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const [searchParams] = useSearchParams();
+  const defaultTab = searchParams.get('tab') === 'register' ? 'register' : 'login';
+  const [authMode, setAuthMode] = useState<"login" | "register">(defaultTab as "login" | "register");
   
   const loginForm = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -46,6 +50,8 @@ const Auth = () => {
       email: "",
       password: "",
       confirmPassword: "",
+      fullName: "",
+      phone: "",
     },
   });
 
@@ -133,6 +139,34 @@ const Auth = () => {
                 
                 <FormField
                   control={registerForm.control}
+                  name="fullName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Nombre completo</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Juan Pérez" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={registerForm.control}
+                  name="phone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Teléfono</FormLabel>
+                      <FormControl>
+                        <Input placeholder="809-123-4567" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={registerForm.control}
                   name="password"
                   render={({ field }) => (
                     <FormItem>
@@ -167,14 +201,14 @@ const Auth = () => {
                 </Button>
               </form>
             </Form>
+            
+            <Alert className="mt-4 bg-yellow-50">
+              <AlertDescription className="text-sm">
+                Luego del registro, su cuenta deberá ser aprobada por un administrador antes de poder acceder al sistema.
+              </AlertDescription>
+            </Alert>
           </TabsContent>
         </Tabs>
-        
-        <Alert className="mt-8 bg-blue-50">
-          <AlertDescription className="text-sm text-center">
-            Esta aplicación está en fase de desarrollo. Para pruebas, puede que el correo electrónico de verificación no sea necesario.
-          </AlertDescription>
-        </Alert>
       </div>
     </div>
   );
