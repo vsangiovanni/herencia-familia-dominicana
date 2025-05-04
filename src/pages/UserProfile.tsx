@@ -12,22 +12,41 @@ import { Label } from "@/components/ui/label";
 import { useForm } from "react-hook-form";
 import { toast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 interface ProfileFormValues {
   full_name: string;
   phone: string;
 }
 
+interface PasswordFormValues {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+}
+
 const UserProfile = () => {
   const { user, userProfile, refreshUserProfile } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
+  const [isPasswordLoading, setIsPasswordLoading] = useState(false);
+  const [isSuccessDialogOpen, setIsSuccessDialogOpen] = useState(false);
   const navigate = useNavigate();
 
   const { register, handleSubmit, setValue, formState: { errors } } = useForm<ProfileFormValues>({
     defaultValues: {
       full_name: "",
       phone: ""
+    }
+  });
+
+  const passwordForm = useForm<PasswordFormValues>({
+    defaultValues: {
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: ""
     }
   });
 
@@ -83,6 +102,45 @@ const UserProfile = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const onPasswordSubmit = async (data: PasswordFormValues) => {
+    if (data.newPassword !== data.confirmPassword) {
+      passwordForm.setError('confirmPassword', {
+        type: 'manual',
+        message: 'Las contraseñas no coinciden'
+      });
+      return;
+    }
+
+    if (data.newPassword.length < 6) {
+      passwordForm.setError('newPassword', {
+        type: 'manual',
+        message: 'La contraseña debe tener al menos 6 caracteres'
+      });
+      return;
+    }
+
+    setIsPasswordLoading(true);
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: data.newPassword
+      });
+
+      if (error) throw error;
+      
+      setIsPasswordDialogOpen(false);
+      passwordForm.reset();
+      setIsSuccessDialogOpen(true);
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error al cambiar contraseña",
+        description: error.message || "No se pudo actualizar la contraseña.",
+      });
+    } finally {
+      setIsPasswordLoading(false);
     }
   };
 
@@ -170,9 +228,17 @@ const UserProfile = () => {
                       </div>
                     </div>
                     
-                    <Button onClick={() => setIsEditing(true)} className="mt-4">
-                      Editar perfil
-                    </Button>
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <Button onClick={() => setIsEditing(true)}>
+                        Editar perfil
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        onClick={() => setIsPasswordDialogOpen(true)}
+                      >
+                        Cambiar contraseña
+                      </Button>
+                    </div>
                   </>
                 )}
               </div>
@@ -180,6 +246,80 @@ const UserProfile = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Password Change Dialog */}
+      <Dialog open={isPasswordDialogOpen} onOpenChange={setIsPasswordDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cambiar contraseña</DialogTitle>
+            <DialogDescription>
+              Ingrese su nueva contraseña para actualizar sus credenciales.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={passwordForm.handleSubmit(onPasswordSubmit)} className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="newPassword">Nueva contraseña</Label>
+              <Input
+                id="newPassword"
+                type="password"
+                {...passwordForm.register('newPassword')}
+                placeholder="Ingrese su nueva contraseña"
+              />
+              {passwordForm.formState.errors.newPassword && (
+                <p className="text-sm font-medium text-destructive">
+                  {passwordForm.formState.errors.newPassword.message}
+                </p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Confirmar contraseña</Label>
+              <Input
+                id="confirmPassword"
+                type="password"
+                {...passwordForm.register('confirmPassword')}
+                placeholder="Confirme su nueva contraseña"
+              />
+              {passwordForm.formState.errors.confirmPassword && (
+                <p className="text-sm font-medium text-destructive">
+                  {passwordForm.formState.errors.confirmPassword.message}
+                </p>
+              )}
+            </div>
+            <div className="flex justify-end space-x-2 pt-4">
+              <Button 
+                variant="outline" 
+                type="button"
+                onClick={() => {
+                  setIsPasswordDialogOpen(false);
+                  passwordForm.reset();
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={isPasswordLoading}>
+                {isPasswordLoading ? "Actualizando..." : "Actualizar contraseña"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Success Dialog */}
+      <AlertDialog open={isSuccessDialogOpen} onOpenChange={setIsSuccessDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Contraseña actualizada</AlertDialogTitle>
+            <AlertDialogDescription>
+              Su contraseña ha sido actualizada exitosamente. Utilice su nueva contraseña la próxima vez que inicie sesión.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setIsSuccessDialogOpen(false)}>
+              Entendido
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
