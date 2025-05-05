@@ -37,6 +37,9 @@ const NavBar = () => {
     return false;
   };
 
+  // Check if we're on the landing page (root path) and user is not logged in
+  const isLandingPage = location.pathname === '/' && !user;
+
   return (
     <nav className="bg-white shadow-md sticky top-0 z-50">
       <div className="container mx-auto px-4 py-2 flex items-center justify-between">
@@ -84,18 +87,27 @@ const NavBar = () => {
           </div>
         </div>
         
-        {/* Mobile Menu Button */}
-        <div className="md:hidden flex items-center gap-2">
-          <UserMenu />
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-            aria-label="Toggle menu"
-          >
-            {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
-          </Button>
-        </div>
+        {/* Mobile Menu Button - Only show if not on landing page or user is logged in */}
+        {!isLandingPage && (
+          <div className="md:hidden flex items-center gap-2">
+            <UserMenu />
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              aria-label="Toggle menu"
+            >
+              {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
+            </Button>
+          </div>
+        )}
+
+        {/* If on landing page and user is not logged in, only show UserMenu */}
+        {isLandingPage && (
+          <div className="md:hidden">
+            <UserMenu />
+          </div>
+        )}
       </div>
       
       {/* Mobile Navigation */}
