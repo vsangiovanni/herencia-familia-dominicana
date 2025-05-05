@@ -12,9 +12,13 @@ const NavBar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const { isAdmin, isApproved, user } = useAuth();
 
-  const links = [
-    { text: 'Inicio', href: '/' },
-  ];
+  // Define links based on authentication status
+  const links = [];
+  
+  // Only show "Inicio" if user is not logged in
+  if (!user) {
+    links.push({ text: 'Inicio', href: '/' });
+  }
 
   // Solo añadir enlaces a páginas si el usuario está autenticado y aprobado
   if (user && isApproved) {
@@ -36,7 +40,7 @@ const NavBar = () => {
   return (
     <nav className="bg-white shadow-md sticky top-0 z-50">
       <div className="container mx-auto px-4 py-2 flex items-center justify-between">
-        <Link to="/" className="flex items-center">
+        <Link to={user && isApproved ? "/dashboard" : "/"} className="flex items-center">
           <span className="text-xl font-serif font-bold text-legal-blue">HerenciaRD</span>
           <span className="ml-1 text-sm text-legal-gold">2025</span>
         </Link>
