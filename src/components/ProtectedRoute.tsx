@@ -17,35 +17,36 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 }) => {
   const { user, loading, isAdmin, isApproved, hasAccess } = useAuth();
   const location = useLocation();
-  const [redirectTo, setRedirectTo] = useState<string | null>(null);
+  const [redirectPath, setRedirectPath] = useState<string | null>(null);
+  const [evaluationComplete, setEvaluationComplete] = useState(false);
 
-  // Use a single useEffect with stable dependencies to determine redirection
+  // Use a single useEffect to determine redirection
   useEffect(() => {
-    // Skip evaluation during loading to prevent early redirects
+    // Skip logic during loading
     if (loading) {
       return;
     }
 
-    let newRedirectPath: string | null = null;
+    let path: string | null = null;
 
     // Check authentication criteria
     if (!user) {
-      newRedirectPath = '/auth';
+      path = '/auth';
     } else if (requireAdmin && !isAdmin) {
-      newRedirectPath = '/';
+      path = '/';
     } else if (requireApproved && !isApproved && user) {
-      newRedirectPath = '/perfil';
+      path = '/perfil';
     } else if (!hasAccess(location.pathname) && user) {
-      newRedirectPath = '/';
+      path = '/';
     }
 
-    // Only update state if the redirect path has changed
-    setRedirectTo(newRedirectPath);
+    // Update redirect path state only if needed
+    setRedirectPath(path);
+    setEvaluationComplete(true);
     
-    // Clean log to verify the flow
     console.log('ProtectedRoute evaluation:', { 
       path: location.pathname,
-      redirectTo: newRedirectPath, 
+      redirectPath: path, 
       loading, 
       isAuthenticated: !!user,
       isAdmin,
@@ -56,15 +57,21 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     
   }, [user, loading, isAdmin, isApproved, hasAccess, location.pathname, requireAdmin, requireApproved]);
 
-  // Show loading screen if authentication is still being checked
+  // Don't render anything until the loading state is resolved and evaluation is complete
   if (loading) {
     return <LoadingScreen />;
   }
 
+  // Wait until evaluation is complete before attempting to redirect
+  if (!evaluationComplete) {
+    return <LoadingScreen />;
+  }
+
   // Perform redirect if needed
-  if (redirectTo) {
-    // Adding a key prop with path ensures that React creates a new Navigate instance when the path changes
-    return <Navigate to={redirectTo} state={{ from: location }} replace key={redirectTo} />;
+  if (redirectPath) {
+    // Create a unique key to ensure React creates a new Navigate instance
+    const redirectKey = `redirect-${redirectPath}-${Date.now()}`;
+    return <Navigate to={redirectPath} state={{ from: location }} replace key={redirectKey} />;
   }
 
   // Render children or Outlet if authentication checks passed

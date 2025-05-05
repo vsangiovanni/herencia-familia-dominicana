@@ -20,15 +20,17 @@ import Footer from "./components/Footer";
 import UserProfile from "./pages/UserProfile";
 import AdminUsers from "./pages/AdminUsers";
 
-// Configure the QueryClient to prevent excessive refetching
+// Configure the QueryClient with conservative settings to prevent excessive network requests
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: 0,
-      staleTime: 60000, // 1 minute
+      retry: 0, // No retries
+      staleTime: 300000, // 5 minutes
+      cacheTime: 600000, // 10 minutes
       refetchOnWindowFocus: false,
       refetchOnMount: false,
-      refetchOnReconnect: false
+      refetchOnReconnect: false,
+      refetchInterval: false
     }
   }
 });
@@ -48,24 +50,67 @@ const App = () => (
                 <Route path="/" element={<Landing />} />
                 <Route path="/auth" element={<Auth />} />
                 
-                {/* Ruta protegida para perfil de usuario (no requiere aprobación) */}
-                <Route element={<ProtectedRoute requireApproved={false} />}>
-                  <Route path="/perfil" element={<UserProfile />} />
-                </Route>
+                {/* User profile route - doesn't require approval */}
+                <Route 
+                  path="/perfil" 
+                  element={
+                    <ProtectedRoute requireApproved={false}>
+                      <UserProfile />
+                    </ProtectedRoute>
+                  } 
+                />
                 
-                {/* Rutas protegidas que requieren aprobación */}
-                <Route element={<ProtectedRoute />}>
-                  <Route path="/dashboard" element={<Index />} />
-                  <Route path="/arbol-genealogico" element={<ArbolGenealogico />} />
-                  <Route path="/arbol-genealogico-clasico" element={<ArbolGenealogicoClasico />} />
-                  <Route path="/lineas-familiares" element={<LineasFamiliares />} />
-                  <Route path="/determinacion-herederos" element={<DeterminacionHerederos />} />
-                </Route>
+                {/* Protected routes requiring approval */}
+                <Route 
+                  path="/dashboard" 
+                  element={
+                    <ProtectedRoute>
+                      <Index />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/arbol-genealogico" 
+                  element={
+                    <ProtectedRoute>
+                      <ArbolGenealogico />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/arbol-genealogico-clasico" 
+                  element={
+                    <ProtectedRoute>
+                      <ArbolGenealogicoClasico />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/lineas-familiares" 
+                  element={
+                    <ProtectedRoute>
+                      <LineasFamiliares />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/determinacion-herederos" 
+                  element={
+                    <ProtectedRoute>
+                      <DeterminacionHerederos />
+                    </ProtectedRoute>
+                  } 
+                />
                 
-                {/* Rutas solo para administradores */}
-                <Route element={<ProtectedRoute requireAdmin={true} />}>
-                  <Route path="/admin/usuarios" element={<AdminUsers />} />
-                </Route>
+                {/* Admin routes */}
+                <Route 
+                  path="/admin/usuarios" 
+                  element={
+                    <ProtectedRoute requireAdmin={true}>
+                      <AdminUsers />
+                    </ProtectedRoute>
+                  } 
+                />
                 
                 <Route path="*" element={<NotFound />} />
               </Routes>

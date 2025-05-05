@@ -1,4 +1,5 @@
-import React from 'react';
+
+import React, { useEffect, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { ArrowRight, BarChart4, FileText, TreePine, Users, Shield, Workflow } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -6,10 +7,23 @@ import { Card, CardContent } from '@/components/ui/card';
 import { useAuth } from '@/context/AuthContext';
 
 const Landing = () => {
-  const { user, isApproved } = useAuth();
+  const { user, isApproved, loading } = useAuth();
+  const [shouldRedirect, setShouldRedirect] = useState(false);
   
-  // Si el usuario ya está autenticado y aprobado, redirigir al dashboard
-  if (user && isApproved) {
+  // Handle redirection in a more controlled manner
+  useEffect(() => {
+    if (!loading && user && isApproved) {
+      // Use a timeout to prevent immediate redirection
+      const timer = setTimeout(() => {
+        setShouldRedirect(true);
+      }, 100);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [user, isApproved, loading]);
+  
+  // Only redirect when state is explicitly set
+  if (shouldRedirect) {
     return <Navigate to="/dashboard" replace />;
   }
   
