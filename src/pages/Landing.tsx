@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { ArrowRight, BarChart4, FileText, TreePine, Users, Shield, Workflow } from 'lucide-react';
@@ -61,16 +60,13 @@ const Landing = () => {
           </p>
           
           {!user ? (
-            <div className="flex flex-col sm:flex-row justify-center gap-4">
-              <Link to="/auth">
-                <Button size="lg" className="bg-white text-legal-blue hover:bg-white/90 font-medium">
-                  Iniciar sesión
-                </Button>
-              </Link>
-              <Link to="/auth?tab=register">
-                <Button size="lg" variant="outline" className="border-white text-white hover:bg-white/10">
-                  Registrarse
-                </Button>
+            <div className="flex justify-center">
+              <Link to="/auth" className="inline-block">
+                <img 
+                  src="/lovable-uploads/4bd2be60-c6cb-438c-92b7-c316c8c4eaea.png" 
+                  alt="Herencia y Familia" 
+                  className="max-w-xs md:max-w-sm rounded-lg shadow-lg hover:opacity-90 transition-opacity"
+                />
               </Link>
             </div>
           ) : !isApproved ? (

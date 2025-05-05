@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogIn, LogOut, User, ChevronDown, Settings } from "lucide-react";
+import { LogOut, User, ChevronDown, Settings } from "lucide-react";
 
 const UserMenu = () => {
   const { user, signOut } = useAuth();
@@ -20,8 +20,8 @@ const UserMenu = () => {
     return (
       <Link to="/auth">
         <Button variant="outline" className="flex items-center gap-2">
-          <LogIn size={18} />
-          <span>Iniciar Sesión</span>
+          <User size={18} />
+          <span>Acceder</span>
         </Button>
       </Link>
     );
