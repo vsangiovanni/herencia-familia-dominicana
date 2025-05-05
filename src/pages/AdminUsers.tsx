@@ -174,10 +174,14 @@ const AdminUsers = () => {
       const selectedPages = pages.filter(page => page.selected);
       
       if (selectedPages.length > 0) {
+        // Obtener el ID del usuario actual
+        const { data: currentUser } = await supabase.auth.getUser();
+        const currentUserId = currentUser?.user?.id;
+        
         const permissionsToInsert = selectedPages.map(page => ({
           user_id: selectedUser.id,
           page_id: page.id,
-          created_by: supabase.auth.getUser().then(({ data }) => data.user?.id)
+          created_by: currentUserId || null
         }));
         
         const { error } = await supabase

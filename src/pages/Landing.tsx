@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, BarChart4, FileText, LucideTree, Users, Shield, Workflow } from 'lucide-react';
+import { ArrowRight, BarChart4, FileText, Tree, Users, Shield, Workflow } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useAuth } from '@/context/AuthContext';
@@ -11,7 +11,7 @@ const Landing = () => {
   
   const features = [
     {
-      icon: <LucideTree className="h-8 w-8 text-legal-blue" />,
+      icon: <Tree className="h-8 w-8 text-legal-blue" />,
       title: "Árbol Genealógico Interactivo",
       description: "Visualice su árbol genealógico de manera interactiva con opciones de zoom y navegación intuitiva."
     },
