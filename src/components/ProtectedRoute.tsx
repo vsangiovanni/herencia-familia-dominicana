@@ -22,14 +22,14 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     to: string;
   }>({ redirect: false, to: '' });
   
-  // Mostrar pantalla de carga mientras se verifica la autenticación
-  if (loading) {
-    return <LoadingScreen />;
-  }
-  
   // Set up the redirect logic in an effect to prevent excessive redirects
   useEffect(() => {
     let redirectPath = '';
+    
+    if (loading) {
+      // Don't redirect while loading
+      return;
+    }
     
     if (!user) {
       redirectPath = '/auth';
@@ -42,14 +42,20 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     }
     
     // Only update redirect state if there's a change
-    if (redirectPath && !shouldRedirect.redirect) {
+    if (redirectPath && (!shouldRedirect.redirect || shouldRedirect.to !== redirectPath)) {
       setShouldRedirect({ redirect: true, to: redirectPath });
     } else if (!redirectPath && shouldRedirect.redirect) {
       setShouldRedirect({ redirect: false, to: '' });
     }
     
-  }, [user, isAdmin, isApproved, location.pathname, requireAdmin, requireApproved, hasAccess, shouldRedirect.redirect]);
+  }, [user, isAdmin, isApproved, location.pathname, requireAdmin, requireApproved, hasAccess, shouldRedirect, loading]);
 
+  // Render loading screen outside of the effect
+  if (loading) {
+    return <LoadingScreen />;
+  }
+
+  // Handle redirect outside of the effect but after all hooks
   if (shouldRedirect.redirect) {
     return <Navigate to={shouldRedirect.to} state={{ from: location }} replace />;
   }
