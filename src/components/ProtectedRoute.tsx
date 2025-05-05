@@ -1,5 +1,5 @@
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import LoadingScreen from './LoadingScreen';
@@ -17,43 +17,41 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 }) => {
   const { user, loading, isAdmin, isApproved, hasAccess } = useAuth();
   const location = useLocation();
-  const redirecting = useRef(false);
+  const [shouldRedirect, setShouldRedirect] = useState<{
+    redirect: boolean;
+    to: string;
+  }>({ redirect: false, to: '' });
   
   // Mostrar pantalla de carga mientras se verifica la autenticación
   if (loading) {
     return <LoadingScreen />;
   }
   
-  // Prevent recursive redirects
+  // Set up the redirect logic in an effect to prevent excessive redirects
   useEffect(() => {
-    redirecting.current = false;
-    return () => {
-      redirecting.current = false;
-    };
-  }, [location.pathname]);
-  
-  // Redirigir a login si no hay usuario autenticado
-  if (!user && !redirecting.current) {
-    redirecting.current = true;
-    return <Navigate to="/auth" state={{ from: location }} replace />;
-  }
+    let redirectPath = '';
+    
+    if (!user) {
+      redirectPath = '/auth';
+    } else if (requireAdmin && !isAdmin) {
+      redirectPath = '/';
+    } else if (requireApproved && !isApproved && user) {
+      redirectPath = '/perfil';
+    } else if (!hasAccess(location.pathname) && user) {
+      redirectPath = '/';
+    }
+    
+    // Only update redirect state if there's a change
+    if (redirectPath && !shouldRedirect.redirect) {
+      setShouldRedirect({ redirect: true, to: redirectPath });
+    } else if (!redirectPath && shouldRedirect.redirect) {
+      setShouldRedirect({ redirect: false, to: '' });
+    }
+    
+  }, [user, isAdmin, isApproved, location.pathname, requireAdmin, requireApproved, hasAccess, shouldRedirect.redirect]);
 
-  // Verificar requisitos de administrador
-  if (requireAdmin && !isAdmin && !redirecting.current) {
-    redirecting.current = true;
-    return <Navigate to="/" state={{ from: location }} replace />;
-  }
-
-  // Verificar requisitos de aprobación
-  if (requireApproved && !isApproved && !redirecting.current && user) {
-    redirecting.current = true;
-    return <Navigate to="/perfil" state={{ from: location }} replace />;
-  }
-  
-  // Verificar acceso a la ruta específica
-  if (!hasAccess(location.pathname) && !redirecting.current && user) {
-    redirecting.current = true;
-    return <Navigate to="/" state={{ from: location }} replace />;
+  if (shouldRedirect.redirect) {
+    return <Navigate to={shouldRedirect.to} state={{ from: location }} replace />;
   }
 
   return children ? <>{children}</> : <Outlet />;

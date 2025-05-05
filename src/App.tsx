@@ -23,9 +23,11 @@ import AdminUsers from "./pages/AdminUsers";
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: 1,
-      staleTime: 10000, // 10 seconds
-      refetchOnWindowFocus: false // Prevents excessive refetching
+      retry: 0, // Reduce retry attempts
+      staleTime: 60000, // Increase stale time to 1 minute
+      refetchOnWindowFocus: false, // Prevents excessive refetching
+      refetchOnMount: false, // Prevent refetch on component mount
+      refetchOnReconnect: false // Prevent refetch on reconnect
     }
   }
 });
