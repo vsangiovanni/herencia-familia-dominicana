@@ -20,21 +20,22 @@ import Footer from "./components/Footer";
 import UserProfile from "./pages/UserProfile";
 import AdminUsers from "./pages/AdminUsers";
 
+// Configure the QueryClient to prevent excessive refetching
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: 0, // Reduce retry attempts
-      staleTime: 60000, // Increase stale time to 1 minute
-      refetchOnWindowFocus: false, // Prevents excessive refetching
-      refetchOnMount: false, // Prevent refetch on component mount
-      refetchOnReconnect: false // Prevent refetch on reconnect
+      retry: 0,
+      staleTime: 60000, // 1 minute
+      refetchOnWindowFocus: false,
+      refetchOnMount: false,
+      refetchOnReconnect: false
     }
   }
 });
 
 const App = () => (
-  <BrowserRouter>
-    <QueryClientProvider client={queryClient}>
+  <QueryClientProvider client={queryClient}>
+    <BrowserRouter>
       <AuthProvider>
         <TooltipProvider>
           <div className="flex flex-col min-h-screen">
@@ -43,6 +44,7 @@ const App = () => (
               <Toaster />
               <Sonner />
               <Routes>
+                {/* Public routes */}
                 <Route path="/" element={<Landing />} />
                 <Route path="/auth" element={<Auth />} />
                 
@@ -72,8 +74,8 @@ const App = () => (
           </div>
         </TooltipProvider>
       </AuthProvider>
-    </QueryClientProvider>
-  </BrowserRouter>
+    </BrowserRouter>
+  </QueryClientProvider>
 );
 
 export default App;
