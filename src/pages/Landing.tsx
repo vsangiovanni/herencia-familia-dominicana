@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { ArrowRight, BarChart4, FileText, TreePine, Users, Shield, Workflow } from 'lucide-react';
@@ -12,17 +11,18 @@ const Landing = () => {
   
   // Handle redirection in a more controlled manner
   useEffect(() => {
+    // Only redirect if user is authenticated and approved
     if (!loading && user && isApproved) {
-      // Use a timeout to prevent immediate redirection
+      // Small delay to prevent immediate redirection that could cause loops
       const timer = setTimeout(() => {
         setShouldRedirect(true);
-      }, 100);
+      }, 300);
       
       return () => clearTimeout(timer);
     }
   }, [user, isApproved, loading]);
   
-  // Only redirect when state is explicitly set
+  // Only redirect when explicitly ready to redirect
   if (shouldRedirect) {
     return <Navigate to="/dashboard" replace />;
   }

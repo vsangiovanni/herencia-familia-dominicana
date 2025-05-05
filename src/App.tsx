@@ -26,11 +26,11 @@ const queryClient = new QueryClient({
     queries: {
       retry: 0, // No retries
       staleTime: 300000, // 5 minutes
-      cacheTime: 600000, // 10 minutes
+      gcTime: 600000, // 10 minutes (formerly cacheTime)
       refetchOnWindowFocus: false,
       refetchOnMount: false,
       refetchOnReconnect: false,
-      refetchInterval: false
+      refetchInterval: undefined
     }
   }
 });
