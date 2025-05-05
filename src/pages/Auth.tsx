@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -31,7 +31,7 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 type RegisterFormValues = z.infer<typeof registerSchema>;
 
 const Auth = () => {
-  const { user, signIn, signUp, loading } = useAuth();
+  const { user, signIn, signUp, loading, isApproved } = useAuth();
   const [searchParams] = useSearchParams();
   const defaultTab = searchParams.get('tab') === 'register' ? 'register' : 'login';
   const [authMode, setAuthMode] = useState<"login" | "register">(defaultTab as "login" | "register");
@@ -55,9 +55,14 @@ const Auth = () => {
     },
   });
 
-  // If user is already authenticated, redirect to home page
-  if (user) {
-    return <Navigate to="/" />;
+  // Si el usuario ya está autenticado y aprobado, redirigir al dashboard
+  if (user && isApproved) {
+    return <Navigate to="/dashboard" />;
+  }
+  
+  // Si el usuario está autenticado pero no aprobado, redirigir al perfil
+  if (user && !isApproved) {
+    return <Navigate to="/perfil" />;
   }
 
   const onLoginSubmit = async (data: LoginFormValues) => {
@@ -70,10 +75,10 @@ const Auth = () => {
 
   return (
     <div className="container mx-auto max-w-md px-4 py-8">
-      <div className="space-y-6 bg-white p-6 rounded-lg shadow-md">
+      <div className="space-y-6 bg-white p-6 rounded-lg shadow-md border border-legal-gold/20">
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-legal-blue">HerenciaRD</h1>
-          <p className="mt-2 text-gray-600">Sistema de Gestión de Herencias</p>
+          <p className="mt-2 text-legal-dark">Sistema de Gestión de Herencias</p>
         </div>
 
         <Tabs value={authMode} onValueChange={(value) => setAuthMode(value as "login" | "register")} className="w-full">
@@ -113,7 +118,7 @@ const Auth = () => {
                   )}
                 />
                 
-                <Button type="submit" className="w-full" disabled={loading}>
+                <Button type="submit" className="w-full bg-legal-blue hover:bg-legal-blue/90" disabled={loading}>
                   {loading ? "Iniciando sesión..." : "Iniciar Sesión"}
                 </Button>
               </form>
@@ -196,14 +201,14 @@ const Auth = () => {
                   )}
                 />
                 
-                <Button type="submit" className="w-full" disabled={loading}>
+                <Button type="submit" className="w-full bg-legal-blue hover:bg-legal-blue/90" disabled={loading}>
                   {loading ? "Registrando..." : "Registrarse"}
                 </Button>
               </form>
             </Form>
             
-            <Alert className="mt-4 bg-yellow-50">
-              <AlertDescription className="text-sm">
+            <Alert className="mt-4 bg-legal-beige border-legal-gold/20">
+              <AlertDescription className="text-sm text-legal-dark">
                 Luego del registro, su cuenta deberá ser aprobada por un administrador antes de poder acceder al sistema.
               </AlertDescription>
             </Alert>

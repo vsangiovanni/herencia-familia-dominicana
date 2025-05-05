@@ -1,13 +1,18 @@
 
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { ArrowRight, BarChart4, FileText, TreePine, Users, Shield, Workflow } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useAuth } from '@/context/AuthContext';
 
 const Landing = () => {
-  const { user, isApproved, userPages } = useAuth();
+  const { user, isApproved } = useAuth();
+  
+  // Si el usuario ya está autenticado y aprobado, redirigir al dashboard
+  if (user && isApproved) {
+    return <Navigate to="/dashboard" replace />;
+  }
   
   const features = [
     {
@@ -45,7 +50,7 @@ const Landing = () => {
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
-      <section className="bg-gradient-to-r from-legal-blue/90 to-legal-blue py-16">
+      <section className="bg-legal-blue py-16">
         <div className="container mx-auto px-4 text-center">
           <h1 className="text-3xl md:text-4xl lg:text-5xl font-serif font-bold text-white mb-4">
             Sistema Genealógico y Determinación de Herederos
@@ -74,25 +79,12 @@ const Landing = () => {
                 Su cuenta está pendiente de aprobación. Un administrador revisará su solicitud pronto.
               </p>
             </div>
-          ) : (
-            <div className="flex flex-col gap-4">
-              <h3 className="text-xl font-medium text-white">Sus páginas disponibles:</h3>
-              <div className="flex flex-wrap justify-center gap-3">
-                {userPages.map(page => (
-                  <Link to={page.path} key={page.id}>
-                    <Button variant="outline" className="border-white text-white hover:bg-white/10">
-                      {page.name} <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          )}
+          ) : null}
         </div>
       </section>
       
       {/* Features */}
-      <section className="py-16 bg-gray-50">
+      <section className="py-16 bg-legal-beige">
         <div className="container mx-auto px-4">
           <h2 className="text-2xl md:text-3xl font-serif font-bold text-legal-blue text-center mb-12">
             Características y Beneficios
@@ -100,15 +92,15 @@ const Landing = () => {
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {features.map((feature, index) => (
-              <Card key={index} className="border-none shadow-md hover:shadow-lg transition-shadow">
+              <Card key={index} className="border border-legal-gold/20 shadow-md hover:shadow-lg transition-shadow">
                 <CardContent className="p-6 flex flex-col items-center text-center">
-                  <div className="bg-legal-beige/50 p-4 rounded-full mb-4">
+                  <div className="bg-legal-beige p-4 rounded-full mb-4">
                     {feature.icon}
                   </div>
                   <h3 className="text-lg font-serif font-bold text-legal-blue mb-2">
                     {feature.title}
                   </h3>
-                  <p className="text-gray-600">
+                  <p className="text-legal-dark">
                     {feature.description}
                   </p>
                 </CardContent>
@@ -125,17 +117,17 @@ const Landing = () => {
             Sobre HerenciaRD
           </h2>
           
-          <Card className="border-none shadow-md">
+          <Card className="border border-legal-gold/20 shadow-md">
             <CardContent className="p-8">
-              <p className="mb-4 text-gray-700">
+              <p className="mb-4 text-legal-dark">
                 HerenciaRD es una plataforma diseñada específicamente para profesionales legales en la República Dominicana
                 que trabajan en casos de determinación de herederos y análisis genealógico.
               </p>
-              <p className="mb-4 text-gray-700">
+              <p className="mb-4 text-legal-dark">
                 Nuestra herramienta facilita la visualización de árboles genealógicos complejos, análisis de líneas familiares
                 y generación de documentación legal conforme a las leyes dominicanas de sucesión.
               </p>
-              <p className="text-gray-700">
+              <p className="text-legal-dark">
                 El sistema ha sido desarrollado en colaboración con abogados especializados para garantizar
                 su precisión legal y utilidad práctica en los procedimientos sucesorales.
               </p>

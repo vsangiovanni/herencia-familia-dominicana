@@ -19,6 +19,7 @@ const NavBar = () => {
   // Solo añadir enlaces a páginas si el usuario está autenticado y aprobado
   if (user && isApproved) {
     links.push(
+      { text: 'Dashboard', href: '/dashboard' },
       { text: 'Árbol Genealógico', href: '/arbol-genealogico' },
       { text: 'Árbol Clásico', href: '/arbol-genealogico-clasico' },
       { text: 'Líneas Familiares', href: '/lineas-familiares' },
