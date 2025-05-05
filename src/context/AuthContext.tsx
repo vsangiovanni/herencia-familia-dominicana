@@ -1,5 +1,5 @@
 
-import React, { createContext, useState, useContext, useEffect } from "react";
+import React, { createContext, useState, useContext, useEffect, useRef } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
@@ -45,6 +45,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [userPages, setUserPages] = useState<UserPage[]>([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const navigationBlocker = useRef(false);
   
   const isAdmin = Boolean(userProfile?.role === "admin");
   const isApproved = Boolean(userProfile?.is_approved);
@@ -185,7 +186,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         description: "Por favor espere a que un administrador apruebe su cuenta.",
       });
       
-      navigate("/auth");
+      // Use a flag to prevent multiple redirects
+      if (!navigationBlocker.current) {
+        navigationBlocker.current = true;
+        navigate("/auth");
+        // Reset the flag after a short delay
+        setTimeout(() => {
+          navigationBlocker.current = false;
+        }, 500);
+      }
     } catch (error: any) {
       toast({
         variant: "destructive",
@@ -213,7 +222,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         description: "Bienvenido de nuevo.",
       });
       
-      navigate("/");
+      // Use a flag to prevent multiple redirects
+      if (!navigationBlocker.current) {
+        navigationBlocker.current = true;
+        navigate("/");
+        // Reset the flag after a short delay
+        setTimeout(() => {
+          navigationBlocker.current = false;
+        }, 500);
+      }
     } catch (error: any) {
       toast({
         variant: "destructive",
@@ -238,7 +255,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         description: "Ha cerrado sesión exitosamente.",
       });
       
-      navigate("/");
+      // Use a flag to prevent multiple redirects
+      if (!navigationBlocker.current) {
+        navigationBlocker.current = true;
+        navigate("/");
+        // Reset the flag after a short delay
+        setTimeout(() => {
+          navigationBlocker.current = false;
+        }, 500);
+      }
     } catch (error: any) {
       toast({
         variant: "destructive",
