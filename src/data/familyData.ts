@@ -4,7 +4,7 @@ import { Person } from '@/components/FamilyTree';
 // Datos del árbol genealógico
 export const familyData: Person = {
   id: "domenico",
-  name: "Domenico Sangiovanni",
+  name: "Domenico (Domingo) Sangiovanni",
   birth: "17/12/1845",
   spouse: "María Rosa Grisolia",
   spouseBirth: "18/07/1852",
@@ -29,7 +29,7 @@ export const familyData: Person = {
     },
     {
       id: "vincenzo",
-      name: "Vincenzo Sangiovanni",
+      name: "Vincenzo (Vicente) Sangiovanni",
       birth: "13/08/1880",
       death: "07/02/1958",
       spouse: "María Balbina Pérez Álvarez",
@@ -129,7 +129,7 @@ export const familyData: Person = {
     },
     {
       id: "paolo",
-      name: "Paolo Sangiovanni",
+      name: "Paolo (Paulino) Sangiovanni",
       birth: "17/01/1885",
       death: "31/03/1936",
       spouse: "Simona Simo",

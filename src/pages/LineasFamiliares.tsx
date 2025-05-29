@@ -36,7 +36,7 @@ const LineasFamiliares = () => {
               <CardContent className="p-6">
                 <div className="flex flex-col md:flex-row gap-6 mb-6">
                   <FamilyMember
-                    name="Domenico Sangiovanni"
+                    name="Domenico (Domingo) Sangiovanni"
                     birth="17/12/1845"
                     spouse="María Rosa Grisolia"
                     className="w-full md:w-auto"
@@ -45,7 +45,7 @@ const LineasFamiliares = () => {
                   <div className="flex-1">
                     <h3 className="text-lg font-medium text-legal-blue mb-2">Información Principal</h3>
                     <p className="text-gray-700 mb-4">
-                      Domenico Sangiovanni, nacido el 17 de diciembre de 1845 en Italia, contrajo matrimonio con 
+                      Domenico (Domingo) Sangiovanni, nacido el 17 de diciembre de 1845 en Italia, contrajo matrimonio con 
                       María Rosa Grisolia, nacida el 18 de julio de 1852 también en Italia. Esta unión representa 
                       las raíces de la familia Sangiovanni en la República Dominicana.
                     </p>
@@ -53,8 +53,8 @@ const LineasFamiliares = () => {
                     <h4 className="font-medium text-legal-blue mt-4 mb-2">Hijos del matrimonio:</h4>
                     <ul className="list-disc pl-5 space-y-1">
                       <li>María Magdalena Sangiovanni (n. 27/04/1874 - m. 07/05/1935)</li>
-                      <li>Vincenzo Sangiovanni (n. 18/08/1880 - m. 07/03/1958)</li>
-                      <li>Paolo Sangiovanni (n. 17/01/1885 - m. 31/03/1936)</li>
+                      <li>Vincenzo (Vicente) Sangiovanni (n. 18/08/1880 - m. 07/03/1958)</li>
+                      <li>Paolo (Paulino) Sangiovanni (n. 17/01/1885 - m. 31/03/1936)</li>
                     </ul>
                   </div>
                 </div>
@@ -114,13 +114,13 @@ const LineasFamiliares = () => {
                   
                   <AccordionItem value="item-2">
                     <AccordionTrigger className="text-lg font-medium text-legal-blue">
-                      2. Vincenzo Sangiovanni
+                      2. Vincenzo (Vicente) Sangiovanni
                     </AccordionTrigger>
                     <AccordionContent>
                       <div className="pl-4 border-l-2 border-legal-gold/30">
                         <div className="flex flex-col md:flex-row gap-4 mb-4">
                           <FamilyMember
-                            name="Vincenzo Sangiovanni"
+                            name="Vincenzo (Vicente) Sangiovanni"
                             birth="18/08/1880"
                             death="07/03/1958"
                             spouse="María Balbina Pérez Álvarez"
@@ -128,7 +128,7 @@ const LineasFamiliares = () => {
                           
                           <div className="flex-1">
                             <p className="text-gray-700 mb-4">
-                              Vincenzo Sangiovanni contrajo matrimonio con María Balbina Pérez Álvarez.
+                              Vincenzo (Vicente) Sangiovanni contrajo matrimonio con María Balbina Pérez Álvarez.
                               Esta rama familiar tiene relevancia directa en la determinación de herederos
                               ya que sus descendientes tienen derecho a la herencia de Alessandro de Paola Sangiovanni.
                             </p>
@@ -146,13 +146,13 @@ const LineasFamiliares = () => {
                   
                   <AccordionItem value="item-3">
                     <AccordionTrigger className="text-lg font-medium text-legal-blue">
-                      3. Paolo Sangiovanni
+                      3. Paolo (Paulino) Sangiovanni
                     </AccordionTrigger>
                     <AccordionContent>
                       <div className="pl-4 border-l-2 border-legal-gold/30">
                         <div className="flex flex-col md:flex-row gap-4 mb-4">
                           <FamilyMember
-                            name="Paolo Sangiovanni"
+                            name="Paolo (Paulino) Sangiovanni"
                             birth="17/01/1885"
                             death="31/03/1936"
                             spouse="Simona Simo"
@@ -160,8 +160,8 @@ const LineasFamiliares = () => {
                           
                           <div className="flex-1">
                             <p className="text-gray-700 mb-4">
-                              Paolo Sangiovanni contrajo matrimonio con Simona Simo. Al igual que la rama de Vincenzo,
-                              los descendientes de Paolo tienen relevancia en la determinación de herederos del causante.
+                              Paolo (Paulino) Sangiovanni contrajo matrimonio con Simona Simo. Al igual que la rama de Vincenzo (Vicente),
+                              los descendientes de Paolo (Paulino) tienen relevancia en la determinación de herederos del causante.
                             </p>
                             
                             <h4 className="font-medium text-legal-blue mb-2">Descendencia:</h4>
@@ -172,7 +172,7 @@ const LineasFamiliares = () => {
                             <div className="mt-4 bg-legal-beige/30 p-3 rounded-md">
                               <p className="text-sm">
                                 <strong>Nota:</strong> Pedro Pablo Sangiovanni Simo se casó con María Rosa Sangiovanni Pérez,
-                                su prima, hija de Vincenzo Sangiovanni, creando así un vínculo familiar complejo.
+                                su prima, hija de Vincenzo (Vicente) Sangiovanni, creando así un vínculo familiar complejo.
                               </p>
                             </div>
                           </div>
