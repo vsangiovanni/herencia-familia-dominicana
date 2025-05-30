@@ -51,12 +51,31 @@ const NavBar = () => {
               Inicio
             </Link>
             {user && (
-              <Link
-                to="/dashboard"
-                className="text-gray-900 hover:text-legal-blue px-3 py-2 text-sm font-medium transition-colors"
-              >
-                Dashboard
-              </Link>
+              <>
+                <Link
+                  to="/dashboard"
+                  className="text-gray-900 hover:text-legal-blue px-3 py-2 text-sm font-medium transition-colors"
+                >
+                  Dashboard
+                </Link>
+                
+                <DropdownMenu>
+                  <DropdownMenuTrigger className="text-gray-900 hover:text-legal-blue px-3 py-2 text-sm font-medium transition-colors">
+                    Árbol Genealógico
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    <DropdownMenuItem asChild>
+                      <Link to="/arbol-genealogico">Árbol Completo</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link to="/arbol-genealogico-clasico">Árbol Clásico</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link to="/lineas-familiares">Líneas Familiares</Link>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
             )}
             
             {isAdmin && (
@@ -135,6 +154,10 @@ const NavBar = () => {
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => navigate('/dashboard')}>
                     Dashboard
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => navigate('/arbol-genealogico')}>
+                    Árbol Genealógico
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem className="cursor-pointer" onClick={handleSignOut}>

@@ -17,6 +17,9 @@ import Footer from './components/Footer';
 import Legal from './pages/Legal';
 import CalculoHerencias from './pages/CalculoHerencias';
 import Dashboard from './pages/Dashboard';
+import ArbolGenealogico from './pages/ArbolGenealogico';
+import ArbolGenealogicoClasico from './pages/ArbolGenealogicoClasico';
+import LineasFamiliares from './pages/LineasFamiliares';
 
 const queryClient = new QueryClient();
 
@@ -64,6 +67,30 @@ function App() {
                     element={
                       <ProtectedRoute requireAdmin={true}>
                         <CalculoHerencias />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  <Route 
+                    path="/arbol-genealogico" 
+                    element={
+                      <ProtectedRoute>
+                        <ArbolGenealogico />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  <Route 
+                    path="/arbol-genealogico-clasico" 
+                    element={
+                      <ProtectedRoute>
+                        <ArbolGenealogicoClasico />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  <Route 
+                    path="/lineas-familiares" 
+                    element={
+                      <ProtectedRoute>
+                        <LineasFamiliares />
                       </ProtectedRoute>
                     } 
                   />
