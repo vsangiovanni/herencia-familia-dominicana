@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
+import { usePageVisit } from "./hooks/usePageVisit";
 
 import Landing from "./pages/Landing";
 import Index from "./pages/Index";
@@ -35,88 +36,97 @@ const queryClient = new QueryClient({
   }
 });
 
+const AppContent = () => {
+  // Register page visits for authenticated users
+  usePageVisit();
+
+  return (
+    <div className="flex flex-col min-h-screen">
+      <NavBar />
+      <main className="flex-grow">
+        <Toaster />
+        <Sonner />
+        <Routes>
+          {/* Public routes */}
+          <Route path="/" element={<Landing />} />
+          <Route path="/auth" element={<Auth />} />
+          
+          {/* User profile route - doesn't require approval */}
+          <Route 
+            path="/perfil" 
+            element={
+              <ProtectedRoute requireApproved={false}>
+                <UserProfile />
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Protected routes requiring approval */}
+          <Route 
+            path="/dashboard" 
+            element={
+              <ProtectedRoute>
+                <Index />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/arbol-genealogico" 
+            element={
+              <ProtectedRoute>
+                <ArbolGenealogico />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/arbol-genealogico-clasico" 
+            element={
+              <ProtectedRoute>
+                <ArbolGenealogicoClasico />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/lineas-familiares" 
+            element={
+              <ProtectedRoute>
+                <LineasFamiliares />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/determinacion-herederos" 
+            element={
+              <ProtectedRoute>
+                <DeterminacionHerederos />
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Admin routes */}
+          <Route 
+            path="/admin/usuarios" 
+            element={
+              <ProtectedRoute requireAdmin={true}>
+                <AdminUsers />
+              </ProtectedRoute>
+            } 
+          />
+          
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </main>
+      <Footer />
+    </div>
+  );
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <BrowserRouter>
       <AuthProvider>
         <TooltipProvider>
-          <div className="flex flex-col min-h-screen">
-            <NavBar />
-            <main className="flex-grow">
-              <Toaster />
-              <Sonner />
-              <Routes>
-                {/* Public routes */}
-                <Route path="/" element={<Landing />} />
-                <Route path="/auth" element={<Auth />} />
-                
-                {/* User profile route - doesn't require approval */}
-                <Route 
-                  path="/perfil" 
-                  element={
-                    <ProtectedRoute requireApproved={false}>
-                      <UserProfile />
-                    </ProtectedRoute>
-                  } 
-                />
-                
-                {/* Protected routes requiring approval */}
-                <Route 
-                  path="/dashboard" 
-                  element={
-                    <ProtectedRoute>
-                      <Index />
-                    </ProtectedRoute>
-                  } 
-                />
-                <Route 
-                  path="/arbol-genealogico" 
-                  element={
-                    <ProtectedRoute>
-                      <ArbolGenealogico />
-                    </ProtectedRoute>
-                  } 
-                />
-                <Route 
-                  path="/arbol-genealogico-clasico" 
-                  element={
-                    <ProtectedRoute>
-                      <ArbolGenealogicoClasico />
-                    </ProtectedRoute>
-                  } 
-                />
-                <Route 
-                  path="/lineas-familiares" 
-                  element={
-                    <ProtectedRoute>
-                      <LineasFamiliares />
-                    </ProtectedRoute>
-                  } 
-                />
-                <Route 
-                  path="/determinacion-herederos" 
-                  element={
-                    <ProtectedRoute>
-                      <DeterminacionHerederos />
-                    </ProtectedRoute>
-                  } 
-                />
-                
-                {/* Admin routes */}
-                <Route 
-                  path="/admin/usuarios" 
-                  element={
-                    <ProtectedRoute requireAdmin={true}>
-                      <AdminUsers />
-                    </ProtectedRoute>
-                  } 
-                />
-                
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </main>
-            <Footer />
-          </div>
+          <AppContent />
         </TooltipProvider>
       </AuthProvider>
     </BrowserRouter>

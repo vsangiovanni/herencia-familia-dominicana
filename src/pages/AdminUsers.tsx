@@ -1,11 +1,12 @@
-
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import DocumentHeader from '@/components/DocumentHeader';
+import PageVisitsStats from '@/components/PageVisitsStats';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
   DialogContent,
@@ -15,7 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/ui/use-toast';
-import { CheckCheck, UserCheck, UserX } from 'lucide-react';
+import { CheckCheck, UserCheck, UserX, Users, BarChart3 } from 'lucide-react';
 
 interface UserData {
   id: string;
@@ -229,86 +230,105 @@ const AdminUsers = () => {
   return (
     <div className="container mx-auto px-4 py-8">
       <DocumentHeader 
-        title="Gestión de Usuarios" 
-        subtitle="Administración de permisos y accesos" 
+        title="Panel de Administración" 
+        subtitle="Gestión de usuarios y estadísticas del sistema" 
       />
 
-      <div className="max-w-5xl mx-auto">
-        <Card className="mb-6">
-          <CardContent className="p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-serif font-bold text-legal-blue">
-                Usuarios del Sistema
-              </h2>
-              <Button onClick={fetchUsers} variant="outline" size="sm">
-                Actualizar lista
-              </Button>
-            </div>
+      <div className="max-w-6xl mx-auto">
+        <Tabs defaultValue="users" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="users" className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Gestión de Usuarios
+            </TabsTrigger>
+            <TabsTrigger value="analytics" className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4" />
+              Estadísticas de Visitas
+            </TabsTrigger>
+          </TabsList>
 
-            {loading ? (
-              <div className="flex justify-center p-6">
-                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-legal-blue"></div>
-              </div>
-            ) : users.length === 0 ? (
-              <p className="text-center text-gray-500 p-6">No se encontraron usuarios</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr className="bg-gray-50">
-                      <th className="border px-4 py-2 text-left">Correo</th>
-                      <th className="border px-4 py-2 text-left">Nombre</th>
-                      <th className="border px-4 py-2 text-left">Rol</th>
-                      <th className="border px-4 py-2 text-left">Estado</th>
-                      <th className="border px-4 py-2 text-left">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {users.map((user) => (
-                      <tr key={user.id} className="hover:bg-gray-50">
-                        <td className="border px-4 py-2">{user.email}</td>
-                        <td className="border px-4 py-2">{user.full_name || '-'}</td>
-                        <td className="border px-4 py-2">
-                          <Badge variant={user.role === 'admin' ? 'destructive' : 'outline'}>
-                            {user.role === 'admin' ? 'Administrador' : 'Usuario Regular'}
-                          </Badge>
-                        </td>
-                        <td className="border px-4 py-2">
-                          <Badge variant={user.is_approved ? 'success' : 'secondary'}>
-                            {user.is_approved ? 'Aprobado' : 'Pendiente'}
-                          </Badge>
-                        </td>
-                        <td className="border px-4 py-2">
-                          <div className="flex space-x-2">
-                            <Button 
-                              size="sm" 
-                              variant={user.is_approved ? "outline" : "default"}
-                              onClick={() => toggleApproval(user)}
-                            >
-                              {user.is_approved ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
-                              <span className="ml-1">
-                                {user.is_approved ? 'Revocar' : 'Aprobar'}
-                              </span>
-                            </Button>
-                            
-                            <Button 
-                              size="sm" 
-                              variant="default"
-                              onClick={() => openPermissionsDialog(user)}
-                            >
-                              <CheckCheck className="h-4 w-4 mr-1" />
-                              Permisos
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+          <TabsContent value="users" className="space-y-6">
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-xl font-serif font-bold text-legal-blue">
+                    Usuarios del Sistema
+                  </h2>
+                  <Button onClick={fetchUsers} variant="outline" size="sm">
+                    Actualizar lista
+                  </Button>
+                </div>
+
+                {loading ? (
+                  <div className="flex justify-center p-6">
+                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-legal-blue"></div>
+                  </div>
+                ) : users.length === 0 ? (
+                  <p className="text-center text-gray-500 p-6">No se encontraron usuarios</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr className="bg-gray-50">
+                          <th className="border px-4 py-2 text-left">Correo</th>
+                          <th className="border px-4 py-2 text-left">Nombre</th>
+                          <th className="border px-4 py-2 text-left">Rol</th>
+                          <th className="border px-4 py-2 text-left">Estado</th>
+                          <th className="border px-4 py-2 text-left">Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {users.map((user) => (
+                          <tr key={user.id} className="hover:bg-gray-50">
+                            <td className="border px-4 py-2">{user.email}</td>
+                            <td className="border px-4 py-2">{user.full_name || '-'}</td>
+                            <td className="border px-4 py-2">
+                              <Badge variant={user.role === 'admin' ? 'destructive' : 'outline'}>
+                                {user.role === 'admin' ? 'Administrador' : 'Usuario Regular'}
+                              </Badge>
+                            </td>
+                            <td className="border px-4 py-2">
+                              <Badge variant={user.is_approved ? 'success' : 'secondary'}>
+                                {user.is_approved ? 'Aprobado' : 'Pendiente'}
+                              </Badge>
+                            </td>
+                            <td className="border px-4 py-2">
+                              <div className="flex space-x-2">
+                                <Button 
+                                  size="sm" 
+                                  variant={user.is_approved ? "outline" : "default"}
+                                  onClick={() => toggleApproval(user)}
+                                >
+                                  {user.is_approved ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
+                                  <span className="ml-1">
+                                    {user.is_approved ? 'Revocar' : 'Aprobar'}
+                                  </span>
+                                </Button>
+                                
+                                <Button 
+                                  size="sm" 
+                                  variant="default"
+                                  onClick={() => openPermissionsDialog(user)}
+                                >
+                                  <CheckCheck className="h-4 w-4 mr-1" />
+                                  Permisos
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="analytics" className="space-y-6">
+            <PageVisitsStats />
+          </TabsContent>
+        </Tabs>
       </div>
 
       <Dialog open={permissionsDialogOpen} onOpenChange={setPermissionsDialogOpen}>
