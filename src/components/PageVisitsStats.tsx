@@ -23,10 +23,8 @@ interface PageVisit {
   page_name: string;
   visited_at: string;
   user_agent: string;
-  profiles?: {
-    email: string;
-    full_name: string | null;
-  } | null;
+  user_email?: string;
+  user_full_name?: string;
 }
 
 interface PageStats {
@@ -47,16 +45,10 @@ const PageVisitsStats = () => {
     try {
       setLoading(true);
 
-      // Obtener todas las visitas con información del usuario
+      // Obtener todas las visitas
       const { data: visitsData, error: visitsError } = await supabase
         .from('page_visits')
-        .select(`
-          *,
-          profiles!inner (
-            email,
-            full_name
-          )
-        `)
+        .select('*')
         .order('visited_at', { ascending: false })
         .limit(100);
 
@@ -65,18 +57,41 @@ const PageVisitsStats = () => {
         throw visitsError;
       }
 
-      console.log('Datos de visitas obtenidos:', visitsData);
-      setVisits(visitsData || []);
+      // Obtener todos los perfiles de usuarios únicos
+      const userIds = [...new Set(visitsData?.map(visit => visit.user_id) || [])];
+      
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, email, full_name')
+        .in('id', userIds);
+
+      if (profilesError) {
+        console.error('Error al obtener perfiles:', profilesError);
+        throw profilesError;
+      }
+
+      // Combinar datos de visitas con perfiles
+      const visitsWithProfiles = visitsData?.map(visit => {
+        const profile = profilesData?.find(p => p.id === visit.user_id);
+        return {
+          ...visit,
+          user_email: profile?.email || 'Sin email',
+          user_full_name: profile?.full_name || 'Sin nombre'
+        };
+      }) || [];
+
+      console.log('Datos de visitas obtenidos:', visitsWithProfiles);
+      setVisits(visitsWithProfiles);
 
       // Calcular estadísticas por página
-      if (visitsData) {
+      if (visitsWithProfiles.length > 0) {
         const statsMap = new Map<string, {
           page_name: string;
           visits: PageVisit[];
           unique_users: Set<string>;
         }>();
 
-        visitsData.forEach(visit => {
+        visitsWithProfiles.forEach(visit => {
           const key = visit.page_path;
           if (!statsMap.has(key)) {
             statsMap.set(key, {
@@ -213,10 +228,10 @@ const PageVisitsStats = () => {
                       <TableCell>
                         <div>
                           <p className="font-medium">
-                            {visit.profiles?.full_name || 'Sin nombre'}
+                            {visit.user_full_name}
                           </p>
                           <p className="text-sm text-gray-500">
-                            {visit.profiles?.email || 'Sin email'}
+                            {visit.user_email}
                           </p>
                         </div>
                       </TableCell>
