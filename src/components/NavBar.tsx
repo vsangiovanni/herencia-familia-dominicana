@@ -1,154 +1,161 @@
-
-import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, UserCog } from 'lucide-react';
+import React from 'react';
+import { Link } from 'react-router-dom';
+import { useAuth } from '@/context/AuthContext';
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { useNavigate } from "react-router-dom";
+import { toast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import UserMenu from "@/components/UserMenu";
-import { useAuth } from "@/context/AuthContext";
+import { LogOut } from 'lucide-react';
 
 const NavBar = () => {
-  const location = useLocation();
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const { isAdmin, isApproved, user } = useAuth();
+  const { user, userProfile, signOut, isAdmin } = useAuth();
+  const navigate = useNavigate();
 
-  // Define links based on authentication status
-  const links = [];
-  
-  // Only show "Inicio" if user is not logged in
-  if (!user) {
-    links.push({ text: 'Inicio', href: '/' });
-  }
-
-  // Solo añadir enlaces a páginas si el usuario está autenticado y aprobado
-  if (user && isApproved) {
-    links.push(
-      { text: 'Dashboard', href: '/dashboard' },
-      { text: 'Árbol Genealógico', href: '/arbol-genealogico' },
-      { text: 'Árbol Clásico', href: '/arbol-genealogico-clasico' },
-      { text: 'Líneas Familiares', href: '/lineas-familiares' },
-      { text: 'Determinación de Herederos', href: '/determinacion-herederos' }
-    );
-  }
-
-  const isActive = (path: string) => {
-    if (path === '/' && location.pathname === '/') return true;
-    if (path !== '/' && location.pathname.startsWith(path)) return true;
-    return false;
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      navigate('/auth');
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error al cerrar sesión",
+        description: error.message || "Ocurrió un error al cerrar la sesión.",
+      });
+    }
   };
 
-  // Check if we're on the landing page (root path) and user is not logged in
-  const isLandingPage = location.pathname === '/' && !user;
-
   return (
-    <nav className="bg-white shadow-md sticky top-0 z-50">
-      <div className="container mx-auto px-4 py-2 flex items-center justify-between">
-        <Link to={user && isApproved ? "/dashboard" : "/"} className="flex items-center">
-          <span className="text-xl font-serif font-bold text-legal-blue">HerenciaRD</span>
-          <span className="ml-1 text-sm text-legal-gold">2025</span>
-        </Link>
-        
-        {/* Desktop Navigation */}
-        <div className="hidden md:flex items-center space-x-4">
-          {links.map((link) => (
-            <Link
-              key={link.href}
-              to={link.href}
-              className={cn(
-                "px-3 py-2 rounded-md text-sm font-medium transition-colors",
-                isActive(link.href)
-                  ? "bg-legal-blue text-white"
-                  : "text-legal-dark hover:bg-legal-beige"
-              )}
-            >
-              {link.text}
+    <nav className="bg-white shadow-sm border-b">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between h-16">
+          <div className="flex items-center">
+            <Link to="/" className="text-legal-blue font-bold text-xl">
+              LegalTech
             </Link>
-          ))}
+          </div>
           
-          {/* Admin link - only for admins */}
-          {isAdmin && (
+          <div className="hidden md:flex items-center space-x-8">
             <Link
-              to="/admin/usuarios"
-              className={cn(
-                "px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center",
-                location.pathname === "/admin/usuarios"
-                  ? "bg-legal-blue text-white"
-                  : "text-legal-dark hover:bg-legal-beige"
-              )}
+              to="/"
+              className="text-gray-900 hover:text-legal-blue px-3 py-2 text-sm font-medium transition-colors"
             >
-              <UserCog className="mr-1 h-4 w-4" />
-              <span>Admin</span>
+              Inicio
             </Link>
-          )}
-          
-          {/* User Menu added here */}
-          <div className="ml-2">
-            <UserMenu />
-          </div>
-        </div>
-        
-        {/* Mobile Menu Button - Only show if not on landing page or user is logged in */}
-        {!isLandingPage && (
-          <div className="md:hidden flex items-center gap-2">
-            <UserMenu />
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-              aria-label="Toggle menu"
-            >
-              {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
-            </Button>
-          </div>
-        )}
-
-        {/* If on landing page and user is not logged in, only show UserMenu */}
-        {isLandingPage && (
-          <div className="md:hidden">
-            <UserMenu />
-          </div>
-        )}
-      </div>
-      
-      {/* Mobile Navigation */}
-      {isMenuOpen && (
-        <div className="md:hidden bg-white py-2 px-4 shadow-lg animate-fade-in">
-          <div className="flex flex-col space-y-2">
-            {links.map((link) => (
+            {user && (
               <Link
-                key={link.href}
-                to={link.href}
-                className={cn(
-                  "px-3 py-2 rounded-md text-sm font-medium transition-colors block",
-                  isActive(link.href)
-                    ? "bg-legal-blue text-white"
-                    : "text-legal-dark hover:bg-legal-beige"
-                )}
-                onClick={() => setIsMenuOpen(false)}
+                to="/documentos"
+                className="text-gray-900 hover:text-legal-blue px-3 py-2 text-sm font-medium transition-colors"
               >
-                {link.text}
+                Documentos
               </Link>
-            ))}
+            )}
             
-            {/* Admin link - only for admins */}
             {isAdmin && (
+              <>
+                <Link
+                  to="/calculo-herencias"
+                  className="text-gray-900 hover:text-legal-blue px-3 py-2 text-sm font-medium transition-colors"
+                >
+                  Cálculo de Herencias
+                </Link>
+                <Link
+                  to="/admin-users"
+                  className="text-gray-900 hover:text-legal-blue px-3 py-2 text-sm font-medium transition-colors"
+                >
+                  Admin Usuarios
+                </Link>
+              </>
+            )}
+            
+            {user ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="h-8 w-8 rounded-full">
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={`https://avatar.vercel.sh/${user?.email}.png`} alt={user?.email} />
+                      <AvatarFallback>
+                        {userProfile?.full_name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56" align="end" forceMount>
+                  <DropdownMenuLabel>Mi Cuenta</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => navigate('/perfil')}>
+                    Perfil
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate('/configuracion')}>
+                    Configuración
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem className="cursor-pointer" onClick={handleSignOut}>
+                    Cerrar Sesión
+                    <LogOut className="ml-auto h-4 w-4" />
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
               <Link
-                to="/admin/usuarios"
-                className={cn(
-                  "px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center",
-                  location.pathname === "/admin/usuarios"
-                    ? "bg-legal-blue text-white"
-                    : "text-legal-dark hover:bg-legal-beige"
-                )}
-                onClick={() => setIsMenuOpen(false)}
+                to="/auth"
+                className="text-gray-900 hover:text-legal-blue px-3 py-2 text-sm font-medium transition-colors"
               >
-                <UserCog className="mr-1 h-4 w-4" />
-                <span>Administración</span>
+                Iniciar Sesión
+              </Link>
+            )}
+          </div>
+
+          <div className="flex items-center md:hidden">
+            {/* Mobile Menu Button - Implement your mobile menu here */}
+            {user ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="h-8 w-8 rounded-full">
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={`https://avatar.vercel.sh/${user?.email}.png`} alt={user?.email} />
+                      <AvatarFallback>
+                        {userProfile?.full_name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56" align="end" forceMount>
+                  <DropdownMenuLabel>Mi Cuenta</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => navigate('/perfil')}>
+                    Perfil
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate('/configuracion')}>
+                    Configuración
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem className="cursor-pointer" onClick={handleSignOut}>
+                    Cerrar Sesión
+                    <LogOut className="ml-auto h-4 w-4" />
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <Link
+                to="/auth"
+                className="text-gray-900 hover:text-legal-blue px-3 py-2 text-sm font-medium transition-colors"
+              >
+                Iniciar Sesión
               </Link>
             )}
           </div>
         </div>
-      )}
+      </div>
+
+      {/* Mobile Menu Content - Implement your mobile menu content here */}
     </nav>
   );
 };
