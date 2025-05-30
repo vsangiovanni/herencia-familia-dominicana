@@ -26,7 +26,7 @@ interface PageVisit {
   profiles?: {
     email: string;
     full_name: string | null;
-  };
+  } | null;
 }
 
 interface PageStats {
@@ -52,7 +52,7 @@ const PageVisitsStats = () => {
         .from('page_visits')
         .select(`
           *,
-          profiles:profiles!page_visits_user_id_fkey (
+          profiles!inner (
             email,
             full_name
           )
@@ -60,8 +60,12 @@ const PageVisitsStats = () => {
         .order('visited_at', { ascending: false })
         .limit(100);
 
-      if (visitsError) throw visitsError;
+      if (visitsError) {
+        console.error('Error al obtener visitas:', visitsError);
+        throw visitsError;
+      }
 
+      console.log('Datos de visitas obtenidos:', visitsData);
       setVisits(visitsData || []);
 
       // Calcular estadísticas por página
@@ -212,7 +216,7 @@ const PageVisitsStats = () => {
                             {visit.profiles?.full_name || 'Sin nombre'}
                           </p>
                           <p className="text-sm text-gray-500">
-                            {visit.profiles?.email}
+                            {visit.profiles?.email || 'Sin email'}
                           </p>
                         </div>
                       </TableCell>
