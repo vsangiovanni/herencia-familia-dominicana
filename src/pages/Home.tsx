@@ -11,11 +11,11 @@ const Home = () => {
       <div className="container mx-auto px-4 py-16">
         <div className="text-center mb-16">
           <h1 className="text-5xl font-bold text-gray-900 mb-6">
-            Bienvenido a LegalTech
+            Bienvenido a HerenciaRD
           </h1>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-            Simplificamos los procesos legales con tecnología avanzada. 
-            Gestiona herencias, documentos y más con facilidad.
+            Sistema especializado en cálculo y determinación de herencias para la República Dominicana. 
+            Gestiona procesos sucesorales con tecnología avanzada y precisión legal.
           </p>
         </div>
 
@@ -25,7 +25,7 @@ const Home = () => {
               <Scale className="mx-auto h-12 w-12 text-blue-600 mb-4" />
               <CardTitle>Cálculo de Herencias</CardTitle>
               <CardDescription>
-                Calcula automáticamente la distribución de bienes entre herederos
+                Calcula automáticamente la distribución de bienes entre herederos según la ley dominicana
               </CardDescription>
             </CardHeader>
           </Card>
@@ -33,9 +33,9 @@ const Home = () => {
           <Card className="hover:shadow-lg transition-shadow">
             <CardHeader className="text-center">
               <FileText className="mx-auto h-12 w-12 text-green-600 mb-4" />
-              <CardTitle>Documentos Legales</CardTitle>
+              <CardTitle>Determinación de Herederos</CardTitle>
               <CardDescription>
-                Genera y gestiona documentos legales de forma automatizada
+                Genera documentación legal para la determinación oficial de herederos
               </CardDescription>
             </CardHeader>
           </Card>
@@ -43,9 +43,9 @@ const Home = () => {
           <Card className="hover:shadow-lg transition-shadow">
             <CardHeader className="text-center">
               <Users className="mx-auto h-12 w-12 text-purple-600 mb-4" />
-              <CardTitle>Gestión de Usuarios</CardTitle>
+              <CardTitle>Gestión Genealógica</CardTitle>
               <CardDescription>
-                Administra usuarios y permisos de forma centralizada
+                Administra árboles genealógicos y relaciones familiares complejas
               </CardDescription>
             </CardHeader>
           </Card>
@@ -53,9 +53,9 @@ const Home = () => {
           <Card className="hover:shadow-lg transition-shadow">
             <CardHeader className="text-center">
               <Calculator className="mx-auto h-12 w-12 text-orange-600 mb-4" />
-              <CardTitle>Herramientas</CardTitle>
+              <CardTitle>Herramientas Legales</CardTitle>
               <CardDescription>
-                Accede a calculadoras y herramientas especializadas
+                Accede a calculadoras y herramientas especializadas en derecho sucesoral
               </CardDescription>
             </CardHeader>
           </Card>

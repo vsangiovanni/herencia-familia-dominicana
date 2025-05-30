@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -38,7 +39,7 @@ const NavBar = () => {
         <div className="flex justify-between h-16">
           <div className="flex items-center">
             <Link to="/" className="text-legal-blue font-bold text-xl">
-              LegalTech
+              HerenciaRD
             </Link>
           </div>
           
@@ -51,10 +52,10 @@ const NavBar = () => {
             </Link>
             {user && (
               <Link
-                to="/documentos"
+                to="/dashboard"
                 className="text-gray-900 hover:text-legal-blue px-3 py-2 text-sm font-medium transition-colors"
               >
-                Documentos
+                Dashboard
               </Link>
             )}
             
@@ -93,8 +94,8 @@ const NavBar = () => {
                   <DropdownMenuItem onClick={() => navigate('/perfil')}>
                     Perfil
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate('/configuracion')}>
-                    Configuración
+                  <DropdownMenuItem onClick={() => navigate('/dashboard')}>
+                    Dashboard
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem className="cursor-pointer" onClick={handleSignOut}>
@@ -114,7 +115,6 @@ const NavBar = () => {
           </div>
 
           <div className="flex items-center md:hidden">
-            {/* Mobile Menu Button - Implement your mobile menu here */}
             {user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -133,8 +133,8 @@ const NavBar = () => {
                   <DropdownMenuItem onClick={() => navigate('/perfil')}>
                     Perfil
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate('/configuracion')}>
-                    Configuración
+                  <DropdownMenuItem onClick={() => navigate('/dashboard')}>
+                    Dashboard
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem className="cursor-pointer" onClick={handleSignOut}>
@@ -154,8 +154,6 @@ const NavBar = () => {
           </div>
         </div>
       </div>
-
-      {/* Mobile Menu Content - Implement your mobile menu content here */}
     </nav>
   );
 };
