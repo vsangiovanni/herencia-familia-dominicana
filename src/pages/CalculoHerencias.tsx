@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -26,7 +25,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { toast } from '@/components/ui/use-toast';
-import { Calculator, Users, Trash2, DollarSign, Home } from 'lucide-react';
+import { Calculator, Users, Trash2, DollarSign, Home, UserCheck } from 'lucide-react';
 
 interface UserData {
   id: string;
@@ -44,6 +43,15 @@ interface HerederoCalculado {
   montoPropiedades: number;
   total: number;
 }
+
+// Datos de los herederos determinados legalmente
+const herederosOficiales = [
+  { nombre: 'Víctor Manuel Martín Sangiovanni Rodríguez', fechaNacimiento: '08/11/1966' },
+  { nombre: 'Perla Rosa Brea Sangiovanni', fechaNacimiento: '30/04/1989' },
+  { nombre: 'Bernardo Martín Lizardo Sangiovanni', fechaNacimiento: '28/10/1966' },
+  { nombre: 'Jocelyn del Jesús Sangiovanni Báez', fechaNacimiento: '06/10/1963' },
+  { nombre: 'Mayra Josefina Sangiovanni Báez', fechaNacimiento: '20/11/1965' }
+];
 
 const CalculoHerencias = () => {
   const { isAdmin } = useAuth();
@@ -89,6 +97,19 @@ const CalculoHerencias = () => {
     }
   }, [isAdmin]);
 
+  const cargarHerederosOficiales = () => {
+    const porcentajeIgual = 100 / herederosOficiales.length;
+    const nuevosHerederos = herederosOficiales.map(heredero => ({
+      nombre: heredero.nombre,
+      porcentaje: Math.round(porcentajeIgual * 100) / 100 // Redondear a 2 decimales
+    }));
+    setHerederos(nuevosHerederos);
+    toast({
+      title: 'Herederos oficiales cargados',
+      description: `Se han cargado ${herederosOficiales.length} herederos con distribución igualitaria`,
+    });
+  };
+
   const agregarHeredero = () => {
     setHerederos([...herederos, { nombre: '', porcentaje: 0 }]);
   };
@@ -112,11 +133,11 @@ const CalculoHerencias = () => {
   const calcularHerencias = () => {
     const totalPorcentaje = herederos.reduce((sum, h) => sum + h.porcentaje, 0);
     
-    if (totalPorcentaje !== 100) {
+    if (Math.abs(totalPorcentaje - 100) > 0.01) { // Permitir pequeña diferencia por redondeo
       toast({
         variant: 'destructive',
         title: 'Error en porcentajes',
-        description: 'Los porcentajes deben sumar exactamente 100%',
+        description: `Los porcentajes deben sumar exactamente 100%. Actualmente suman ${totalPorcentaje.toFixed(2)}%`,
       });
       return;
     }
@@ -241,6 +262,35 @@ const CalculoHerencias = () => {
           </TabsList>
 
           <TabsContent value="calculator" className="space-y-6">
+            {/* Información de herederos oficiales */}
+            <Card className="bg-legal-blue/5 border-legal-blue/20">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-legal-blue">
+                  <UserCheck className="h-5 w-5" />
+                  Herederos Oficiales Determinados
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-gray-700 mb-4">
+                  Los siguientes herederos han sido determinados legalmente para Alessandro de Paola Sangiovanni:
+                </p>
+                <div className="grid md:grid-cols-2 gap-2 mb-4">
+                  {herederosOficiales.map((heredero, index) => (
+                    <div key={index} className="text-sm text-gray-600">
+                      • {heredero.nombre} (Nacido: {heredero.fechaNacimiento})
+                    </div>
+                  ))}
+                </div>
+                <Button 
+                  onClick={cargarHerederosOficiales}
+                  className="bg-legal-blue hover:bg-legal-blue/90 text-white"
+                >
+                  <UserCheck className="mr-2 h-4 w-4" />
+                  Cargar Herederos Oficiales
+                </Button>
+              </CardContent>
+            </Card>
+
             <div className="grid md:grid-cols-2 gap-6">
               {/* Formulario de entrada */}
               <Card>
