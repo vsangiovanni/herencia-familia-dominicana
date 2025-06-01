@@ -157,8 +157,25 @@ const NavBar = () => {
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => navigate('/arbol-genealogico')}>
-                    Árbol Genealógico
+                    Árbol Completo
                   </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate('/arbol-genealogico-clasico')}>
+                    Árbol Clásico
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate('/lineas-familiares')}>
+                    Líneas Familiares
+                  </DropdownMenuItem>
+                  {isAdmin && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => navigate('/calculo-herencias')}>
+                        Cálculo de Herencias
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => navigate('/admin-users')}>
+                        Admin Usuarios
+                      </DropdownMenuItem>
+                    </>
+                  )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem className="cursor-pointer" onClick={handleSignOut}>
                     Cerrar Sesión
