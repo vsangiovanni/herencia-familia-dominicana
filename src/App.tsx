@@ -8,7 +8,7 @@ import { Sonner } from './components/ui/sonner';
 
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
-import Home from './pages/Home';
+import Landing from './pages/Landing';
 import Profile from './pages/Profile';
 import Auth from './pages/Auth';
 import AdminUsers from './pages/AdminUsers';
@@ -35,7 +35,7 @@ function App() {
               <NavBar />
               <main className="flex-1">
                 <Routes>
-                  <Route path="/" element={<Home />} />
+                  <Route path="/" element={<Landing />} />
                   <Route path="/auth" element={<Auth />} />
                   <Route 
                     path="/dashboard" 
