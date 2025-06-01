@@ -20,6 +20,7 @@ import Dashboard from './pages/Dashboard';
 import ArbolGenealogico from './pages/ArbolGenealogico';
 import ArbolGenealogicoClasico from './pages/ArbolGenealogicoClasico';
 import LineasFamiliares from './pages/LineasFamiliares';
+import DeterminacionHerederos from './pages/DeterminacionHerederos';
 
 const queryClient = new QueryClient();
 
@@ -91,6 +92,14 @@ function App() {
                     element={
                       <ProtectedRoute>
                         <LineasFamiliares />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  <Route 
+                    path="/determinacion-herederos" 
+                    element={
+                      <ProtectedRoute>
+                        <DeterminacionHerederos />
                       </ProtectedRoute>
                     } 
                   />
