@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,12 +8,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Edit, Key } from 'lucide-react';
+import { Edit, Key, LogOut } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
 const Profile = () => {
-  const { user, userProfile, refreshUserProfile, isAdmin } = useAuth();
+  const { user, userProfile, refreshUserProfile, isAdmin, signOut } = useAuth();
   const [isEditingName, setIsEditingName] = useState(false);
   const [fullName, setFullName] = useState(userProfile?.full_name || '');
   const [isChangingPassword, setIsChangingPassword] = useState(false);
@@ -95,6 +94,18 @@ const Profile = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error al cerrar sesión",
+        description: error.message || "Ocurrió un error al cerrar la sesión.",
+      });
     }
   };
 
@@ -269,6 +280,15 @@ const Profile = () => {
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
+
+              <Button 
+                variant="destructive" 
+                className="w-full justify-start text-sm"
+                onClick={handleSignOut}
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                Cerrar Sesión
+              </Button>
             </div>
           </CardContent>
         </Card>
