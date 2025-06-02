@@ -14,7 +14,7 @@ import { toast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
 const Profile = () => {
-  const { user, userProfile, refreshUserProfile } = useAuth();
+  const { user, userProfile, refreshUserProfile, isAdmin } = useAuth();
   const [isEditingName, setIsEditingName] = useState(false);
   const [fullName, setFullName] = useState(userProfile?.full_name || '');
   const [isChangingPassword, setIsChangingPassword] = useState(false);
