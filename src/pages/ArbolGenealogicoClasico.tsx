@@ -1,13 +1,17 @@
-
 import React from 'react';
 import DocumentHeader from '@/components/DocumentHeader';
 import ClassicFamilyTree from '@/components/ClassicFamilyTree';
 import { familyData } from '@/data/familyData';
 import { Card, CardContent } from '@/components/ui/card';
+import BackButton from '@/components/BackButton';
 
 const ArbolGenealogicoClasico = () => {
   return (
     <div className="container mx-auto px-4 py-8">
+      <div className="mb-4">
+        <BackButton />
+      </div>
+      
       <DocumentHeader 
         title="Árbol Genealógico Clásico" 
         subtitle="Visualización Tradicional de la Familia Sangiovanni - de Paola" 

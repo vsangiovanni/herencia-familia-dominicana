@@ -1,16 +1,20 @@
-
 import React, { useState } from 'react';
 import DocumentHeader from '@/components/DocumentHeader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import FamilyMember from '@/components/FamilyMember';
+import BackButton from '@/components/BackButton';
 
 const LineasFamiliares = () => {
   const [activeTab, setActiveTab] = useState("primera-generacion");
 
   return (
     <div className="container mx-auto px-4 py-8">
+      <div className="mb-4">
+        <BackButton />
+      </div>
+      
       <DocumentHeader 
         title="Líneas Familiares" 
         subtitle="Análisis Detallado por Generación" 

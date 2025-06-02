@@ -1,16 +1,20 @@
-
 import React, { useState } from 'react';
 import DocumentHeader from '@/components/DocumentHeader';
 import FamilyTree from '@/components/FamilyTree';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { familyData } from '@/data/familyData';
+import BackButton from '@/components/BackButton';
 
 const ArbolGenealogico = () => {
   const [highlightedPerson, setHighlightedPerson] = useState<string>("alessandro");
 
   return (
     <div className="container mx-auto px-4 py-8">
+      <div className="mb-4">
+        <BackButton />
+      </div>
+      
       <DocumentHeader 
         title="Árbol Genealógico" 
         subtitle="Familia Sangiovanni - de Paola" 

@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Edit, Key, LogOut } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import BackButton from '@/components/BackButton';
 
 const Profile = () => {
   const { user, userProfile, refreshUserProfile, isAdmin, signOut } = useAuth();
@@ -111,6 +112,10 @@ const Profile = () => {
 
   return (
     <div className="container mx-auto px-4 py-8">
+      <div className="mb-4">
+        <BackButton />
+      </div>
+      
       <div className="max-w-2xl mx-auto">
         <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-6 md:mb-8">Mi Perfil</h1>
         
