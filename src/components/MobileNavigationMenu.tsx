@@ -2,7 +2,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,10 +11,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Button } from "@/components/ui/button";
+import { Menu, User } from "lucide-react";
 
-const MobileMenu = () => {
-  const { user, userProfile, isAdmin } = useAuth();
+const MobileNavigationMenu = () => {
+  const { user, isAdmin } = useAuth();
   const navigate = useNavigate();
 
   if (!user) {
@@ -25,6 +25,7 @@ const MobileMenu = () => {
           onClick={() => navigate('/auth')}
           className="text-gray-900 hover:text-legal-blue px-3 py-2 text-sm font-medium transition-colors"
         >
+          <User size={18} className="mr-2" />
           Iniciar Sesión
         </Button>
       </div>
@@ -35,13 +36,8 @@ const MobileMenu = () => {
     <div className="flex items-center md:hidden">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="h-8 w-8 rounded-full">
-            <Avatar className="h-8 w-8">
-              <AvatarImage src={`https://avatar.vercel.sh/${user?.email}.png`} alt={user?.email} />
-              <AvatarFallback>
-                {userProfile?.full_name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
+          <Button variant="ghost" className="h-10 w-10">
+            <Menu className="h-5 w-5" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="w-56" align="end" forceMount>
@@ -73,10 +69,14 @@ const MobileMenu = () => {
               </DropdownMenuItem>
             </>
           )}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => navigate('/perfil')}>
+            Mi Perfil
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
   );
 };
 
-export default MobileMenu;
+export default MobileNavigationMenu;

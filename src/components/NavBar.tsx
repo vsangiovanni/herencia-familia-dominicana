@@ -3,7 +3,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import NavigationMenu from './NavigationMenu';
 import UserMenu from './UserMenu';
-import MobileMenu from './MobileMenu';
+import MobileNavigationMenu from './MobileNavigationMenu';
 
 const NavBar = () => {
   return (
@@ -16,13 +16,16 @@ const NavBar = () => {
             </Link>
           </div>
           
+          {/* Desktop Navigation Menu */}
           <NavigationMenu />
           
+          {/* Desktop User Menu */}
           <div className="hidden md:flex items-center">
             <UserMenu />
           </div>
 
-          <MobileMenu />
+          {/* Mobile Navigation Menu */}
+          <MobileNavigationMenu />
         </div>
       </div>
     </nav>
