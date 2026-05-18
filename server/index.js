@@ -119,15 +119,15 @@ async function ensureAdminUser() {
   if (!email || !password) return;
 
   const existing = await query('SELECT id FROM profiles WHERE email = :email LIMIT 1', { email });
-  const passwordHash = await bcrypt.hash(password, 12);
   if (existing.length > 0) {
     await query(
-      "UPDATE profiles SET password_hash = :passwordHash, role = 'admin', is_approved = TRUE WHERE email = :email",
-      { email, passwordHash }
+      "UPDATE profiles SET role = 'admin', is_approved = TRUE WHERE email = :email",
+      { email }
     );
     return;
   }
 
+  const passwordHash = await bcrypt.hash(password, 12);
   await query(
     `INSERT INTO profiles (id, email, password_hash, full_name, role, is_approved)
      VALUES (:id, :email, :passwordHash, :fullName, 'admin', TRUE)`,

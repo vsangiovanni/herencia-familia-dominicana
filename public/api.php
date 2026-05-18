@@ -209,10 +209,7 @@ function ensure_schema(): void {
   if ($email && $password) {
     $existing = query_one('SELECT id FROM profiles WHERE email = :email LIMIT 1', ['email' => $email]);
     if ($existing) {
-      exec_sql("UPDATE profiles SET password_hash = :hash, role = 'admin', is_approved = TRUE WHERE email = :email", [
-        'email' => $email,
-        'hash' => password_hash($password, PASSWORD_BCRYPT),
-      ]);
+      exec_sql("UPDATE profiles SET role = 'admin', is_approved = TRUE WHERE email = :email", ['email' => $email]);
     } else {
       exec_sql(
         "INSERT INTO profiles (id, email, password_hash, full_name, role, is_approved)
