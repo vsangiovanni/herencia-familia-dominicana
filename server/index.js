@@ -9,9 +9,10 @@ import mysql from 'mysql2/promise';
 import { randomUUID } from 'node:crypto';
 
 const app = express();
-const port = Number(process.env.API_PORT || 3001);
+const port = Number(process.env.PORT || process.env.API_PORT || 3001);
 const jwtSecret = process.env.JWT_SECRET || 'herencia-rd-local-dev-secret';
 const cookieName = 'herencia_session';
+const distPath = path.join(process.cwd(), 'dist');
 
 app.use(express.json({ limit: '20mb' }));
 app.use(cookieParser());
@@ -96,13 +97,20 @@ function requireAdmin(req, res, next) {
 
 async function ensureDatabase() {
   const schemaPath = path.join(process.cwd(), 'server', 'schema.sql');
-  const schema = fs.readFileSync(schemaPath, 'utf8');
+  const schema = fs
+    .readFileSync(schemaPath, 'utf8')
+    .replace(/^CREATE DATABASE IF NOT EXISTS\s+[^;]+;\s*/i, '')
+    .replace(/^USE\s+[^;]+;\s*/i, '');
   const bootstrap = await mysql.createConnection({
     ...dbConfig,
     database: undefined,
   });
-  await bootstrap.query(schema);
+  await bootstrap.query(`CREATE DATABASE IF NOT EXISTS \`${dbConfig.database}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
   await bootstrap.end();
+
+  const schemaConnection = await mysql.createConnection(dbConfig);
+  await schemaConnection.query(schema);
+  await schemaConnection.end();
 }
 
 async function ensureAdminUser() {
@@ -111,15 +119,15 @@ async function ensureAdminUser() {
   if (!email || !password) return;
 
   const existing = await query('SELECT id FROM profiles WHERE email = :email LIMIT 1', { email });
+  const passwordHash = await bcrypt.hash(password, 12);
   if (existing.length > 0) {
     await query(
-      "UPDATE profiles SET role = 'admin', is_approved = TRUE WHERE email = :email",
-      { email }
+      "UPDATE profiles SET password_hash = :passwordHash, role = 'admin', is_approved = TRUE WHERE email = :email",
+      { email, passwordHash }
     );
     return;
   }
 
-  const passwordHash = await bcrypt.hash(password, 12);
   await query(
     `INSERT INTO profiles (id, email, password_hash, full_name, role, is_approved)
      VALUES (:id, :email, :passwordHash, :fullName, 'admin', TRUE)`,
@@ -477,6 +485,14 @@ app.delete('/api/evidence-documents/:id', requireAuth, async (req, res) => {
   await query('DELETE FROM evidence_documents WHERE id = :id', { id: req.params.id });
   res.json({ ok: true });
 });
+
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath));
+  app.get(/.*/, (req, res, next) => {
+    if (req.path.startsWith('/api/')) return next();
+    res.type('html').send(fs.readFileSync(path.join(distPath, 'index.html'), 'utf8'));
+  });
+}
 
 app.use((err, _req, res, _next) => {
   console.error(err);
