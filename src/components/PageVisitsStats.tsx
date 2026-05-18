@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { 
   Table, 
@@ -45,40 +45,12 @@ const PageVisitsStats = () => {
     try {
       setLoading(true);
 
-      // Obtener todas las visitas
-      const { data: visitsData, error: visitsError } = await supabase
-        .from('page_visits')
-        .select('*')
-        .order('visited_at', { ascending: false })
-        .limit(100);
-
-      if (visitsError) {
-        console.error('Error al obtener visitas:', visitsError);
-        throw visitsError;
-      }
-
-      // Obtener todos los perfiles de usuarios únicos
-      const userIds = [...new Set(visitsData?.map(visit => visit.user_id) || [])];
-      
-      const { data: profilesData, error: profilesError } = await supabase
-        .from('profiles')
-        .select('id, email, full_name')
-        .in('id', userIds);
-
-      if (profilesError) {
-        console.error('Error al obtener perfiles:', profilesError);
-        throw profilesError;
-      }
-
-      // Combinar datos de visitas con perfiles
-      const visitsWithProfiles = visitsData?.map(visit => {
-        const profile = profilesData?.find(p => p.id === visit.user_id);
-        return {
-          ...visit,
-          user_email: profile?.email || 'Sin email',
-          user_full_name: profile?.full_name || 'Sin nombre'
-        };
-      }) || [];
+      const { visits } = await api.listPageVisits();
+      const visitsWithProfiles = visits.map(visit => ({
+        ...visit,
+        user_email: visit.user_email || 'Sin email',
+        user_full_name: visit.user_full_name || 'Sin nombre'
+      }));
 
       console.log('Datos de visitas obtenidos:', visitsWithProfiles);
       setVisits(visitsWithProfiles);

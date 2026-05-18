@@ -57,7 +57,7 @@ const LineasFamiliares = () => {
                     <h4 className="font-medium text-legal-blue mt-4 mb-2">Hijos del matrimonio:</h4>
                     <ul className="list-disc pl-5 space-y-1">
                       <li>María Magdalena Sangiovanni (n. 27/04/1874 - m. 07/05/1935)</li>
-                      <li>Vincenzo (Vicente) Sangiovanni (n. 18/08/1880 - m. 07/03/1958)</li>
+                      <li>Vincenzo (Vicente) Sangiovanni (n. 13/08/1880 - m. 07/02/1958)</li>
                       <li>Paolo (Paulino) Sangiovanni (n. 17/01/1885 - m. 31/03/1936)</li>
                     </ul>
                   </div>
@@ -125,8 +125,8 @@ const LineasFamiliares = () => {
                         <div className="flex flex-col md:flex-row gap-4 mb-4">
                           <FamilyMember
                             name="Vincenzo (Vicente) Sangiovanni"
-                            birth="18/08/1880"
-                            death="07/03/1958"
+                            birth="13/08/1880"
+                            death="07/02/1958"
                             spouse="María Balbina Pérez Álvarez"
                           />
                           

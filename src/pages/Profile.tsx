@@ -10,7 +10,7 @@ import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Edit, Key, LogOut } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api';
 import BackButton from '@/components/BackButton';
 
 const Profile = () => {
@@ -28,12 +28,7 @@ const Profile = () => {
     
     setLoading(true);
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ full_name: fullName })
-        .eq('id', user.id);
-
-      if (error) throw error;
+      await api.updateProfile({ full_name: fullName });
 
       await refreshUserProfile();
       setIsEditingName(false);
@@ -73,11 +68,7 @@ const Profile = () => {
 
     setLoading(true);
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword
-      });
-
-      if (error) throw error;
+      await api.updatePassword(newPassword);
 
       setIsChangingPassword(false);
       setCurrentPassword('');

@@ -21,6 +21,9 @@ import ArbolGenealogico from './pages/ArbolGenealogico';
 import ArbolGenealogicoClasico from './pages/ArbolGenealogicoClasico';
 import LineasFamiliares from './pages/LineasFamiliares';
 import DeterminacionHerederos from './pages/DeterminacionHerederos';
+import Hallazgos from './pages/Hallazgos';
+import CalculoFiliacion from './pages/CalculoFiliacion';
+import DocumentosProbatorios from './pages/DocumentosProbatorios';
 
 const queryClient = new QueryClient();
 
@@ -100,6 +103,30 @@ function App() {
                     element={
                       <ProtectedRoute>
                         <DeterminacionHerederos />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  <Route 
+                    path="/hallazgos" 
+                    element={
+                      <ProtectedRoute>
+                        <Hallazgos />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  <Route 
+                    path="/calculo-filiacion" 
+                    element={
+                      <ProtectedRoute>
+                        <CalculoFiliacion />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  <Route 
+                    path="/documentos-probatorios" 
+                    element={
+                      <ProtectedRoute>
+                        <DocumentosProbatorios />
                       </ProtectedRoute>
                     } 
                   />

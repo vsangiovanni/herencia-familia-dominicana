@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api';
 import DocumentHeader from '@/components/DocumentHeader';
 import PageVisitsStats from '@/components/PageVisitsStats';
 import { Button } from '@/components/ui/button';
@@ -51,30 +51,8 @@ const AdminUsers = () => {
     try {
       setLoading(true);
       
-      // Obtener todos los usuarios
-      const { data: usersData, error: usersError } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
-      
-      if (usersError) throw usersError;
-      
-      // Obtener permisos para cada usuario
-      const usersWithPermissions = await Promise.all(
-        (usersData || []).map(async (user: UserData) => {
-          const { data: permissions } = await supabase
-            .from('user_page_permissions')
-            .select('page_id')
-            .eq('user_id', user.id);
-          
-          return {
-            ...user,
-            permissions: permissions || []
-          };
-        })
-      );
-      
-      setUsers(usersWithPermissions);
+      const { users } = await api.listUsers();
+      setUsers(users as UserData[]);
     } catch (error) {
       console.error('Error al obtener usuarios:', error);
       toast({
@@ -89,14 +67,8 @@ const AdminUsers = () => {
 
   const fetchPages = async () => {
     try {
-      const { data, error } = await supabase
-        .from('pages')
-        .select('*')
-        .order('name');
-        
-      if (error) throw error;
-      
-      setPages(data || []);
+      const { pages } = await api.listPages();
+      setPages(pages || []);
     } catch (error) {
       console.error('Error al obtener páginas:', error);
     }
@@ -113,12 +85,7 @@ const AdminUsers = () => {
     try {
       const newStatus = !user.is_approved;
       
-      const { error } = await supabase
-        .from('profiles')
-        .update({ is_approved: newStatus })
-        .eq('id', user.id);
-        
-      if (error) throw error;
+      await api.updateUser(user.id, { is_approved: newStatus });
       
       // Actualizar estado local
       setUsers(users.map(u => 
@@ -165,32 +132,8 @@ const AdminUsers = () => {
     try {
       setSavingPermissions(true);
       
-      // Eliminar permisos existentes
-      await supabase
-        .from('user_page_permissions')
-        .delete()
-        .eq('user_id', selectedUser.id);
-      
-      // Insertar nuevos permisos
       const selectedPages = pages.filter(page => page.selected);
-      
-      if (selectedPages.length > 0) {
-        // Obtener el ID del usuario actual
-        const { data: currentUser } = await supabase.auth.getUser();
-        const currentUserId = currentUser?.user?.id;
-        
-        const permissionsToInsert = selectedPages.map(page => ({
-          user_id: selectedUser.id,
-          page_id: page.id,
-          created_by: currentUserId || null
-        }));
-        
-        const { error } = await supabase
-          .from('user_page_permissions')
-          .insert(permissionsToInsert);
-          
-        if (error) throw error;
-      }
+      await api.saveUserPermissions(selectedUser.id, selectedPages.map(page => page.id));
       
       toast({
         title: 'Permisos actualizados',

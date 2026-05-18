@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api';
 import DocumentHeader from '@/components/DocumentHeader';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -66,15 +66,10 @@ const UserProfile = () => {
     
     try {
       setLoading(true);
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          full_name: data.full_name || null,
-          phone: data.phone || null,
-        })
-        .eq('id', user.id);
-
-      if (error) throw error;
+      await api.updateProfile({
+        full_name: data.full_name || null,
+        phone: data.phone || null,
+      });
 
       await refreshUserProfile();
       
@@ -96,11 +91,7 @@ const UserProfile = () => {
   const handlePasswordChange = async (data: PasswordFormValues) => {
     try {
       setLoading(true);
-      const { error } = await supabase.auth.updateUser({ 
-        password: data.password 
-      });
-
-      if (error) throw error;
+      await api.updatePassword(data.password);
       
       // Cerrar diálogo de cambio de contraseña
       setPasswordDialogOpen(false);

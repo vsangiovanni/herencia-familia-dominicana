@@ -9,6 +9,9 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Menu, User } from "lucide-react";
@@ -58,6 +61,21 @@ const MobileNavigationMenu = () => {
           <DropdownMenuItem onClick={() => navigate('/determinacion-herederos')}>
             Determinación de Herederos
           </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>Sienna</DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="w-56">
+              <DropdownMenuItem onClick={() => navigate('/hallazgos')}>
+                Hallazgos
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/calculo-filiacion')}>
+                Cálculo por Filiación
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/documentos-probatorios')}>
+                Documentos Probatorios
+              </DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
           {isAdmin && (
             <>
               <DropdownMenuSeparator />

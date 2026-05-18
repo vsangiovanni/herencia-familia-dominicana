@@ -2,7 +2,7 @@
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api';
 
 interface PageConfig {
   [path: string]: string;
@@ -31,14 +31,11 @@ export const usePageVisit = () => {
       try {
         const pageName = pageNames[location.pathname] || 'Página Desconocida';
         
-        await supabase
-          .from('page_visits')
-          .insert({
-            user_id: user.id,
-            page_path: location.pathname,
-            page_name: pageName,
-            user_agent: navigator.userAgent
-          });
+        await api.recordPageVisit({
+          page_path: location.pathname,
+          page_name: pageName,
+          user_agent: navigator.userAgent
+        });
 
         console.log('Visita de página registrada:', location.pathname);
       } catch (error) {

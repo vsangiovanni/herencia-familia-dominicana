@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api';
 import DocumentHeader from '@/components/DocumentHeader';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -72,13 +72,8 @@ const CalculoHerencias = () => {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
-      
-      if (error) throw error;
-      setUsers(data || []);
+      const { users } = await api.listUsers();
+      setUsers(users as UserData[]);
     } catch (error) {
       console.error('Error al obtener usuarios:', error);
       toast({
@@ -186,25 +181,7 @@ const CalculoHerencias = () => {
     try {
       setDeleting(true);
       
-      // Eliminar permisos del usuario
-      await supabase
-        .from('user_page_permissions')
-        .delete()
-        .eq('user_id', userToDelete.id);
-
-      // Eliminar visitas del usuario
-      await supabase
-        .from('page_visits')
-        .delete()
-        .eq('user_id', userToDelete.id);
-
-      // Eliminar perfil del usuario
-      const { error } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', userToDelete.id);
-
-      if (error) throw error;
+      await api.deleteUser(userToDelete.id);
 
       toast({
         title: 'Usuario eliminado',
