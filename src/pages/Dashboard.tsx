@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
 import { Calculator, Users, FileText, TreePine } from 'lucide-react';
-import BackButton from '@/components/BackButton';
+import PageHelp from '@/components/PageHelp';
 
 const Dashboard = () => {
   const { user, userProfile, isAdmin } = useAuth();
@@ -12,11 +12,10 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="container mx-auto px-4 py-8">
-        <div className="mb-4">
-          <BackButton />
-        </div>
-        
-        <div className="mb-8">
+        <div className="relative mb-8 pr-12">
+          <div className="absolute right-0 top-0">
+            <PageHelp helpKey="dashboard" />
+          </div>
           <h1 className="text-4xl font-bold text-gray-900 mb-2">
             Bienvenido, {userProfile?.full_name || user?.email}
           </h1>

@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import BackButton from '@/components/BackButton';
 import DocumentHeader from '@/components/DocumentHeader';
-import SiennaPageLayout from '@/components/sienna/SiennaPageLayout';
 import { api, ConfirmedHeir, SiennaFamilyMember } from '@/lib/api';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -105,7 +104,7 @@ const ClassicNode = ({
       <div className="relative flex flex-col items-center pt-6">
         <div
           className={cn(
-            'relative mb-3 w-[min(100%,270px)] min-w-0 max-w-[270px] rounded-md border-2 bg-white p-3 text-center shadow-sm',
+            'relative mb-3 min-w-[230px] max-w-[270px] rounded-md border-2 bg-white p-3 text-center shadow-sm',
             member.is_highlighted_ancestor && !isHeir ? 'border-legal-gold bg-legal-beige' : 'border-legal-blue/30',
             isHeir && 'border-legal-gold bg-legal-gold/5 shadow-md'
           )}
@@ -356,14 +355,13 @@ const ArbolGenealogicoSienna = () => {
   };
 
   return (
-    <SiennaPageLayout>
-      <div className="mb-4">
-        <BackButton />
-      </div>
+    <div className="container mx-auto px-4 py-8">
+      <BackButton />
 
       <DocumentHeader
         title="Árbol Genealógico Sienna"
         subtitle="Visualización clásica dinámica con herederos, foto y monto heredado"
+        helpKey="sienna-arbol"
       />
 
       <div className="mb-4 flex flex-wrap justify-end gap-2">
@@ -378,7 +376,7 @@ const ArbolGenealogicoSienna = () => {
         </Button>
       </div>
 
-      <div className="w-full space-y-6">
+      <div className="mx-auto max-w-[95%] space-y-6">
         <Card className="border border-legal-gold/20">
           <CardContent className="p-5">
             <h3 className="mb-2 font-serif text-lg font-bold text-legal-blue">Criterio automático del caso Alessandro</h3>
@@ -388,7 +386,7 @@ const ArbolGenealogicoSienna = () => {
           </CardContent>
         </Card>
 
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-4">
           <Card className="border border-legal-gold/20">
             <CardContent className="flex items-center gap-3 p-5">
               <Users className="h-9 w-9 text-legal-blue" />
@@ -438,7 +436,7 @@ const ArbolGenealogicoSienna = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 p-6">
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[1fr_220px_auto] lg:items-end">
+            <div className="grid gap-4 md:grid-cols-[1fr_220px_auto] md:items-end">
               <div>
                 <Label>Monto bruto de la herencia</Label>
                 <Input
@@ -462,11 +460,7 @@ const ArbolGenealogicoSienna = () => {
                   placeholder="0"
                 />
               </div>
-              <Button
-                onClick={applyEstateCalculation}
-                disabled={paymentSaving}
-                className="w-full bg-legal-gold text-white hover:bg-legal-gold/90 sm:w-auto"
-              >
+              <Button onClick={applyEstateCalculation} disabled={paymentSaving} className="bg-legal-gold hover:bg-legal-gold/90 text-white">
                 <Save className="mr-2 h-4 w-4" />
                 Calcular y guardar pagos
               </Button>
@@ -494,7 +488,7 @@ const ArbolGenealogicoSienna = () => {
               </Button>
             )}
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+            <div className="grid gap-3 md:grid-cols-5">
               {calculatedPayments.map(({ heir, share, amount }) => (
                 <div key={share.member.id} className="rounded-md border border-legal-blue/15 bg-white p-3">
                   <p className="text-xs font-semibold leading-tight text-legal-blue">{heir?.heir_name || share.member.name}</p>
@@ -568,7 +562,7 @@ const ArbolGenealogicoSienna = () => {
           </CardContent>
         </Card>
       </div>
-    </SiennaPageLayout>
+    </div>
   );
 };
 

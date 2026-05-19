@@ -20,10 +20,20 @@ npm run build
 npm run deploy:api
 ```
 
-Pipeline todo-en-uno:
+Pipeline todo-en-uno (build + FTP + verificación HTTP):
 
 ```sh
-bash scripts/run-release.sh
+npm run release
+# equivalente: bash scripts/run-release.sh
+```
+
+Flujo recomendado con Git:
+
+```sh
+git add -A
+git commit -m "descripción del cambio"
+git push origin main
+npm run release
 ```
 
 ## Checklist manual

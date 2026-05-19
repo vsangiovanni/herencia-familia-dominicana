@@ -164,7 +164,7 @@ const ExplicacionHerederosSienna = () => {
   return (
     <SiennaPageLayout className="print:py-2">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 print:hidden">
-        <BackButton />
+        <BackButton wrapperClassName="" />
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" asChild>
             <Link to="/sienna/arbol-genealogico">Ver árbol Sienna</Link>
@@ -179,6 +179,7 @@ const ExplicacionHerederosSienna = () => {
       <DocumentHeader
         title="Explicación Sienna para Herederos"
         subtitle="Por qué heredo, simulación, soporte documental y resumen para reunión"
+        helpKey="sienna-explicacion"
       />
 
       <div className="w-full space-y-6">

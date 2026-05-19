@@ -210,9 +210,10 @@ const AdminUsers = () => {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <DocumentHeader 
-        title="Panel de Administración" 
-        subtitle="Gestión de usuarios y estadísticas del sistema" 
+      <DocumentHeader
+        title="Panel de Administración"
+        subtitle="Gestión de usuarios y estadísticas del sistema"
+        helpKey="admin-users"
       />
 
       <div className="max-w-6xl mx-auto">

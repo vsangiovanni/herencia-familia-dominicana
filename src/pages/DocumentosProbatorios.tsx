@@ -346,13 +346,12 @@ const DocumentosProbatorios = () => {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="mb-4">
-        <BackButton />
-      </div>
+      <BackButton />
 
       <DocumentHeader
         title="Documentos Probatorios"
         subtitle="Registro de actas, personas documentadas y herederos confirmados para sustentar el cálculo"
+        helpKey="documentos-probatorios"
       />
 
       <div className="max-w-7xl mx-auto space-y-6">

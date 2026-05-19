@@ -138,9 +138,10 @@ const DeterminacionHerederos = () => {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <DocumentHeader 
-        title="Determinación de Herederos" 
-        subtitle="Alessandro de Paola Sangiovanni" 
+      <DocumentHeader
+        title="Determinación de Herederos"
+        subtitle="Alessandro de Paola Sangiovanni"
+        helpKey="determinacion-herederos"
       />
       
       <div className="max-w-4xl mx-auto">

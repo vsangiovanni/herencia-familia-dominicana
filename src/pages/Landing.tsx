@@ -4,6 +4,7 @@ import { ArrowRight, BarChart4, FileText, TreePine, Users, Shield, Workflow } fr
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useAuth } from '@/context/AuthContext';
+import PageHelp from '@/components/PageHelp';
 
 const Landing = () => {
   const { user, isApproved, loading } = useAuth();
@@ -63,7 +64,10 @@ const Landing = () => {
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
-      <section className="bg-legal-blue py-16">
+      <section className="relative bg-legal-blue py-16">
+        <div className="absolute right-4 top-4 z-10 sm:right-8 sm:top-6">
+          <PageHelp helpKey="landing" className="text-white hover:bg-white/10 hover:text-white" />
+        </div>
         <div className="container mx-auto px-4 text-center">
           <h1 className="text-3xl md:text-4xl lg:text-5xl font-serif font-bold text-white mb-4">
             Sistema Genealógico y Determinación de Herederos

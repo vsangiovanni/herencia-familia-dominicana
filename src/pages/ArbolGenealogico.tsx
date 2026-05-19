@@ -11,13 +11,12 @@ const ArbolGenealogico = () => {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="mb-4">
-        <BackButton />
-      </div>
+      <BackButton />
       
-      <DocumentHeader 
-        title="Árbol Genealógico" 
-        subtitle="Familia Sangiovanni - de Paola" 
+      <DocumentHeader
+        title="Árbol Genealógico"
+        subtitle="Familia Sangiovanni - de Paola"
+        helpKey="arbol-genealogico"
       />
       
       <div className="max-w-4xl mx-auto">

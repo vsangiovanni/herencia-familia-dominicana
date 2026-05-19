@@ -22,4 +22,3 @@ bash scripts/post-deploy-check.sh
 
 echo ""
 echo "OK: release completado. Log: $LOG"
-echo "Siguiente paso manual: git add, commit y push si hubo cambios de código."

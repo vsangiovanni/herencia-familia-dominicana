@@ -7,8 +7,12 @@ Pantallas especializadas del expediente familiar (caso Alessandro y derivados).
 | Ruta | Archivo | Propósito |
 |------|---------|-----------|
 | `/sienna/arbol-genealogico` | `ArbolGenealogicoSienna.tsx` | Árbol clásico, cálculo de montos, resumen por heredero |
-| `/sienna/miembros-arbol` | `MiembrosArbolSienna.tsx` | Alta/edición de miembros, simulador previo al guardado |
+| `/sienna/miembros-arbol` | `MiembrosArbolSienna.tsx` | CRUD con línea parental, rama sucesoral, conexión al árbol y si hereda |
 | `/sienna/explicacion-herederos` | `ExplicacionHerederosSienna.tsx` | Reunión: por qué heredo, simulador, semáforo, timeline, glosario, PDF |
+
+## Ayuda en pantalla
+
+En las tres rutas Sienna hay un icono **?** (esquina superior derecha del encabezado) con guía de uso: montos del caudal, estado hereditario en miembros, pestañas de explicación, etc. Ver [docs/UI.md](UI.md).
 
 ## Layout responsivo
 

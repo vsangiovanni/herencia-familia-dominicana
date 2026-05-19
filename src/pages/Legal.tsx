@@ -2,12 +2,16 @@
 import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import PageHelp from '@/components/PageHelp';
 
 const Legal = () => {
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">Información Legal</h1>
+      <div className="relative max-w-4xl mx-auto">
+        <div className="absolute right-0 top-0">
+          <PageHelp helpKey="legal" />
+        </div>
+        <h1 className="pr-12 text-3xl font-bold text-gray-900 mb-8">Información Legal</h1>
         
         <div className="space-y-8">
           <Card>

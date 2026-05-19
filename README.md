@@ -46,6 +46,13 @@ Documentación: [docs/SIENNA.md](docs/SIENNA.md)
 
 Lógica compartida: `src/lib/dominicanInheritance.ts`, `src/lib/siennaHeirExplain.ts`.
 
+## Interfaz (ayuda y navegación)
+
+Documentación: [docs/UI.md](docs/UI.md)
+
+- **Ayuda (?):** popover no invasivo en cada pantalla; textos en `src/data/screenHelp.ts`.
+- **Atrás:** visible solo fuera de inicio, login y panel; con historial vuelve atrás, si no va al dashboard.
+
 ## Backend
 
 - **Local:** Node.js + Express (`server/index.js`) → MySQL.

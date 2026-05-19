@@ -79,13 +79,12 @@ const actionItems = [
 const Hallazgos = () => {
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="mb-4">
-        <BackButton />
-      </div>
+      <BackButton />
 
       <DocumentHeader
         title="Hallazgos"
         subtitle="Inconsistencias, riesgos y sugerencias de revisión"
+        helpKey="hallazgos"
       />
 
       <div className="max-w-5xl mx-auto space-y-6">

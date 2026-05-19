@@ -8,13 +8,12 @@ import BackButton from '@/components/BackButton';
 const ArbolGenealogicoClasico = () => {
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="mb-4">
-        <BackButton />
-      </div>
+      <BackButton />
       
-      <DocumentHeader 
-        title="Árbol Genealógico Clásico" 
-        subtitle="Visualización Tradicional de la Familia Sangiovanni - de Paola" 
+      <DocumentHeader
+        title="Árbol Genealógico Clásico"
+        subtitle="Visualización Tradicional de la Familia Sangiovanni - de Paola"
+        helpKey="arbol-genealogico-clasico"
       />
       
       <div className="max-w-[95%] mx-auto">

@@ -27,8 +27,14 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/use-toast';
 import { buildDominicanInheritancePlan, classifyMemberByDominicanLaw, normalizeName } from '@/lib/dominicanInheritance';
+import {
+  buildMemberTreeContext,
+  formatParentOptionLabel,
+  sortMembersByTree,
+} from '@/lib/siennaFamilyTree';
 import { formatPercent } from '@/lib/siennaHeirExplain';
-import { Edit, Save, SlidersHorizontal, Trash2, UserPlus, Users } from 'lucide-react';
+import MemberTreeContextPanel from '@/components/sienna/MemberTreeContextPanel';
+import { Edit, GitBranch, Save, Search, SlidersHorizontal, Trash2, UserPlus, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Progress } from '@/components/ui/progress';
 
@@ -113,16 +119,12 @@ const toForm = (member: SiennaFamilyMember): MemberForm => ({
   sort_order: String(member.sort_order || 0),
 });
 
-const formatAuditDate = (value?: string | null) =>
-  value ? new Intl.DateTimeFormat('es-DO', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) : '-';
-
-const auditName = (name?: string | null, email?: string | null) => name || email || '-';
-
 const MiembrosArbolSienna = () => {
   const [members, setMembers] = useState<SiennaFamilyMember[]>([]);
   const [form, setForm] = useState<MemberForm>(emptyForm);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState('');
 
   const loadMembers = async () => {
     setLoading(true);
@@ -152,6 +154,42 @@ const MiembrosArbolSienna = () => {
 
   const evaluation = useMemo(() => determineInheritance(form, members), [form, members]);
 
+  const inheritancePlan = useMemo(() => buildDominicanInheritancePlan(members), [members]);
+
+  const sortedMembers = useMemo(
+    () => sortMembersByTree(members, inheritancePlan),
+    [inheritancePlan, members]
+  );
+
+  const memberContexts = useMemo(
+    () => new Map(sortedMembers.map((member) => [member.id, buildMemberTreeContext(member, members, inheritancePlan)])),
+    [inheritancePlan, members, sortedMembers]
+  );
+
+  const filteredMembers = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return sortedMembers;
+
+    return sortedMembers.filter((member) => {
+      const context = memberContexts.get(member.id);
+      const haystack = [
+        member.name,
+        member.id,
+        member.spouse,
+        context?.parentalLine,
+        context?.collateralLine,
+        context?.connectionLabel,
+        context?.inheritanceLabel,
+        member.inheritance_reason,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      return haystack.includes(query);
+    });
+  }, [memberContexts, search, sortedMembers]);
+
   const draftMembers = useMemo(() => {
     if (!form.name.trim() && !form.id) return members;
     const memberId = form.id || '__draft_member__';
@@ -173,6 +211,26 @@ const MiembrosArbolSienna = () => {
       ? members.map((member) => (member.id === memberId ? draftMember : member))
       : [...members, draftMember];
   }, [evaluation.inheritance_reason, evaluation.inheritance_status, form, members]);
+
+  const formContext = useMemo(() => {
+    const memberId = form.id || '__draft_member__';
+    const draftMember: SiennaFamilyMember = {
+      id: memberId,
+      parent_id: form.parent_id === 'root' ? null : form.parent_id,
+      relationship_to_parent: form.parent_id === 'root' ? null : form.relationship_to_parent,
+      name: form.name.trim() || 'Borrador',
+      birth: form.birth || null,
+      death: form.death || null,
+      spouse: form.spouse || null,
+      spouse_birth: form.spouse_birth || null,
+      inheritance_status: evaluation.inheritance_status,
+      inheritance_reason: form.inheritance_reason || evaluation.inheritance_reason,
+      is_highlighted_ancestor: form.is_highlighted_ancestor,
+      sort_order: Number(form.sort_order || 0),
+    };
+
+    return buildMemberTreeContext(draftMember, draftMembers, inheritancePlan);
+  }, [draftMembers, evaluation, form, inheritancePlan]);
 
   const simulation = useMemo(() => {
     const current = buildDominicanInheritancePlan(members);
@@ -246,13 +304,12 @@ const MiembrosArbolSienna = () => {
 
   return (
     <SiennaPageLayout>
-      <div className="mb-4">
-        <BackButton />
-      </div>
+      <BackButton />
 
       <DocumentHeader
         title="Miembros del Árbol Sienna"
-        subtitle="Administración de personas, parentescos, estados hereditarios y ramas explicativas"
+        subtitle="Registro operativo: línea parental, rama sucesoral, conexión al árbol y si el miembro hereda o actúa solo como enlace"
+        helpKey="sienna-miembros"
       />
 
       <div className="mb-4 flex flex-wrap justify-end gap-2">
@@ -285,19 +342,24 @@ const MiembrosArbolSienna = () => {
               <Input value={form.name} onChange={(event) => updateForm('name', event.target.value)} />
             </div>
             <div>
-              <Label>Nodo superior</Label>
+              <Label>Conectar debajo de (nodo superior)</Label>
               <Select value={form.parent_id} onValueChange={(value) => updateForm('parent_id', value)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Seleccione el ascendiente" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="root">Raíz del árbol</SelectItem>
+                  <SelectItem value="root">Raíz del árbol (sin superior)</SelectItem>
                   {members.filter((member) => member.id !== form.id).map((member) => (
-                    <SelectItem key={member.id} value={member.id}>{member.name}</SelectItem>
+                    <SelectItem key={member.id} value={member.id}>
+                      {formatParentOptionLabel(member, members)}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              <p className="mt-1 text-xs text-legal-gray">
+                Persona a la que se une en el árbol. El parentesco indica cómo se relaciona con ese superior.
+              </p>
             </div>
             <div>
-              <Label>Parentesco</Label>
+              <Label>Parentesco con el superior</Label>
               <Select
                 value={form.relationship_to_parent}
                 onValueChange={(value) => updateForm('relationship_to_parent', value)}
@@ -323,11 +385,19 @@ const MiembrosArbolSienna = () => {
               <Input value={form.death} onChange={(event) => updateForm('death', event.target.value)} placeholder="dd/mm/aaaa" />
             </div>
             <div>
-              <Label>Cónyuge</Label>
+              <Label>Cónyuge (doble filiación / representación)</Label>
               <Input value={form.spouse} onChange={(event) => updateForm('spouse', event.target.value)} />
             </div>
             <div>
-              <Label>Orden</Label>
+              <Label>Nacimiento del cónyuge</Label>
+              <Input
+                value={form.spouse_birth}
+                onChange={(event) => updateForm('spouse_birth', event.target.value)}
+                placeholder="dd/mm/aaaa"
+              />
+            </div>
+            <div>
+              <Label>Orden entre hermanos</Label>
               <Input type="number" value={form.sort_order} onChange={(event) => updateForm('sort_order', event.target.value)} />
             </div>
             <div>
@@ -359,11 +429,18 @@ const MiembrosArbolSienna = () => {
               />
             </div>
             <div className="rounded-md border border-legal-blue/20 bg-legal-blue/5 p-4 md:col-span-2">
-              <p className="text-sm font-semibold text-legal-blue">Evaluación sugerida</p>
+              <p className="text-sm font-semibold text-legal-blue">Evaluación sugerida (reparto)</p>
               <Badge className="mt-2" variant={evaluation.inheritance_status === 'posible_heredero' ? 'default' : 'secondary'}>
                 {evaluation.inheritance_status.replace(/_/g, ' ')}
               </Badge>
               <p className="mt-2 text-sm leading-relaxed text-gray-700">{evaluation.inheritance_reason}</p>
+            </div>
+            <div className="rounded-md border border-legal-gold/25 bg-legal-gold/5 p-4 md:col-span-2">
+              <p className="mb-3 flex items-center gap-2 text-sm font-semibold text-legal-blue">
+                <GitBranch className="h-4 w-4" />
+                Posición en el árbol (vista previa)
+              </p>
+              <MemberTreeContextPanel context={formContext} />
             </div>
             <div className="flex flex-col justify-end gap-2 sm:flex-row md:col-span-2">
               <Button variant="outline" onClick={resetForm} className="w-full sm:w-auto">
@@ -428,57 +505,105 @@ const MiembrosArbolSienna = () => {
               Tabla de Miembros
             </CardTitle>
           </CardHeader>
-          <CardContent className="overflow-x-auto p-4 sm:p-6">
-            <Table className="min-w-[720px]">
+          <CardContent className="space-y-4 p-4 sm:p-6">
+            <div className="relative max-w-xl">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-legal-gray" />
+              <Input
+                className="pl-9"
+                placeholder="Buscar por nombre, línea parental, rama o herencia..."
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
+            </div>
+
+            <Table className="min-w-[1100px]">
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nombre</TableHead>
-                  <TableHead>Superior</TableHead>
-                  <TableHead>Parentesco</TableHead>
-                  <TableHead>Estado</TableHead>
+                  <TableHead>Miembro</TableHead>
+                  <TableHead className="min-w-[220px]">Línea parental</TableHead>
+                  <TableHead>Rama / nivel</TableHead>
+                  <TableHead>Conexión</TableHead>
+                  <TableHead>¿Hereda?</TableHead>
+                  <TableHead>Rol</TableHead>
                   <TableHead>Fechas</TableHead>
-                  <TableHead>Razón</TableHead>
-                  <TableHead className="hidden lg:table-cell">Auditoría</TableHead>
+                  <TableHead className="hidden xl:table-cell">Notas</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading && (
-                  <TableRow><TableCell colSpan={8} className="text-center py-8 text-legal-gray">Cargando miembros...</TableCell></TableRow>
+                  <TableRow>
+                    <TableCell colSpan={9} className="py-8 text-center text-legal-gray">
+                      Cargando miembros...
+                    </TableCell>
+                  </TableRow>
                 )}
-                {!loading && members.map((member) => {
-                  const parent = members.find((item) => item.id === member.parent_id);
-                  return (
-                    <TableRow key={member.id}>
-                      <TableCell className="font-medium text-legal-blue min-w-[240px]">{member.name}</TableCell>
-                      <TableCell>{parent?.name || 'Raíz'}</TableCell>
-                      <TableCell>{member.relationship_to_parent || '-'}</TableCell>
-                      <TableCell>
-                        <Badge variant={member.inheritance_status === 'posible_heredero' || member.inheritance_status === 'confirmado' ? 'default' : 'secondary'}>
-                          {(member.inheritance_status || 'requiere_revision').replace(/_/g, ' ')}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{member.birth || '-'} {member.death ? ` / ${member.death}` : ''}</TableCell>
-                      <TableCell className="min-w-[280px] text-sm text-gray-700">{member.inheritance_reason || '-'}</TableCell>
-                      <TableCell className="hidden min-w-[220px] text-xs text-legal-gray lg:table-cell">
-                        <p><span className="font-semibold">Creado:</span> {auditName(member.created_by_name, member.created_by_email)}</p>
-                        <p>{formatAuditDate(member.created_at)}</p>
-                        <p className="mt-1"><span className="font-semibold">Modificado:</span> {auditName(member.updated_by_name, member.updated_by_email)}</p>
-                        <p>{formatAuditDate(member.updated_at)}</p>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button variant="outline" size="sm" onClick={() => setForm(toForm(member))}>
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700" onClick={() => deleteMember(member)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                {!loading && filteredMembers.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={9} className="py-8 text-center text-legal-gray">
+                      No hay miembros que coincidan con la búsqueda.
+                    </TableCell>
+                  </TableRow>
+                )}
+                {!loading &&
+                  filteredMembers.map((member) => {
+                    const context = memberContexts.get(member.id);
+                    if (!context) return null;
+
+                    return (
+                      <TableRow key={member.id}>
+                        <TableCell className="min-w-[200px]">
+                          <p className="font-medium text-legal-blue">{member.name}</p>
+                          <p className="mt-1 font-mono text-[10px] text-legal-gray">{member.id}</p>
+                          {member.is_highlighted_ancestor && (
+                            <Badge className="mt-1" variant="outline">
+                              Destacado
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm leading-relaxed text-gray-700">{context.parentalLine}</TableCell>
+                        <TableCell className="min-w-[160px]">
+                          <p className="text-sm font-medium text-legal-blue">{context.collateralLine}</p>
+                          <p className="mt-1 text-xs text-legal-gray">Nivel {context.treeLevel}</p>
+                        </TableCell>
+                        <TableCell className="min-w-[140px] text-sm text-gray-700">{context.connectionLabel}</TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={context.inherits ? 'default' : 'secondary'}
+                            className={context.inherits ? 'bg-legal-gold text-white hover:bg-legal-gold/90' : ''}
+                          >
+                            {context.inheritanceLabel}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="min-w-[140px] text-sm text-gray-700">{context.treeRoleLabel}</TableCell>
+                        <TableCell className="whitespace-nowrap text-sm">
+                          {member.birth || '—'}
+                          {member.death ? ` / † ${member.death}` : ''}
+                          {member.spouse ? (
+                            <p className="mt-1 text-xs text-legal-gray">Cónyuge: {member.spouse}</p>
+                          ) : null}
+                        </TableCell>
+                        <TableCell className="hidden min-w-[200px] text-sm text-gray-700 xl:table-cell">
+                          {member.inheritance_reason || context.routeLabel || '—'}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button variant="outline" size="sm" onClick={() => setForm(toForm(member))}>
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-600 hover:text-red-700"
+                              onClick={() => deleteMember(member)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
               </TableBody>
             </Table>
           </CardContent>

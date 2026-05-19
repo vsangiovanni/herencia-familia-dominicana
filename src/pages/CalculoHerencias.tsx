@@ -220,9 +220,10 @@ const CalculoHerencias = () => {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <DocumentHeader 
-        title="Cálculo de Herencias" 
-        subtitle="Herramientas administrativas para el cálculo de herencias y gestión de usuarios" 
+      <DocumentHeader
+        title="Cálculo de Herencias"
+        subtitle="Herramientas administrativas para el cálculo de herencias y gestión de usuarios"
+        helpKey="calculo-herencias"
       />
 
       <div className="max-w-6xl mx-auto">

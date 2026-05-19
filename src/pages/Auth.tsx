@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import PageHelp from "@/components/PageHelp";
 
 const loginSchema = z.object({
   email: z.string().email("Correo electrónico inválido"),
@@ -42,7 +43,10 @@ const Auth = () => {
   };
 
   return (
-    <div className="container mx-auto max-w-md px-4 py-8">
+    <div className="container relative mx-auto max-w-md px-4 py-8">
+      <div className="absolute right-4 top-8 z-10">
+        <PageHelp helpKey="auth" />
+      </div>
       <div className="space-y-6 bg-white p-6 rounded-lg shadow-md border border-legal-gold/20">
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-legal-blue">HerenciaRD</h1>

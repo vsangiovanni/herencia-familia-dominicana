@@ -122,13 +122,12 @@ const CalculoFiliacion = () => {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="mb-4">
-        <BackButton />
-      </div>
+      <BackButton />
 
       <DocumentHeader
         title="Cálculo por Filiación"
         subtitle="Distribución por línea familiar y acumulado por heredero"
+        helpKey="calculo-filiacion"
       />
 
       <div className="max-w-6xl mx-auto space-y-6">

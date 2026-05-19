@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:api": "node server/index.js",
+    "dev:up": "bash scripts/dev-up.sh",
     "server": "node server/index.js",
     "start": "node server/index.js",
     "prebuild": "bash scripts/copy-brand-assets.sh",

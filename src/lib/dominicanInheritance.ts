@@ -29,7 +29,7 @@ export const normalizeName = (value: string) =>
     .replace(/\s+/g, ' ')
     .trim();
 
-const activeCollateralRoots = [
+export const activeCollateralRoots = [
   {
     name: 'Vincenzo (Vicente) Sangiovanni',
     label: 'Vincenzo/Vicente',
