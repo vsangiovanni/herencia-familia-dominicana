@@ -1,146 +1,82 @@
 # HerenciaRD
 
-Sistema especializado para documentar, explicar y calcular herencias familiares en la República Dominicana.
+Sistema genealógico y de determinación de herederos para la República Dominicana.
 
-## Proyecto
+**Autor y titular:** [Víctor Sangiovanni](https://github.com/vsangiovanni)
 
-**URL**: https://lovable.dev/projects/7f633c8a-c2f3-4efb-90df-5640b3e808da
+**Producción:** https://herenciard.vmsencf.com
 
-**Producción**: https://herenciard.vmsencf.com
+**Repositorio:** https://github.com/vsangiovanni/herencia-familia-dominicana
 
-## How can I edit this code?
+## Descripción
 
-There are several ways of editing your application.
-
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/7f633c8a-c2f3-4efb-90df-5640b3e808da) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
-
-**Edit a file directly in GitHub**
-
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## Sección Sienna
-
-La sección Sienna contiene las pantallas de trabajo especializadas para el expediente familiar:
-
-- `/sienna/arbol-genealogico`: árbol genealógico clásico, dinámico y enfocado en explicar quién hereda, por qué hereda y cuánto recibe.
-- `/sienna/miembros-arbol`: CRUD administrativo para agregar, editar y clasificar miembros del árbol sin contaminar la pantalla de presentación.
-- `/sienna/explicacion-herederos`: pantalla para reunión con herederos — vista «Por qué heredo», simulador visual, semáforo documental (verde/amarillo/rojo), línea de tiempo, glosario con ejemplos del caso, resumen ejecutivo del reparto y ficha PDF individual por heredero.
-- `/documentos-probatorios`: carga y revisión de documentos, herederos confirmados, foto del heredero y monto heredado.
-
-El árbol Sienna usa la información documentada del caso Alessandro para marcar herederos finales, enlaces genealógicos y ramas activas. El monto total de la herencia se puede calcular en pantalla y se refleja en los nodos del árbol; al guardar, queda persistido en los herederos confirmados.
-
-### Cálculo sucesoral Sienna
-
-Las páginas `/sienna/arbol-genealogico` y `/sienna/miembros-arbol` comparten el cálculo de `src/lib/dominicanInheritance.ts`.
-
-- Aplica el criterio sucesoral dominicano de forma operativa: primero descendientes directos del causante; si no existen, ramas colaterales documentadas y representación por estirpes cuando un ascendiente de la rama figura fallecido.
-- Para el expediente Alessandro, al no existir descendencia directa registrada, la distribución activa parte de las ramas Vincenzo/Vicente y Paolo/Paulino y recalcula porcentajes cuando se agregan nuevos descendientes en el árbol Sienna.
-- El cálculo conserva la doble vocación sucesoral cuando una rama entra por el cónyuge documentado en el árbol, como ocurre con María Rosa Sangiovanni Pérez y Pedro Pablo Sangiovanni Simo.
-- La pantalla de miembros clasifica al guardar; el árbol recalcula en vivo el porcentaje y el monto neto a distribuir después del porcentaje de la firma de abogados.
-
-## Backend y datos
-
-El desarrollo local usa Node.js + Express contra MySQL. Producción en Hostinger usa el backend PHP `public/api.php` y `public/.htaccess`, porque es el flujo estable para el hosting compartido.
-
-Tablas relevantes:
-
-- `confirmed_heirs`: herederos confirmados, líneas familiares, foto y monto heredado.
-- `sienna_family_members`: miembros del árbol, parentesco, nodo superior, estado hereditario y razón explicativa.
+HerenciaRD documenta expedientes familiares, construye árboles genealógicos y calcula repartos sucesorios según criterios operativos de la legislación dominicana. La sección **Sienna** concentra las pantallas de reunión con herederos: explicación del reparto, semáforo documental, simulador y árbol clásico.
 
 ## Desarrollo local
 
+Requisitos: Node.js 18+ y MySQL.
+
 ```sh
+git clone https://github.com/vsangiovanni/herencia-familia-dominicana.git
+cd herencia-familia-dominicana
+cp .env.example .env
+npm install
 node server/index.js
-./node_modules/.bin/vite --host 0.0.0.0 --port 8080
+npm run dev
 ```
 
-URLs locales:
+| Servicio | URL |
+|----------|-----|
+| Frontend | http://localhost:8080/ |
+| API (Node) | http://127.0.0.1:3001/api/health |
+| Árbol Sienna | http://localhost:8080/sienna/arbol-genealogico |
+| Explicación herederos | http://localhost:8080/sienna/explicacion-herederos |
+| Miembros del árbol | http://localhost:8080/sienna/miembros-arbol |
 
-- Frontend: http://localhost:8080/
-- Backend health: http://127.0.0.1:3001/api/health
-- Árbol Sienna: http://localhost:8080/sienna/arbol-genealogico
-- CRUD miembros: http://localhost:8080/sienna/miembros-arbol
-- Explicación herederos: http://localhost:8080/sienna/explicacion-herederos
+## Sección Sienna
 
-### Herramientas para explicar a herederos (Sienna)
+Documentación: [docs/SIENNA.md](docs/SIENNA.md)
 
-| Función | Dónde |
-|--------|--------|
-| Por qué heredo (ruta, %, monto, base legal simple) | `/sienna/explicacion-herederos` → pestaña «Por qué heredo» |
-| Simulador (incluir/excluir herederos sin guardar) | `/sienna/explicacion-herederos` → «Simulador» |
-| Simulador antes de guardar miembro en el árbol | `/sienna/miembros-arbol` |
-| Semáforo documental y conflictos de fechas | `/sienna/explicacion-herederos` → «Semáforo» |
-| Línea de tiempo (nacimiento, matrimonio, defunción, vínculos) | `/sienna/explicacion-herederos` → «Línea de tiempo» |
-| Resumen ejecutivo (bruto, firma, neto, tabla de reparto) | `/sienna/explicacion-herederos` (parte superior) |
-| Ficha PDF por heredero (foto, rama, documentos, cuota) | Botón «PDF individual» en cada ficha |
-| Resumen en el árbol | `/sienna/arbol-genealogico` → bloque «Por qué heredan» |
+| Ruta | Uso |
+|------|-----|
+| `/sienna/arbol-genealogico` | Árbol clásico, montos y resumen «Por qué heredan» |
+| `/sienna/miembros-arbol` | CRUD de miembros y simulador antes de guardar |
+| `/sienna/explicacion-herederos` | Reunión con herederos: pestañas, PDF, semáforo, timeline |
+| `/documentos-probatorios` | Evidencias y herederos confirmados |
 
-Lógica compartida en `src/lib/siennaHeirExplain.ts` y cálculo sucesoral en `src/lib/dominicanInheritance.ts`.
+Lógica compartida: `src/lib/dominicanInheritance.ts`, `src/lib/siennaHeirExplain.ts`.
 
-## Tecnologías
+## Backend
 
-This project is built with:
+- **Local:** Node.js + Express (`server/index.js`) → MySQL.
+- **Producción (Hostinger):** PHP `public/api.php` + `.htaccess` (copiados a `dist/` en el build).
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+Tablas principales: `confirmed_heirs`, `sienna_family_members`.
+
+## Marca y créditos
+
+Ver [docs/BRANDING.md](docs/BRANDING.md). Favicon: `public/favicon.svg` (árbol y balanza en azul legal y oro).
 
 ## Despliegue
 
-El flujo estable actual es:
+Guía completa: [docs/DEPLOY.md](docs/DEPLOY.md)
 
-1. Validar cambios localmente.
-2. Ejecutar `./node_modules/.bin/vite build`.
-3. Subir el contenido de `dist/` por FTP al subdominio de Hostinger.
-4. Verificar `https://herenciard.vmsencf.com/api/health` y rutas críticas:
-   - `/sienna/arbol-genealogico`
-   - `/sienna/explicacion-herederos`
-   - `/sienna/miembros-arbol`
+| Comando | Acción |
+|---------|--------|
+| `npm run build` | Genera `dist/` |
+| `npm run deploy` | Sube `dist/` por FTP (no toca `.env` remoto) |
+| `npm run deploy:api` | Solo `api.php` (cambios de backend) |
+| `npm run check:prod` | Verifica health y rutas Sienna en producción |
+| `npm run release` | Build + deploy + check (script bash) |
 
-No subir `.env`, `.deploy_hostinger/`, dumps ni credenciales. El build de Vite copia `public/api.php` y `public/.htaccess` dentro de `dist/`.
+Plantilla de variables en servidor: [`.env.production.example`](.env.production.example)
 
-## Can I connect a custom domain to my Lovable project?
+Credenciales FTP: archivo local `Credenciales Hostinger.txt` en el escritorio (ver DEPLOY.md).
 
-Yes it is!
+## Tecnologías
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+Vite, TypeScript, React, shadcn/ui, Tailwind CSS, MySQL.
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+## Licencia
+
+© Víctor Sangiovanni. Todos los derechos reservados.

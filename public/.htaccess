@@ -10,6 +10,12 @@
   RewriteRule . /index.html [L]
 </IfModule>
 
+<IfModule mod_headers.c>
+  <FilesMatch "^(index\.html|og-image\.png)$">
+    Header set Cache-Control "public, max-age=300, must-revalidate"
+  </FilesMatch>
+</IfModule>
+
 <Files ".env">
   Require all denied
 </Files>

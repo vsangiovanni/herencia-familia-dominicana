@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="HerenciaRD">
+  <rect width="64" height="64" rx="12" fill="#0A2463"/>
+  <path d="M32 10 40 26H24Z" fill="#D5A021"/>
+  <line x1="32" y1="26" x2="32" y2="38" stroke="#F2F0E6" stroke-width="2.5" stroke-linecap="round"/>
+  <circle cx="22" cy="42" r="5" fill="#D5A021"/>
+  <circle cx="42" cy="42" r="5" fill="#D5A021"/>
+  <line x1="22" y1="42" x2="32" y2="38" stroke="#D5A021" stroke-width="2" stroke-linecap="round"/>
+  <line x1="42" y1="42" x2="32" y2="38" stroke="#D5A021" stroke-width="2" stroke-linecap="round"/>
+  <path d="M32 38v8M26 50h12" stroke="#F2F0E6" stroke-width="2.5" stroke-linecap="round"/>
+  <circle cx="32" cy="50" r="2.5" fill="#D5A021"/>
+</svg>

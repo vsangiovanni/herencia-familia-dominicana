@@ -136,6 +136,13 @@ function ensure_schema(): void {
       CONSTRAINT fk_page_visits_user FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS app_settings (
+      setting_key VARCHAR(120) PRIMARY KEY,
+      setting_value TEXT NULL,
+      updated_by CHAR(36) NULL,
+      updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS confirmed_heirs (
       id CHAR(36) PRIMARY KEY,
       heir_name VARCHAR(255) NOT NULL UNIQUE,
@@ -148,6 +155,8 @@ function ensure_schema(): void {
       photo_file_type VARCHAR(120) NULL,
       photo_data LONGTEXT NULL,
       inheritance_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+      created_by CHAR(36) NULL,
+      updated_by CHAR(36) NULL,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     );
@@ -171,6 +180,7 @@ function ensure_schema(): void {
       file_type VARCHAR(120) NULL,
       file_data LONGTEXT NULL,
       created_by CHAR(36) NULL,
+      updated_by CHAR(36) NULL,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       CONSTRAINT fk_evidence_created_by FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL
@@ -189,6 +199,8 @@ function ensure_schema(): void {
       inheritance_reason TEXT NULL,
       is_highlighted_ancestor BOOLEAN NOT NULL DEFAULT FALSE,
       sort_order INT NOT NULL DEFAULT 0,
+      created_by CHAR(36) NULL,
+      updated_by CHAR(36) NULL,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       INDEX idx_sienna_family_parent (parent_id)
@@ -207,6 +219,7 @@ function ensure_schema(): void {
     ['Cálculo por Filiación', '/calculo-filiacion', 'Distribución por líneas familiares'],
     ['Documentos Probatorios', '/documentos-probatorios', 'Expediente documental de actas y herederos'],
     ['Árbol Sienna', '/sienna/arbol-genealogico', 'Árbol genealógico con foto y monto heredado'],
+    ['Miembros del Árbol Sienna', '/sienna/miembros-arbol', 'CRUD de miembros del árbol genealógico Sienna'],
   ];
 
   foreach ($pages as [$name, $path, $description]) {
@@ -240,6 +253,8 @@ function ensure_schema(): void {
     ['photo_file_type', 'ALTER TABLE confirmed_heirs ADD COLUMN photo_file_type VARCHAR(120) NULL AFTER photo_file_name'],
     ['photo_data', 'ALTER TABLE confirmed_heirs ADD COLUMN photo_data LONGTEXT NULL AFTER photo_file_type'],
     ['inheritance_amount', 'ALTER TABLE confirmed_heirs ADD COLUMN inheritance_amount DECIMAL(14,2) NOT NULL DEFAULT 0 AFTER photo_data'],
+    ['created_by', 'ALTER TABLE confirmed_heirs ADD COLUMN created_by CHAR(36) NULL AFTER inheritance_amount'],
+    ['updated_by', 'ALTER TABLE confirmed_heirs ADD COLUMN updated_by CHAR(36) NULL AFTER created_by'],
   ];
 
   foreach ($migrations as [$column, $sql]) {
@@ -248,10 +263,16 @@ function ensure_schema(): void {
     }
   }
 
+  if (!column_exists('evidence_documents', 'updated_by')) {
+    db()->exec('ALTER TABLE evidence_documents ADD COLUMN updated_by CHAR(36) NULL AFTER created_by');
+  }
+
   $memberMigrations = [
     ['relationship_to_parent', "ALTER TABLE sienna_family_members ADD COLUMN relationship_to_parent ENUM('hijo', 'hija', 'conyuge', 'padre', 'madre', 'otro') NULL AFTER parent_id"],
     ['inheritance_status', "ALTER TABLE sienna_family_members ADD COLUMN inheritance_status ENUM('posible_heredero', 'no_hereda', 'requiere_revision', 'confirmado') NOT NULL DEFAULT 'requiere_revision' AFTER spouse_birth"],
     ['inheritance_reason', 'ALTER TABLE sienna_family_members ADD COLUMN inheritance_reason TEXT NULL AFTER inheritance_status'],
+    ['created_by', 'ALTER TABLE sienna_family_members ADD COLUMN created_by CHAR(36) NULL AFTER sort_order'],
+    ['updated_by', 'ALTER TABLE sienna_family_members ADD COLUMN updated_by CHAR(36) NULL AFTER created_by'],
   ];
 
   foreach ($memberMigrations as [$column, $sql]) {
@@ -259,6 +280,12 @@ function ensure_schema(): void {
       db()->exec($sql);
     }
   }
+
+  exec_sql(
+    "INSERT INTO app_settings (setting_key, setting_value)
+     VALUES ('lawyer_fee_percentage', '0')
+     ON DUPLICATE KEY UPDATE setting_key = setting_key"
+  );
 
   exec_sql(
     "UPDATE sienna_family_members
@@ -443,31 +470,38 @@ function bool_value($value): int {
   return filter_var($value, FILTER_VALIDATE_BOOLEAN) ? 1 : 0;
 }
 
-try {
-  ensure_schema();
+function request_path(): string {
+  $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+  return preg_replace('#^/api#', '', $path) ?: '/';
+}
 
-  $method = $_SERVER['REQUEST_METHOD'];
-  $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?: '/';
-  $path = preg_replace('#^/api#', '', $path) ?: '/';
-
-  if ($method === 'GET' && $path === '/health') {
-    db()->query('SELECT 1');
-    json_response(['ok' => true, 'storage' => 'mysql', 'runtime' => 'php']);
+function respond_health(): void {
+  $envPath = __DIR__ . '/.env';
+  if (!is_file($envPath)) {
+    json_response([
+      'ok' => false,
+      'storage' => 'mysql',
+      'runtime' => 'php',
+      'message' => 'Falta el archivo .env en el servidor. Copie las credenciales MySQL de Hostinger a public_html/herenciard/.env',
+    ], 503);
   }
 
+  db()->query('SELECT 1');
+  json_response(['ok' => true, 'storage' => 'mysql', 'runtime' => 'php']);
+}
+
+try {
+  $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+  $path = request_path();
+
+  if ($method === 'GET' && $path === '/health') {
+    respond_health();
+  }
+
+  ensure_schema();
+
   if ($method === 'POST' && $path === '/auth/signup') {
-    $data = body();
-    $email = strtolower(trim($data['email'] ?? ''));
-    $password = (string)($data['password'] ?? '');
-    if (!$email || strlen($password) < 6) json_response(['message' => 'Email y contraseña válida son requeridos'], 400);
-    if (query_one('SELECT id FROM profiles WHERE email = :email LIMIT 1', ['email' => $email])) {
-      json_response(['message' => 'Ya existe un usuario con ese email'], 409);
-    }
-    exec_sql(
-      "INSERT INTO profiles (id, email, password_hash, role, is_approved) VALUES (:id, :email, :hash, 'regular', FALSE)",
-      ['id' => uuid(), 'email' => $email, 'hash' => password_hash($password, PASSWORD_BCRYPT)]
-    );
-    json_response(['ok' => true], 201);
+    json_response(['message' => 'El auto-registro está deshabilitado. Solicita tus credenciales al administrador.'], 403);
   }
 
   if ($method === 'POST' && $path === '/auth/signin') {
@@ -506,6 +540,29 @@ try {
     json_response(['pages' => query_all('SELECT id, name, path, description, created_at FROM pages ORDER BY name')]);
   }
 
+  if ($method === 'GET' && $path === '/settings') {
+    require_user();
+    $settings = [];
+    foreach (query_all('SELECT setting_key, setting_value FROM app_settings') as $row) {
+      $settings[$row['setting_key']] = $row['setting_value'];
+    }
+    json_response(['settings' => $settings]);
+  }
+
+  if ($method === 'PUT' && $path === '/settings') {
+    $user = require_user();
+    require_admin($user);
+    $rawFee = (float)(body()['lawyer_fee_percentage'] ?? 0);
+    $fee = min(100, max(0, $rawFee));
+    exec_sql(
+      "INSERT INTO app_settings (setting_key, setting_value, updated_by)
+       VALUES ('lawyer_fee_percentage', :value, :updatedBy)
+       ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_by = VALUES(updated_by)",
+      ['value' => (string)$fee, 'updatedBy' => $user['id']]
+    );
+    json_response(['ok' => true, 'settings' => ['lawyer_fee_percentage' => $fee]]);
+  }
+
   if ($method === 'GET' && $path === '/profiles/me') {
     json_response(['profile' => public_profile(require_user())]);
   }
@@ -534,6 +591,38 @@ try {
       ));
     }
     json_response(['users' => $users]);
+  }
+
+  if ($method === 'POST' && $path === '/users') {
+    $user = require_user();
+    require_admin($user);
+    $data = body();
+    $email = trim((string)($data['email'] ?? ''));
+    $password = (string)($data['password'] ?? '');
+    if ($email === '' || $password === '') {
+      json_response(['message' => 'Correo y contraseña son requeridos'], 400);
+    }
+    if (strlen($password) < 6) {
+      json_response(['message' => 'La contraseña debe tener al menos 6 caracteres'], 400);
+    }
+    if (query_one('SELECT id FROM profiles WHERE email = :email LIMIT 1', ['email' => $email])) {
+      json_response(['message' => 'Ese correo ya existe'], 409);
+    }
+    $id = uuid();
+    $role = in_array(($data['role'] ?? 'regular'), ['admin', 'regular'], true) ? $data['role'] : 'regular';
+    exec_sql(
+      'INSERT INTO profiles (id, email, password_hash, full_name, role, is_approved)
+       VALUES (:id, :email, :hash, :fullName, :role, :approved)',
+      [
+        'id' => $id,
+        'email' => $email,
+        'hash' => password_hash($password, PASSWORD_BCRYPT),
+        'fullName' => $data['full_name'] ?? null,
+        'role' => $role,
+        'approved' => bool_value($data['is_approved'] ?? true),
+      ]
+    );
+    json_response(['profile' => public_profile(query_one('SELECT * FROM profiles WHERE id = :id', ['id' => $id]))], 201);
   }
 
   if (preg_match('#^/users/([^/]+)$#', $path, $m) && $method === 'PATCH') {
@@ -595,17 +684,25 @@ try {
   if ($method === 'GET' && $path === '/confirmed-heirs') {
     require_user();
     json_response(['heirs' => query_all(
-      'SELECT h.*, COUNT(d.id) AS evidence_count FROM confirmed_heirs h LEFT JOIN evidence_documents d ON d.related_heir_name = h.heir_name GROUP BY h.id ORDER BY h.heir_name'
+      'SELECT h.*, creator.email AS created_by_email, creator.full_name AS created_by_name,
+              updater.email AS updated_by_email, updater.full_name AS updated_by_name,
+              COUNT(d.id) AS evidence_count
+       FROM confirmed_heirs h
+       LEFT JOIN evidence_documents d ON d.related_heir_name = h.heir_name
+       LEFT JOIN profiles creator ON creator.id = h.created_by
+       LEFT JOIN profiles updater ON updater.id = h.updated_by
+       GROUP BY h.id
+       ORDER BY h.heir_name'
     )]);
   }
 
   if ($method === 'POST' && $path === '/confirmed-heirs') {
-    require_user();
+    $user = require_user();
     $data = body();
     exec_sql(
-      'INSERT INTO confirmed_heirs (id, heir_name, relationship_summary, line_vincenzo, line_paolo, status, notes, photo_file_name, photo_file_type, photo_data, inheritance_amount)
-       VALUES (:id, :name, :summary, :vincenzo, :paolo, :status, :notes, :photoFileName, :photoFileType, :photoData, :inheritanceAmount)
-       ON DUPLICATE KEY UPDATE relationship_summary = VALUES(relationship_summary), line_vincenzo = VALUES(line_vincenzo), line_paolo = VALUES(line_paolo), status = VALUES(status), notes = VALUES(notes), photo_file_name = VALUES(photo_file_name), photo_file_type = VALUES(photo_file_type), photo_data = VALUES(photo_data), inheritance_amount = VALUES(inheritance_amount)',
+      'INSERT INTO confirmed_heirs (id, heir_name, relationship_summary, line_vincenzo, line_paolo, status, notes, photo_file_name, photo_file_type, photo_data, inheritance_amount, created_by, updated_by)
+       VALUES (:id, :name, :summary, :vincenzo, :paolo, :status, :notes, :photoFileName, :photoFileType, :photoData, :inheritanceAmount, :createdBy, :updatedBy)
+       ON DUPLICATE KEY UPDATE relationship_summary = VALUES(relationship_summary), line_vincenzo = VALUES(line_vincenzo), line_paolo = VALUES(line_paolo), status = VALUES(status), notes = VALUES(notes), photo_file_name = VALUES(photo_file_name), photo_file_type = VALUES(photo_file_type), photo_data = VALUES(photo_data), inheritance_amount = VALUES(inheritance_amount), updated_by = VALUES(updated_by)',
       [
         'id' => uuid(),
         'name' => $data['heir_name'] ?? '',
@@ -618,16 +715,18 @@ try {
         'photoFileType' => $data['photo_file_type'] ?? null,
         'photoData' => $data['photo_data'] ?? null,
         'inheritanceAmount' => (float)($data['inheritance_amount'] ?? 0),
+        'createdBy' => $user['id'],
+        'updatedBy' => $user['id'],
       ]
     );
     json_response(['ok' => true]);
   }
 
   if (preg_match('#^/confirmed-heirs/([^/]+)$#', $path, $m) && $method === 'PUT') {
-    require_user();
+    $user = require_user();
     $data = body();
     exec_sql(
-      'UPDATE confirmed_heirs SET heir_name = :name, relationship_summary = :summary, line_vincenzo = :vincenzo, line_paolo = :paolo, status = :status, notes = :notes, photo_file_name = :photoFileName, photo_file_type = :photoFileType, photo_data = :photoData, inheritance_amount = :inheritanceAmount WHERE id = :id',
+      'UPDATE confirmed_heirs SET heir_name = :name, relationship_summary = :summary, line_vincenzo = :vincenzo, line_paolo = :paolo, status = :status, notes = :notes, photo_file_name = :photoFileName, photo_file_type = :photoFileType, photo_data = :photoData, inheritance_amount = :inheritanceAmount, updated_by = :updatedBy WHERE id = :id',
       [
         'id' => $m[1],
         'name' => $data['heir_name'] ?? '',
@@ -640,6 +739,7 @@ try {
         'photoFileType' => $data['photo_file_type'] ?? null,
         'photoData' => $data['photo_data'] ?? null,
         'inheritanceAmount' => (float)($data['inheritance_amount'] ?? 0),
+        'updatedBy' => $user['id'],
       ]
     );
     json_response(['ok' => true]);
@@ -648,9 +748,15 @@ try {
   if ($method === 'GET' && $path === '/sienna-family-members') {
     require_user();
     $members = query_all(
-      'SELECT id, parent_id, relationship_to_parent, name, birth, death, spouse, spouse_birth, inheritance_status, inheritance_reason, is_highlighted_ancestor, sort_order, created_at, updated_at
-       FROM sienna_family_members
-       ORDER BY COALESCE(parent_id, \'\'), sort_order, name'
+      'SELECT sfm.id, sfm.parent_id, sfm.relationship_to_parent, sfm.name, sfm.birth, sfm.death, sfm.spouse, sfm.spouse_birth,
+              sfm.inheritance_status, sfm.inheritance_reason, sfm.is_highlighted_ancestor, sfm.sort_order,
+              sfm.created_by, sfm.updated_by, sfm.created_at, sfm.updated_at,
+              creator.email AS created_by_email, creator.full_name AS created_by_name,
+              updater.email AS updated_by_email, updater.full_name AS updated_by_name
+       FROM sienna_family_members sfm
+       LEFT JOIN profiles creator ON creator.id = sfm.created_by
+       LEFT JOIN profiles updater ON updater.id = sfm.updated_by
+       ORDER BY COALESCE(sfm.parent_id, \'\'), sfm.sort_order, sfm.name'
     );
     foreach ($members as &$member) {
       $member['is_highlighted_ancestor'] = (bool)$member['is_highlighted_ancestor'];
@@ -660,7 +766,7 @@ try {
   }
 
   if ($method === 'POST' && $path === '/sienna-family-members') {
-    require_user();
+    $user = require_user();
     $data = body();
     if (empty($data['name'])) {
       json_response(['message' => 'El nombre del miembro es requerido'], 400);
@@ -668,9 +774,9 @@ try {
 
     $id = $data['id'] ?? uuid();
     exec_sql(
-      'INSERT INTO sienna_family_members (id, parent_id, relationship_to_parent, name, birth, death, spouse, spouse_birth, inheritance_status, inheritance_reason, is_highlighted_ancestor, sort_order)
-       VALUES (:id, :parentId, :relationshipToParent, :name, :birth, :death, :spouse, :spouseBirth, :inheritanceStatus, :inheritanceReason, :highlighted, :sortOrder)
-       ON DUPLICATE KEY UPDATE parent_id = VALUES(parent_id), relationship_to_parent = VALUES(relationship_to_parent), name = VALUES(name), birth = VALUES(birth), death = VALUES(death), spouse = VALUES(spouse), spouse_birth = VALUES(spouse_birth), inheritance_status = VALUES(inheritance_status), inheritance_reason = VALUES(inheritance_reason), is_highlighted_ancestor = VALUES(is_highlighted_ancestor), sort_order = VALUES(sort_order)',
+      'INSERT INTO sienna_family_members (id, parent_id, relationship_to_parent, name, birth, death, spouse, spouse_birth, inheritance_status, inheritance_reason, is_highlighted_ancestor, sort_order, created_by, updated_by)
+       VALUES (:id, :parentId, :relationshipToParent, :name, :birth, :death, :spouse, :spouseBirth, :inheritanceStatus, :inheritanceReason, :highlighted, :sortOrder, :createdBy, :updatedBy)
+       ON DUPLICATE KEY UPDATE parent_id = VALUES(parent_id), relationship_to_parent = VALUES(relationship_to_parent), name = VALUES(name), birth = VALUES(birth), death = VALUES(death), spouse = VALUES(spouse), spouse_birth = VALUES(spouse_birth), inheritance_status = VALUES(inheritance_status), inheritance_reason = VALUES(inheritance_reason), is_highlighted_ancestor = VALUES(is_highlighted_ancestor), sort_order = VALUES(sort_order), updated_by = VALUES(updated_by)',
       [
         'id' => $id,
         'parentId' => $data['parent_id'] ?? null,
@@ -684,6 +790,8 @@ try {
         'inheritanceReason' => $data['inheritance_reason'] ?? null,
         'highlighted' => bool_value($data['is_highlighted_ancestor'] ?? false),
         'sortOrder' => (int)($data['sort_order'] ?? 0),
+        'createdBy' => $user['id'],
+        'updatedBy' => $user['id'],
       ]
     );
     json_response(['ok' => true, 'member' => array_merge($data, ['id' => $id])], 201);
@@ -711,9 +819,9 @@ try {
     $data = body();
     exec_sql(
       'INSERT INTO evidence_documents
-       (id, title, document_type, primary_person, event_date, event_place, father_name, mother_name, spouse_name, related_heir_name, confirms_heir, people_involved, extracted_text, notes, file_name, file_type, file_data, created_by)
+       (id, title, document_type, primary_person, event_date, event_place, father_name, mother_name, spouse_name, related_heir_name, confirms_heir, people_involved, extracted_text, notes, file_name, file_type, file_data, created_by, updated_by)
        VALUES
-       (:id, :title, :type, :primaryPerson, :eventDate, :eventPlace, :father, :mother, :spouse, :heir, :confirms, :people, :text, :notes, :fileName, :fileType, :fileData, :createdBy)',
+       (:id, :title, :type, :primaryPerson, :eventDate, :eventPlace, :father, :mother, :spouse, :heir, :confirms, :people, :text, :notes, :fileName, :fileType, :fileData, :createdBy, :updatedBy)',
       [
         'id' => uuid(),
         'title' => $data['title'] ?? 'Documento sin título',
@@ -733,10 +841,11 @@ try {
         'fileType' => $data['file_type'] ?? null,
         'fileData' => $data['file_data'] ?? null,
         'createdBy' => $user['id'],
+        'updatedBy' => $user['id'],
       ]
     );
     if (!empty($data['related_heir_name']) && !empty($data['confirms_heir'])) {
-      exec_sql("UPDATE confirmed_heirs SET status = 'confirmado' WHERE heir_name = :name", ['name' => $data['related_heir_name']]);
+      exec_sql("UPDATE confirmed_heirs SET status = 'confirmado', updated_by = :updatedBy WHERE heir_name = :name", ['name' => $data['related_heir_name'], 'updatedBy' => $user['id']]);
     }
     json_response(['ok' => true], 201);
   }

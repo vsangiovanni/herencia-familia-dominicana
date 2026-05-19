@@ -1,6 +1,12 @@
 # Logs
 logs
 *.log
+release-output.txt
+deploy-run.log
+deploy-build.log
+BUILD_LOG.txt
+mysql-check.txt
+vite-start.txt
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -8,6 +14,8 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+__pycache__/
+*.pyc
 dist
 dist-ssr
 .env
