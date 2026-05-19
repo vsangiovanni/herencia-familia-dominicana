@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/use-toast';
+import { classifyMemberByDominicanLaw, normalizeName } from '@/lib/dominicanInheritance';
 import { Edit, Save, Trash2, UserPlus, Users } from 'lucide-react';
 
 type MemberForm = {
@@ -57,67 +58,11 @@ const emptyForm: MemberForm = {
   sort_order: '0',
 };
 
-const normalizeName = (value: string) =>
-  value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9 ]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-
 const makeId = (name: string) =>
   `${normalizeName(name)
     .replace(/\s+/g, '-')
     .replace(/^-|-$/g, '')
     .slice(0, 70) || 'miembro'}-${Date.now()}`;
-
-const activeLineNames = [
-  'Vincenzo (Vicente) Sangiovanni',
-  'Paolo (Paulino) Sangiovanni',
-  'María Rosa Sangiovanni Pérez',
-  'Domingo Ramón Sangiovanni Pérez',
-  'Pedro Pablo Sangiovanni Simo',
-];
-
-const caseCausanteName = 'Alessandro de Paola Sangiovanni';
-
-const determinedHeirs = new Map([
-  [normalizeName('Víctor Manuel Martín Sangiovanni Rodríguez'), 'Heredero determinado por doble vocación sucesoral: línea Vincenzo/Vicente vía María Rosa y línea Paolo/Paulino vía Pedro Pablo.'],
-  [normalizeName('Perla Rosa Brea Sangiovanni'), 'Heredera determinada por representación en la rama de Rosa Julia, con doble línea familiar Vincenzo/Vicente y Paolo/Paulino.'],
-  [normalizeName('Bernardo Martín Lizardo Sangiovanni'), 'Heredero determinado por la rama Domingo Ramón -> María Amparo dentro de la línea Vincenzo/Vicente.'],
-  [normalizeName('Jocelyn del Jesús Sangiovanni Báez'), 'Heredera determinada por la rama Domingo Ramón -> José Vicente dentro de la línea Vincenzo/Vicente.'],
-  [normalizeName('Mayra Josefina Sangiovanni Báez'), 'Heredera determinada por la rama Domingo Ramón -> José Vicente dentro de la línea Vincenzo/Vicente.'],
-]);
-
-const knownIntermediates = new Map([
-  [normalizeName('Domenico (Domingo) Sangiovanni'), 'Tronco familiar común; sirve para ubicar ramas, no como heredero final.'],
-  [normalizeName('María Magdalena Sangiovanni'), 'Madre del causante Alessandro; rama del causante, no heredera final en este análisis.'],
-  [normalizeName('Vincenzo (Vicente) Sangiovanni'), 'Hermano de la madre del causante; abre una rama sucesoral activa por sus descendientes.'],
-  [normalizeName('Paolo (Paulino) Sangiovanni'), 'Hermano de la madre del causante; abre una rama sucesoral activa por sus descendientes.'],
-  [normalizeName('María Rosa Sangiovanni Pérez'), 'Intermedia fallecida en rama Vincenzo/Vicente y vínculo hacia la doble filiación.'],
-  [normalizeName('Pedro Pablo Sangiovanni Simo'), 'Intermedio fallecido en rama Paolo/Paulino y vínculo hacia la doble filiación.'],
-  [normalizeName('Domingo Ramón Sangiovanni Pérez'), 'Intermedio fallecido en rama Vincenzo/Vicente; transmite representación a sus descendientes.'],
-  [normalizeName('Víctor Manuel Sangiovanni Sangiovanni'), 'Intermedio fallecido; conecta a Víctor Manuel Martín y a Rosa Julia/Perla.'],
-  [normalizeName('Rosa Julia Sangiovanni Rodríguez'), 'Intermedia fallecida; Perla Rosa entra por representación en su rama.'],
-  [normalizeName('María Amparo Sangiovanni Gesualdo'), 'Intermedia fallecida; Bernardo Martín entra por representación en su rama.'],
-  [normalizeName('José Vicente Sangiovanni Gesualdo'), 'Intermedio fallecido; Jocelyn y Mayra entran por representación en su rama.'],
-]);
-
-const getAncestorChain = (members: SiennaFamilyMember[], parentId: string) => {
-  const byId = new Map(members.map((member) => [member.id, member]));
-  const chain: SiennaFamilyMember[] = [];
-  let current = byId.get(parentId);
-  const seen = new Set<string>();
-
-  while (current && !seen.has(current.id)) {
-    chain.push(current);
-    seen.add(current.id);
-    current = current.parent_id ? byId.get(current.parent_id) : undefined;
-  }
-
-  return chain;
-};
 
 const determineInheritance = (form: MemberForm, members: SiennaFamilyMember[]) => {
   if (form.inheritance_status === 'confirmado') {
@@ -127,68 +72,26 @@ const determineInheritance = (form: MemberForm, members: SiennaFamilyMember[]) =
     };
   }
 
-  if (form.parent_id === 'root') {
-    return {
-      inheritance_status: 'requiere_revision' as const,
-      inheritance_reason: form.inheritance_reason || 'Está entrando como raíz del árbol; requiere revisión manual para determinar vocación sucesoral.',
-    };
-  }
-
-  const chain = getAncestorChain(members, form.parent_id);
-  const chainNames = chain.map((member) => normalizeName(member.name));
-  const newName = normalizeName(form.name);
-  const inActiveLine = activeLineNames.some((name) => chainNames.includes(normalizeName(name)));
-  const parent = members.find((member) => member.id === form.parent_id);
-  const parentIsDeterminedHeir = parent ? determinedHeirs.has(normalizeName(parent.name)) : false;
-  const parentIsCausante = parent ? normalizeName(parent.name) === normalizeName(caseCausanteName) : false;
-  const parentIsDeceased = Boolean(parent?.death);
-
-  if (newName === normalizeName(caseCausanteName)) {
-    return { inheritance_status: 'no_hereda' as const, inheritance_reason: 'Es el causante del expediente; no se clasifica como heredero.' };
-  }
-
-  if (determinedHeirs.has(newName)) {
-    return { inheritance_status: 'posible_heredero' as const, inheritance_reason: determinedHeirs.get(newName) || '' };
-  }
-
-  if (knownIntermediates.has(newName)) {
-    return { inheritance_status: 'no_hereda' as const, inheritance_reason: knownIntermediates.get(newName) || '' };
-  }
-
-  if (form.relationship_to_parent === 'hijo' || form.relationship_to_parent === 'hija') {
-    if (parentIsCausante) {
-      return {
-        inheritance_status: 'requiere_revision' as const,
-        inheritance_reason: 'Sería descendiente directo del causante, lo que contradice el supuesto actual de que Alessandro falleció sin descendencia directa.',
-      };
-    }
-
-    if (parentIsDeterminedHeir) {
-      return {
-        inheritance_status: 'no_hereda' as const,
-        inheritance_reason: 'Es descendiente de un heredero vivo ya determinado; no desplaza a ese heredero mientras este conserve vocación sucesoral.',
-      };
-    }
-
-    if (inActiveLine && parentIsDeceased) {
-      return {
-        inheritance_status: 'posible_heredero' as const,
-        inheritance_reason: 'Queda dentro de una rama sucesoral activa y su nodo superior figura fallecido; puede entrar por representación si los documentos confirman la filiación.',
-      };
-    }
-  }
-
-  if (form.relationship_to_parent === 'padre' || form.relationship_to_parent === 'madre') {
-    return {
-      inheritance_status: 'no_hereda' as const,
-      inheritance_reason: 'Fue agregado como ascendiente del nodo seleccionado; no se marca como heredero final en este modelo de descendencia.',
-    };
-  }
-
-  return {
+  const memberId = form.id || '__draft_member__';
+  const draftMember: SiennaFamilyMember = {
+    id: memberId,
+    parent_id: form.parent_id === 'root' ? null : form.parent_id,
+    relationship_to_parent: form.parent_id === 'root' ? null : form.relationship_to_parent,
+    name: form.name.trim() || 'Miembro sin nombre',
+    birth: form.birth || null,
+    death: form.death || null,
+    spouse: form.spouse || null,
+    spouse_birth: form.spouse_birth || null,
     inheritance_status: form.inheritance_status,
-    inheritance_reason: form.inheritance_reason || 'No hay suficiente información del expediente para clasificarlo automáticamente.',
+    inheritance_reason: form.inheritance_reason || null,
+    is_highlighted_ancestor: form.is_highlighted_ancestor,
+    sort_order: Number(form.sort_order || 0),
   };
+  const draftMembers = members.some((member) => member.id === memberId)
+    ? members.map((member) => (member.id === memberId ? draftMember : member))
+    : [...members, draftMember];
+
+  return classifyMemberByDominicanLaw(draftMember, draftMembers);
 };
 
 const toForm = (member: SiennaFamilyMember): MemberForm => ({
@@ -205,6 +108,11 @@ const toForm = (member: SiennaFamilyMember): MemberForm => ({
   is_highlighted_ancestor: Boolean(member.is_highlighted_ancestor),
   sort_order: String(member.sort_order || 0),
 });
+
+const formatAuditDate = (value?: string | null) =>
+  value ? new Intl.DateTimeFormat('es-DO', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) : '-';
+
+const auditName = (name?: string | null, email?: string | null) => name || email || '-';
 
 const MiembrosArbolSienna = () => {
   const [members, setMembers] = useState<SiennaFamilyMember[]>([]);
@@ -428,12 +336,13 @@ const MiembrosArbolSienna = () => {
                   <TableHead>Estado</TableHead>
                   <TableHead>Fechas</TableHead>
                   <TableHead>Razón</TableHead>
+                  <TableHead>Auditoría</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading && (
-                  <TableRow><TableCell colSpan={7} className="text-center py-8 text-legal-gray">Cargando miembros...</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={8} className="text-center py-8 text-legal-gray">Cargando miembros...</TableCell></TableRow>
                 )}
                 {!loading && members.map((member) => {
                   const parent = members.find((item) => item.id === member.parent_id);
@@ -449,6 +358,12 @@ const MiembrosArbolSienna = () => {
                       </TableCell>
                       <TableCell>{member.birth || '-'} {member.death ? ` / ${member.death}` : ''}</TableCell>
                       <TableCell className="min-w-[280px] text-sm text-gray-700">{member.inheritance_reason || '-'}</TableCell>
+                      <TableCell className="min-w-[220px] text-xs text-legal-gray">
+                        <p><span className="font-semibold">Creado:</span> {auditName(member.created_by_name, member.created_by_email)}</p>
+                        <p>{formatAuditDate(member.created_at)}</p>
+                        <p className="mt-1"><span className="font-semibold">Modificado:</span> {auditName(member.updated_by_name, member.updated_by_email)}</p>
+                        <p>{formatAuditDate(member.updated_at)}</p>
+                      </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           <Button variant="outline" size="sm" onClick={() => setForm(toForm(member))}>

@@ -64,6 +64,15 @@ La sección Sienna contiene las pantallas de trabajo especializadas para el expe
 
 El árbol Sienna usa la información documentada del caso Alessandro para marcar herederos finales, enlaces genealógicos y ramas activas. El monto total de la herencia se puede calcular en pantalla y se refleja en los nodos del árbol; al guardar, queda persistido en los herederos confirmados.
 
+### Cálculo sucesoral Sienna
+
+Las páginas `/sienna/arbol-genealogico` y `/sienna/miembros-arbol` comparten el cálculo de `src/lib/dominicanInheritance.ts`.
+
+- Aplica el criterio sucesoral dominicano de forma operativa: primero descendientes directos del causante; si no existen, ramas colaterales documentadas y representación por estirpes cuando un ascendiente de la rama figura fallecido.
+- Para el expediente Alessandro, al no existir descendencia directa registrada, la distribución activa parte de las ramas Vincenzo/Vicente y Paolo/Paulino y recalcula porcentajes cuando se agregan nuevos descendientes en el árbol Sienna.
+- El cálculo conserva la doble vocación sucesoral cuando una rama entra por el cónyuge documentado en el árbol, como ocurre con María Rosa Sangiovanni Pérez y Pedro Pablo Sangiovanni Simo.
+- La pantalla de miembros clasifica al guardar; el árbol recalcula en vivo el porcentaje y el monto neto a distribuir después del porcentaje de la firma de abogados.
+
 ## Backend y datos
 
 El desarrollo local usa Node.js + Express contra MySQL. Producción en Hostinger usa el backend PHP `public/api.php` y `public/.htaccess`, porque es el flujo estable para el hosting compartido.

@@ -9,6 +9,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/components/ui/use-toast';
+import { useAuth } from '@/context/AuthContext';
+import {
+  buildDominicanInheritancePlan,
+  classifyMemberByDominicanLaw,
+  InheritancePlan,
+  legalCriterionText,
+  normalizeName,
+} from '@/lib/dominicanInheritance';
 import { cn } from '@/lib/utils';
 import { Calculator, ClipboardCheck, GitBranch, Landmark, Route, Save, Users } from 'lucide-react';
 
@@ -20,15 +28,6 @@ const formatMoney = (amount: number | string | null | undefined) =>
     currency: 'DOP',
     minimumFractionDigits: 2,
   }).format(Number(amount || 0));
-
-const normalizeName = (value: string) =>
-  value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9 ]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
 
 const initials = (name: string) =>
   name
@@ -64,93 +63,6 @@ const buildForest = (members: SiennaFamilyMember[]) => {
   return sortTree(roots);
 };
 
-const caseCausanteName = 'Alessandro de Paola Sangiovanni';
-
-const determinedHeirs = new Map([
-  [
-    normalizeName('Víctor Manuel Martín Sangiovanni Rodríguez'),
-    'Heredero determinado por doble vocación sucesoral: línea Vincenzo/Vicente vía María Rosa y línea Paolo/Paulino vía Pedro Pablo.',
-  ],
-  [
-    normalizeName('Perla Rosa Brea Sangiovanni'),
-    'Heredera determinada por representación en la rama de Rosa Julia, con doble línea familiar Vincenzo/Vicente y Paolo/Paulino.',
-  ],
-  [
-    normalizeName('Bernardo Martín Lizardo Sangiovanni'),
-    'Heredero determinado por la rama Domingo Ramón -> María Amparo dentro de la línea Vincenzo/Vicente.',
-  ],
-  [
-    normalizeName('Jocelyn del Jesús Sangiovanni Báez'),
-    'Heredera determinada por la rama Domingo Ramón -> José Vicente dentro de la línea Vincenzo/Vicente.',
-  ],
-  [
-    normalizeName('Mayra Josefina Sangiovanni Báez'),
-    'Heredera determinada por la rama Domingo Ramón -> José Vicente dentro de la línea Vincenzo/Vicente.',
-  ],
-]);
-
-const heirCaseDetails = new Map([
-  [
-    normalizeName('Víctor Manuel Martín Sangiovanni Rodríguez'),
-    {
-      share: 37.5,
-      role: 'Heredero final',
-      route: 'Domenico -> María Magdalena -> Alessandro como causante; derecho por ramas Vincenzo/Vicente y Paolo/Paulino vía María Rosa/Pedro Pablo -> Víctor Manuel Sangiovanni Sangiovanni -> Víctor Manuel Martín.',
-      paymentBasis: 'Acumula dos entradas: 12.5% por Vincenzo/Vicente y 25% por Paolo/Paulino.',
-    },
-  ],
-  [
-    normalizeName('Perla Rosa Brea Sangiovanni'),
-    {
-      share: 37.5,
-      role: 'Heredera final',
-      route: 'Domenico -> María Magdalena -> Alessandro como causante; derecho por ramas Vincenzo/Vicente y Paolo/Paulino vía María Rosa/Pedro Pablo -> Víctor Manuel Sangiovanni Sangiovanni -> Rosa Julia -> Perla Rosa.',
-      paymentBasis: 'Entra por representación de Rosa Julia y acumula doble línea: 12.5% + 25%.',
-    },
-  ],
-  [
-    normalizeName('Bernardo Martín Lizardo Sangiovanni'),
-    {
-      share: 12.5,
-      role: 'Heredero final',
-      route: 'Domenico -> Vincenzo/Vicente -> Domingo Ramón -> María Amparo -> Bernardo Martín.',
-      paymentBasis: 'Participa por la rama Domingo Ramón / María Amparo dentro de Vincenzo/Vicente.',
-    },
-  ],
-  [
-    normalizeName('Jocelyn del Jesús Sangiovanni Báez'),
-    {
-      share: 6.25,
-      role: 'Heredera final',
-      route: 'Domenico -> Vincenzo/Vicente -> Domingo Ramón -> José Vicente -> Jocelyn.',
-      paymentBasis: 'Comparte la rama José Vicente con Mayra dentro de Vincenzo/Vicente.',
-    },
-  ],
-  [
-    normalizeName('Mayra Josefina Sangiovanni Báez'),
-    {
-      share: 6.25,
-      role: 'Heredera final',
-      route: 'Domenico -> Vincenzo/Vicente -> Domingo Ramón -> José Vicente -> Mayra.',
-      paymentBasis: 'Comparte la rama José Vicente con Jocelyn dentro de Vincenzo/Vicente.',
-    },
-  ],
-]);
-
-const knownIntermediates = new Map([
-  [normalizeName('Domenico (Domingo) Sangiovanni'), 'Tronco familiar común; sirve para ubicar ramas, no como heredero final.'],
-  [normalizeName('María Magdalena Sangiovanni'), 'Madre del causante Alessandro; rama del causante, no heredera final en este análisis.'],
-  [normalizeName('Vincenzo (Vicente) Sangiovanni'), 'Hermano de la madre del causante; abre una rama sucesoral activa por sus descendientes.'],
-  [normalizeName('Paolo (Paulino) Sangiovanni'), 'Hermano de la madre del causante; abre una rama sucesoral activa por sus descendientes.'],
-  [normalizeName('María Rosa Sangiovanni Pérez'), 'Intermedia fallecida en rama Vincenzo/Vicente y vínculo hacia la doble filiación.'],
-  [normalizeName('Pedro Pablo Sangiovanni Simo'), 'Intermedio fallecido en rama Paolo/Paulino y vínculo hacia la doble filiación.'],
-  [normalizeName('Domingo Ramón Sangiovanni Pérez'), 'Intermedio fallecido en rama Vincenzo/Vicente; transmite representación a sus descendientes.'],
-  [normalizeName('Víctor Manuel Sangiovanni Sangiovanni'), 'Intermedio fallecido; conecta a Víctor Manuel Martín y a Rosa Julia/Perla.'],
-  [normalizeName('Rosa Julia Sangiovanni Rodríguez'), 'Intermedia fallecida; Perla Rosa entra por representación en su rama.'],
-  [normalizeName('María Amparo Sangiovanni Gesualdo'), 'Intermedia fallecida; Bernardo Martín entra por representación en su rama.'],
-  [normalizeName('José Vicente Sangiovanni Gesualdo'), 'Intermedio fallecido; Jocelyn y Mayra entran por representación en su rama.'],
-]);
-
 const explanationRole = (status?: string | null) => {
   if (status === 'confirmado' || status === 'posible_heredero') return 'Heredero final';
   if (status === 'no_hereda') return 'Enlace genealógico';
@@ -160,59 +72,30 @@ const explanationRole = (status?: string | null) => {
 const formatPercent = (value: number) =>
   `${new Intl.NumberFormat('es-DO', { maximumFractionDigits: 2 }).format(value)}%`;
 
-const classifyExistingMember = (member: SiennaFamilyMember): Pick<SiennaFamilyMember, 'inheritance_status' | 'inheritance_reason'> => {
-  const name = normalizeName(member.name);
-
-  if (name === normalizeName(caseCausanteName)) {
-    return {
-      inheritance_status: 'no_hereda',
-      inheritance_reason: 'Es el causante del expediente; no se clasifica como heredero.',
-    };
-  }
-
-  if (determinedHeirs.has(name)) {
-    return {
-      inheritance_status: 'posible_heredero',
-      inheritance_reason: determinedHeirs.get(name),
-    };
-  }
-
-  if (knownIntermediates.has(name)) {
-    return {
-      inheritance_status: 'no_hereda',
-      inheritance_reason: knownIntermediates.get(name),
-    };
-  }
-
-  return {
-    inheritance_status: member.inheritance_status || 'requiere_revision',
-    inheritance_reason: member.inheritance_reason || 'No hay suficiente información del expediente para clasificarlo automáticamente.',
-  };
-};
-
 const ClassicNode = ({
   member,
   heirsByName,
+  inheritancePlan,
   total,
   estateAmount,
 }: {
   member: TreeMember;
   heirsByName: Map<string, ConfirmedHeir>;
+  inheritancePlan: InheritancePlan;
   total: number;
   estateAmount: number;
 }) => {
   const heir = heirsByName.get(normalizeName(member.name));
+  const inheritanceShare = inheritancePlan.sharesById.get(member.id);
   const savedAmount = Number(heir?.inheritance_amount || 0);
-  const isHeir = Boolean(heir);
-  const automaticClassification = classifyExistingMember(member);
-  const inheritanceStatus = heir ? 'confirmado' : automaticClassification.inheritance_status;
-  const inheritanceReason = heir?.relationship_summary || automaticClassification.inheritance_reason;
-  const caseDetail = heirCaseDetails.get(normalizeName(member.name));
-  const role = caseDetail?.role || explanationRole(inheritanceStatus);
-  const calculatedAmount = estateAmount > 0 && caseDetail ? estateAmount * (caseDetail.share / 100) : 0;
+  const isHeir = Boolean(heir || inheritanceShare);
+  const inheritanceStatus = heir ? 'confirmado' : (inheritanceShare ? 'posible_heredero' : member.inheritance_status);
+  const inheritanceReason = inheritanceShare?.reason || heir?.relationship_summary || member.inheritance_reason;
+  const role = inheritanceShare?.role || explanationRole(inheritanceStatus);
+  const calculatedAmount = estateAmount > 0 && inheritanceShare ? estateAmount * (inheritanceShare.share / 100) : 0;
   const amount = calculatedAmount || savedAmount;
   const referenceTotal = estateAmount > 0 ? estateAmount : total;
-  const share = caseDetail?.share || (referenceTotal > 0 && amount > 0 ? (amount / referenceTotal) * 100 : 0);
+  const share = inheritanceShare?.share || (referenceTotal > 0 && amount > 0 ? (amount / referenceTotal) * 100 : 0);
 
   return (
     <li className="relative">
@@ -267,9 +150,9 @@ const ClassicNode = ({
           {isHeir && (
             <div className="mt-3 space-y-2 border-t border-legal-gold/30 pt-3">
               <div className="flex flex-wrap justify-center gap-1">
-                {heir?.line_vincenzo && <Badge variant="outline">Vincenzo/Vicente</Badge>}
-                {heir?.line_paolo && <Badge variant="outline">Paolo/Paulino</Badge>}
-                <Badge variant={heir?.status === 'confirmado' ? 'default' : 'secondary'}>{heir?.status}</Badge>
+                {(heir?.line_vincenzo || inheritanceShare?.sources.includes('Vincenzo/Vicente')) && <Badge variant="outline">Vincenzo/Vicente</Badge>}
+                {(heir?.line_paolo || inheritanceShare?.sources.includes('Paolo/Paulino')) && <Badge variant="outline">Paolo/Paulino</Badge>}
+                <Badge variant={heir?.status === 'confirmado' ? 'default' : 'secondary'}>{heir?.status || 'calculado'}</Badge>
               </div>
               <div className="rounded-md bg-white/80 p-2">
                 <p className="text-[11px] uppercase tracking-wide text-legal-gray">Monto heredado</p>
@@ -278,14 +161,14 @@ const ClassicNode = ({
                   {share > 0 ? formatPercent(share) : 'Porcentaje pendiente'}
                 </p>
               </div>
-              {caseDetail && (
+              {inheritanceShare && (
                 <div className="rounded-md bg-legal-blue/5 p-2 text-left">
                   <p className="flex items-center gap-1 text-[11px] font-semibold uppercase text-legal-blue">
                     <Route className="h-3 w-3" />
                     Ruta y pago
                   </p>
-                  <p className="mt-1 text-xs leading-relaxed text-gray-700">{caseDetail.paymentBasis}</p>
-                  <p className="mt-1 text-xs leading-relaxed text-legal-gray">{caseDetail.route}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-gray-700">{inheritanceShare.paymentBasis}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-legal-gray">{inheritanceShare.route}</p>
                 </div>
               )}
             </div>
@@ -309,7 +192,14 @@ const ClassicNode = ({
             <div className="absolute -top-6 left-1/2 h-6 w-0.5 -translate-x-1/2 bg-legal-blue" />
             {member.children.length > 1 && <div className="absolute left-0 right-0 top-0 h-0.5 bg-legal-blue" />}
             {member.children.map((child) => (
-              <ClassicNode key={child.id} member={child} heirsByName={heirsByName} total={total} estateAmount={estateAmount} />
+              <ClassicNode
+                key={child.id}
+                member={child}
+                heirsByName={heirsByName}
+                inheritancePlan={inheritancePlan}
+                total={total}
+                estateAmount={estateAmount}
+              />
             ))}
           </ul>
         )}
@@ -319,25 +209,35 @@ const ClassicNode = ({
 };
 
 const ArbolGenealogicoSienna = () => {
+  const { isAdmin } = useAuth();
   const [heirs, setHeirs] = useState<ConfirmedHeir[]>([]);
   const [members, setMembers] = useState<SiennaFamilyMember[]>([]);
   const [estateAmount, setEstateAmount] = useState('');
+  const [lawyerFeePercentage, setLawyerFeePercentage] = useState('0');
   const [loading, setLoading] = useState(true);
   const [paymentSaving, setPaymentSaving] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [heirsResponse, membersResponse] = await Promise.all([
+      const [heirsResponse, membersResponse, settingsResponse] = await Promise.all([
         api.listConfirmedHeirs(),
         api.listSiennaFamilyMembers(),
+        api.getSettings(),
       ]);
       setHeirs(heirsResponse.heirs);
+      setLawyerFeePercentage(String(settingsResponse.settings.lawyer_fee_percentage ?? 0));
+      const plan = buildDominicanInheritancePlan(membersResponse.members);
       setMembers(
-        membersResponse.members.map((member) => ({
-          ...member,
-          ...classifyExistingMember(member),
-        }))
+        membersResponse.members.map((member) => {
+          const classification = classifyMemberByDominicanLaw(member, membersResponse.members);
+          return {
+            ...member,
+            ...classification,
+            inheritance_reason: plan.sharesById.get(member.id)?.reason || classification.inheritance_reason,
+          };
+        })
       );
     } catch (error) {
       toast({
@@ -359,6 +259,9 @@ const ArbolGenealogicoSienna = () => {
     [heirs]
   );
   const estateAmountNumber = Number(estateAmount || 0);
+  const lawyerFeePercentageNumber = Math.min(100, Math.max(0, Number(lawyerFeePercentage || 0)));
+  const lawyerFeeAmount = estateAmountNumber > 0 ? estateAmountNumber * (lawyerFeePercentageNumber / 100) : 0;
+  const distributableEstateAmount = estateAmountNumber > 0 ? Math.max(0, estateAmountNumber - lawyerFeeAmount) : 0;
 
   const heirsByName = useMemo(
     () => new Map(heirs.map((heir) => [normalizeName(heir.heir_name), heir])),
@@ -366,23 +269,22 @@ const ArbolGenealogicoSienna = () => {
   );
 
   const forest = useMemo(() => buildForest(members), [members]);
+  const inheritancePlan = useMemo(() => buildDominicanInheritancePlan(members), [members]);
   const calculatedPayments = useMemo(() => {
-    const totalEstate = estateAmountNumber;
-    return heirs
-      .map((heir) => {
-        const detail = heirCaseDetails.get(normalizeName(heir.heir_name));
-        return {
-          heir,
-          detail,
-          amount: detail && totalEstate > 0 ? totalEstate * (detail.share / 100) : Number(heir.inheritance_amount || 0),
-        };
-      })
-      .filter((item) => item.detail);
-  }, [estateAmountNumber, heirs]);
+    const totalEstate = distributableEstateAmount;
+    return inheritancePlan.activeHeirs.map((share) => {
+      const heir = heirsByName.get(normalizeName(share.member.name));
+      return {
+        heir,
+        share,
+        amount: totalEstate > 0 ? totalEstate * (share.share / 100) : Number(heir?.inheritance_amount || 0),
+      };
+    });
+  }, [distributableEstateAmount, heirsByName, inheritancePlan]);
   const presentationStats = useMemo(() => {
     const classifiedMembers = members.map((member) => ({
       ...member,
-      ...classifyExistingMember(member),
+      ...classifyMemberByDominicanLaw(member, members),
     }));
 
     return {
@@ -393,28 +295,33 @@ const ArbolGenealogicoSienna = () => {
   }, [members]);
 
   const applyEstateCalculation = async () => {
-    const totalEstate = estateAmountNumber;
+    const totalEstate = distributableEstateAmount;
     if (!totalEstate || totalEstate <= 0) {
-      toast({ title: 'Monto requerido', description: 'Indica el monto total de la herencia para distribuirlo.' });
+      toast({ title: 'Monto requerido', description: 'Indica el monto total de la herencia para distribuirlo después de abogados.' });
       return;
     }
 
     setPaymentSaving(true);
     try {
       await Promise.all(
-        calculatedPayments.map(({ heir, amount }) =>
-          api.updateConfirmedHeir(heir.id, {
-            relationship_summary: heir.relationship_summary,
-            line_vincenzo: heir.line_vincenzo,
-            line_paolo: heir.line_paolo,
-            status: heir.status,
-            notes: heir.notes,
-            photo_file_name: heir.photo_file_name,
-            photo_file_type: heir.photo_file_type,
-            photo_data: heir.photo_data,
+        calculatedPayments.map(({ heir, share, amount }) => {
+          const payload = {
+            heir_name: share.member.name,
+            relationship_summary: share.reason,
+            line_vincenzo: share.sources.includes('Vincenzo/Vicente'),
+            line_paolo: share.sources.includes('Paolo/Paulino'),
+            status: heir?.status || 'mencionado' as const,
+            notes: heir?.notes || share.paymentBasis,
+            photo_file_name: heir?.photo_file_name,
+            photo_file_type: heir?.photo_file_type,
+            photo_data: heir?.photo_data,
             inheritance_amount: amount,
-          })
-        )
+          };
+
+          return heir
+            ? api.updateConfirmedHeir(heir.id, payload)
+            : api.saveConfirmedHeir(payload);
+        })
       );
       await loadData();
       toast({ title: 'Montos calculados', description: 'Los pagos quedaron guardados y el árbol fue actualizado.' });
@@ -426,6 +333,22 @@ const ArbolGenealogicoSienna = () => {
       });
     } finally {
       setPaymentSaving(false);
+    }
+  };
+
+  const saveLawyerFee = async () => {
+    setSettingsSaving(true);
+    try {
+      await api.updateSettings({ lawyer_fee_percentage: lawyerFeePercentageNumber });
+      toast({ title: 'Porcentaje guardado', description: 'La comisión de la firma quedó guardada para el cálculo Sienna.' });
+    } catch (error) {
+      toast({
+        title: 'No se pudo guardar el porcentaje',
+        description: error instanceof Error ? error.message : 'Error desconocido',
+        variant: 'destructive',
+      });
+    } finally {
+      setSettingsSaving(false);
     }
   };
 
@@ -445,10 +368,7 @@ const ArbolGenealogicoSienna = () => {
           <CardContent className="p-5">
             <h3 className="mb-2 font-serif text-lg font-bold text-legal-blue">Criterio automático del caso Alessandro</h3>
             <p className="text-sm leading-relaxed text-gray-700">
-              La clasificación usa el contenido ya documentado en la app: Alessandro figura como causante sin descendencia directa;
-              las ramas activas salen por Vincenzo/Vicente y Paolo/Paulino; y los herederos determinados son Víctor Manuel Martín,
-              Perla Rosa, Bernardo Martín, Jocelyn y Mayra. Los nodos intermedios fallecidos se muestran como soporte de
-              representación, no como herederos finales.
+              {legalCriterionText}
             </p>
           </CardContent>
         </Card>
@@ -503,9 +423,9 @@ const ArbolGenealogicoSienna = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 p-6">
-            <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
+            <div className="grid gap-4 md:grid-cols-[1fr_220px_auto] md:items-end">
               <div>
-                <Label>Monto total de la herencia</Label>
+                <Label>Monto bruto de la herencia</Label>
                 <Input
                   type="number"
                   min="0"
@@ -515,18 +435,52 @@ const ArbolGenealogicoSienna = () => {
                   placeholder="0.00"
                 />
               </div>
+              <div>
+                <Label>% firma de abogados</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value={lawyerFeePercentage}
+                  onChange={(event) => setLawyerFeePercentage(event.target.value)}
+                  placeholder="0"
+                />
+              </div>
               <Button onClick={applyEstateCalculation} disabled={paymentSaving} className="bg-legal-gold hover:bg-legal-gold/90 text-white">
                 <Save className="mr-2 h-4 w-4" />
                 Calcular y guardar pagos
               </Button>
             </div>
 
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-md border border-legal-blue/15 bg-white p-3">
+                <p className="text-xs uppercase text-legal-gray">Monto bruto</p>
+                <p className="font-bold text-legal-blue">{formatMoney(estateAmountNumber || total)}</p>
+              </div>
+              <div className="rounded-md border border-legal-blue/15 bg-white p-3">
+                <p className="text-xs uppercase text-legal-gray">Firma de abogados</p>
+                <p className="font-bold text-legal-blue">{formatMoney(lawyerFeeAmount)}</p>
+                <p className="text-xs text-legal-gray">{formatPercent(lawyerFeePercentageNumber)}</p>
+              </div>
+              <div className="rounded-md border border-legal-blue/15 bg-white p-3">
+                <p className="text-xs uppercase text-legal-gray">Neto a distribuir</p>
+                <p className="font-bold text-legal-blue">{formatMoney(distributableEstateAmount || total)}</p>
+              </div>
+            </div>
+
+            {isAdmin && (
+              <Button variant="outline" onClick={saveLawyerFee} disabled={settingsSaving}>
+                Guardar % de abogados
+              </Button>
+            )}
+
             <div className="grid gap-3 md:grid-cols-5">
-              {calculatedPayments.map(({ heir, detail, amount }) => (
-                <div key={heir.id} className="rounded-md border border-legal-blue/15 bg-white p-3">
-                  <p className="text-xs font-semibold leading-tight text-legal-blue">{heir.heir_name}</p>
+              {calculatedPayments.map(({ heir, share, amount }) => (
+                <div key={share.member.id} className="rounded-md border border-legal-blue/15 bg-white p-3">
+                  <p className="text-xs font-semibold leading-tight text-legal-blue">{heir?.heir_name || share.member.name}</p>
                   <p className="mt-2 text-sm font-bold text-legal-blue">{formatMoney(amount)}</p>
-                  <p className="text-xs text-legal-gray">{detail ? formatPercent(detail.share) : 'Sin porcentaje'}</p>
+                  <p className="text-xs text-legal-gray">{formatPercent(share.share)}</p>
                 </div>
               ))}
             </div>
@@ -541,7 +495,7 @@ const ArbolGenealogicoSienna = () => {
                 El árbol se arma desde los miembros guardados en base de datos. Al agregar una persona y seleccionar su nodo superior, la rama se reacomoda automáticamente.
               </p>
               <p className="text-sm text-legal-gray">
-                <strong>Total usado en pantalla:</strong> {formatMoney(estateAmountNumber || total)}. Miembros en árbol: {members.length}.
+                <strong>Neto usado en pantalla:</strong> {formatMoney(distributableEstateAmount || total)}. Miembros en árbol: {members.length}.
               </p>
             </div>
 
@@ -553,7 +507,14 @@ const ArbolGenealogicoSienna = () => {
                   <div className="classic-family-tree overflow-auto p-8">
                     <ul className="classic-tree-root flex justify-center gap-8">
                       {forest.map((root) => (
-                        <ClassicNode key={root.id} member={root} heirsByName={heirsByName} total={total} estateAmount={estateAmountNumber} />
+                        <ClassicNode
+                          key={root.id}
+                          member={root}
+                          heirsByName={heirsByName}
+                          inheritancePlan={inheritancePlan}
+                          total={total}
+                          estateAmount={distributableEstateAmount}
+                        />
                       ))}
                     </ul>
                   </div>
