@@ -60,7 +60,7 @@ La sección Sienna contiene las pantallas de trabajo especializadas para el expe
 
 - `/sienna/arbol-genealogico`: árbol genealógico clásico, dinámico y enfocado en explicar quién hereda, por qué hereda y cuánto recibe.
 - `/sienna/miembros-arbol`: CRUD administrativo para agregar, editar y clasificar miembros del árbol sin contaminar la pantalla de presentación.
-- `/sienna/explicacion-herederos`: resumen ejecutivo para herederos con fichas individuales, simulador de revisión, semáforo documental, línea de tiempo y glosario.
+- `/sienna/explicacion-herederos`: pantalla para reunión con herederos — vista «Por qué heredo», simulador visual, semáforo documental (verde/amarillo/rojo), línea de tiempo, glosario con ejemplos del caso, resumen ejecutivo del reparto y ficha PDF individual por heredero.
 - `/documentos-probatorios`: carga y revisión de documentos, herederos confirmados, foto del heredero y monto heredado.
 
 El árbol Sienna usa la información documentada del caso Alessandro para marcar herederos finales, enlaces genealógicos y ramas activas. El monto total de la herencia se puede calcular en pantalla y se refleja en los nodos del árbol; al guardar, queda persistido en los herederos confirmados.
@@ -96,6 +96,22 @@ URLs locales:
 - Backend health: http://127.0.0.1:3001/api/health
 - Árbol Sienna: http://localhost:8080/sienna/arbol-genealogico
 - CRUD miembros: http://localhost:8080/sienna/miembros-arbol
+- Explicación herederos: http://localhost:8080/sienna/explicacion-herederos
+
+### Herramientas para explicar a herederos (Sienna)
+
+| Función | Dónde |
+|--------|--------|
+| Por qué heredo (ruta, %, monto, base legal simple) | `/sienna/explicacion-herederos` → pestaña «Por qué heredo» |
+| Simulador (incluir/excluir herederos sin guardar) | `/sienna/explicacion-herederos` → «Simulador» |
+| Simulador antes de guardar miembro en el árbol | `/sienna/miembros-arbol` |
+| Semáforo documental y conflictos de fechas | `/sienna/explicacion-herederos` → «Semáforo» |
+| Línea de tiempo (nacimiento, matrimonio, defunción, vínculos) | `/sienna/explicacion-herederos` → «Línea de tiempo» |
+| Resumen ejecutivo (bruto, firma, neto, tabla de reparto) | `/sienna/explicacion-herederos` (parte superior) |
+| Ficha PDF por heredero (foto, rama, documentos, cuota) | Botón «PDF individual» en cada ficha |
+| Resumen en el árbol | `/sienna/arbol-genealogico` → bloque «Por qué heredan» |
+
+Lógica compartida en `src/lib/siennaHeirExplain.ts` y cálculo sucesoral en `src/lib/dominicanInheritance.ts`.
 
 ## Tecnologías
 
@@ -114,9 +130,12 @@ El flujo estable actual es:
 1. Validar cambios localmente.
 2. Ejecutar `./node_modules/.bin/vite build`.
 3. Subir el contenido de `dist/` por FTP al subdominio de Hostinger.
-4. Verificar `https://herenciard.vmsencf.com/api/health` y rutas críticas.
+4. Verificar `https://herenciard.vmsencf.com/api/health` y rutas críticas:
+   - `/sienna/arbol-genealogico`
+   - `/sienna/explicacion-herederos`
+   - `/sienna/miembros-arbol`
 
-No subir `.env`, `.deploy_hostinger/`, dumps ni credenciales.
+No subir `.env`, `.deploy_hostinger/`, dumps ni credenciales. El build de Vite copia `public/api.php` y `public/.htaccess` dentro de `dist/`.
 
 ## Can I connect a custom domain to my Lovable project?
 

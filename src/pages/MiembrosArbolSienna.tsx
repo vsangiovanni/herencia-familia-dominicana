@@ -25,8 +25,11 @@ import {
 } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/use-toast';
-import { classifyMemberByDominicanLaw, normalizeName } from '@/lib/dominicanInheritance';
-import { Edit, Save, Trash2, UserPlus, Users } from 'lucide-react';
+import { buildDominicanInheritancePlan, classifyMemberByDominicanLaw, normalizeName } from '@/lib/dominicanInheritance';
+import { formatPercent } from '@/lib/siennaHeirExplain';
+import { Edit, Save, SlidersHorizontal, Trash2, UserPlus, Users } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Progress } from '@/components/ui/progress';
 
 type MemberForm = {
   id: string;
@@ -148,6 +151,49 @@ const MiembrosArbolSienna = () => {
 
   const evaluation = useMemo(() => determineInheritance(form, members), [form, members]);
 
+  const draftMembers = useMemo(() => {
+    if (!form.name.trim() && !form.id) return members;
+    const memberId = form.id || '__draft_member__';
+    const draftMember: SiennaFamilyMember = {
+      id: memberId,
+      parent_id: form.parent_id === 'root' ? null : form.parent_id,
+      relationship_to_parent: form.parent_id === 'root' ? null : form.relationship_to_parent,
+      name: form.name.trim() || 'Miembro sin nombre',
+      birth: form.birth || null,
+      death: form.death || null,
+      spouse: form.spouse || null,
+      spouse_birth: form.spouse_birth || null,
+      inheritance_status: evaluation.inheritance_status,
+      inheritance_reason: form.inheritance_reason || evaluation.inheritance_reason,
+      is_highlighted_ancestor: form.is_highlighted_ancestor,
+      sort_order: Number(form.sort_order || 0),
+    };
+    return members.some((member) => member.id === memberId)
+      ? members.map((member) => (member.id === memberId ? draftMember : member))
+      : [...members, draftMember];
+  }, [evaluation.inheritance_reason, evaluation.inheritance_status, form, members]);
+
+  const simulation = useMemo(() => {
+    const current = buildDominicanInheritancePlan(members);
+    const projected = buildDominicanInheritancePlan(draftMembers);
+    const names = new Set([
+      ...current.activeHeirs.map((share) => share.member.id),
+      ...projected.activeHeirs.map((share) => share.member.id),
+    ]);
+
+    return Array.from(names).map((id) => {
+      const before = current.sharesById.get(id);
+      const after = projected.sharesById.get(id);
+      return {
+        id,
+        name: after?.member.name || before?.member.name || 'Miembro',
+        beforeShare: before?.share || 0,
+        afterShare: after?.share || 0,
+        delta: (after?.share || 0) - (before?.share || 0),
+      };
+    }).sort((a, b) => b.afterShare - a.afterShare || a.name.localeCompare(b.name));
+  }, [draftMembers, members]);
+
   const saveMember = async () => {
     if (!form.name.trim()) {
       toast({ title: 'Falta el nombre', description: 'El nombre del miembro es obligatorio.' });
@@ -207,6 +253,15 @@ const MiembrosArbolSienna = () => {
         title="Miembros del Árbol Sienna"
         subtitle="Administración de personas, parentescos, estados hereditarios y ramas explicativas"
       />
+
+      <div className="mb-4 flex flex-wrap justify-end gap-2">
+        <Button variant="outline" size="sm" asChild>
+          <Link to="/sienna/arbol-genealogico">Ver árbol</Link>
+        </Button>
+        <Button variant="outline" size="sm" asChild>
+          <Link to="/sienna/explicacion-herederos">Explicación para herederos</Link>
+        </Button>
+      </div>
 
       <div className="mx-auto max-w-7xl space-y-6">
         <div className="grid gap-4 md:grid-cols-4">
@@ -320,13 +375,53 @@ const MiembrosArbolSienna = () => {
         </Card>
 
         <Card className="border border-legal-gold/20">
+          <CardHeader className="border-b bg-legal-blue/5">
+            <CardTitle className="flex items-center gap-2 text-legal-blue">
+              <SlidersHorizontal className="h-5 w-5" />
+              Simulador antes de guardar
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 p-6">
+            <p className="text-sm text-gray-700">
+              Al editar nombre, nodo superior, defunción o parentesco, vea cómo cambian los porcentajes de los herederos
+              activos. Los cambios solo se aplican al guardar el miembro.
+            </p>
+            {simulation.length === 0 ? (
+              <p className="text-sm text-legal-gray">No hay herederos activos en la simulación actual.</p>
+            ) : (
+              <div className="grid gap-3 md:grid-cols-2">
+                {simulation.map((row) => (
+                  <div
+                    key={row.id}
+                    className={`rounded-md border p-3 ${row.delta !== 0 ? 'border-legal-gold/50 bg-legal-gold/5' : 'border-legal-blue/15'}`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-medium text-legal-blue">{row.name}</p>
+                      <p className="text-xs text-legal-gray">
+                        {row.delta > 0 ? '+' : ''}
+                        {formatPercent(row.delta)}
+                      </p>
+                    </div>
+                    <div className="mt-2 flex justify-between text-xs text-legal-gray">
+                      <span>Antes: {formatPercent(row.beforeShare)}</span>
+                      <span>Después: {formatPercent(row.afterShare)}</span>
+                    </div>
+                    <Progress className="mt-2 h-2" value={row.afterShare} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border border-legal-gold/20">
           <CardHeader className="bg-legal-blue/5 border-b">
             <CardTitle className="flex items-center gap-2 text-legal-blue">
               <Users className="h-5 w-5" />
               Tabla de Miembros
             </CardTitle>
           </CardHeader>
-          <CardContent className="p-6 overflow-x-auto">
+          <CardContent className="overflow-x-auto p-6">
             <Table>
               <TableHeader>
                 <TableRow>

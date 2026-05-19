@@ -18,7 +18,9 @@ import {
   normalizeName,
 } from '@/lib/dominicanInheritance';
 import { cn } from '@/lib/utils';
-import { Calculator, ClipboardCheck, GitBranch, Landmark, Route, Save, Users } from 'lucide-react';
+import { Calculator, ClipboardCheck, FileText, GitBranch, Landmark, Route, Save, Users } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { buildWhyIInheritText, formatMoney as formatMoneyExplain, formatPercent as formatPercentExplain } from '@/lib/siennaHeirExplain';
 
 type TreeMember = SiennaFamilyMember & { children: TreeMember[] };
 
@@ -363,6 +365,18 @@ const ArbolGenealogicoSienna = () => {
         subtitle="Visualización clásica dinámica con herederos, foto y monto heredado"
       />
 
+      <div className="mb-4 flex flex-wrap justify-end gap-2">
+        <Button variant="outline" size="sm" asChild>
+          <Link to="/sienna/explicacion-herederos">
+            <FileText className="mr-2 h-4 w-4" />
+            Explicación para herederos
+          </Link>
+        </Button>
+        <Button variant="outline" size="sm" asChild>
+          <Link to="/sienna/miembros-arbol">Administrar miembros</Link>
+        </Button>
+      </div>
+
       <div className="mx-auto max-w-[95%] space-y-6">
         <Card className="border border-legal-gold/20">
           <CardContent className="p-5">
@@ -484,6 +498,31 @@ const ArbolGenealogicoSienna = () => {
                 </div>
               ))}
             </div>
+
+            {inheritancePlan.activeHeirs.length > 0 && (
+              <div className="space-y-3 border-t border-legal-blue/10 pt-4">
+                <h4 className="font-serif text-base font-bold text-legal-blue">Por qué heredan (resumen)</h4>
+                <div className="grid gap-3 lg:grid-cols-2">
+                  {inheritancePlan.activeHeirs.map((share) => {
+                    const amount =
+                      distributableEstateAmount > 0
+                        ? distributableEstateAmount * (share.share / 100)
+                        : Number(heirsByName.get(normalizeName(share.member.name))?.inheritance_amount || 0);
+                    return (
+                      <div key={share.member.id} className="rounded-md border border-legal-gold/25 bg-legal-gold/5 p-3">
+                        <p className="font-medium text-legal-blue">{share.member.name}</p>
+                        <p className="mt-1 text-xs text-legal-gray">
+                          {formatPercentExplain(share.share)} · {formatMoneyExplain(amount)}
+                        </p>
+                        <p className="mt-2 line-clamp-4 text-xs leading-relaxed text-gray-700">
+                          {buildWhyIInheritText(share, share.share, amount)}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 

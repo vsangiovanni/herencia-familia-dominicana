@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import BackButton from '@/components/BackButton';
 import DocumentHeader from '@/components/DocumentHeader';
-import { api, EvidenceDocument, SiennaFamilyMember } from '@/lib/api';
+import { api, ConfirmedHeir, EvidenceDocument, SiennaFamilyMember } from '@/lib/api';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,74 +13,61 @@ import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/components/ui/use-toast';
-import { AlertTriangle, BookOpen, CalendarDays, FileDown, FileText, Landmark, Printer, Route, Scale, ShieldCheck, SlidersHorizontal, Users } from 'lucide-react';
-import { buildDominicanInheritancePlan, InheritanceShare, legalCriterionText, normalizeName } from '@/lib/dominicanInheritance';
+import {
+  buildDominicanInheritancePlan,
+  InheritanceShare,
+  legalCriterionText,
+  normalizeName,
+} from '@/lib/dominicanInheritance';
+import {
+  buildCaseGlossary,
+  buildMemberLifeTimeline,
+  buildWhyIInheritText,
+  downloadHeirBriefPdf,
+  evaluateEvidenceSupport,
+  formatMoney,
+  formatPercent,
+  heirPhotoByName,
+  routeSteps,
+} from '@/lib/siennaHeirExplain';
+import {
+  AlertTriangle,
+  BookOpen,
+  CalendarDays,
+  FileDown,
+  FileText,
+  GitBranch,
+  Landmark,
+  Printer,
+  Route,
+  Scale,
+  ShieldCheck,
+  SlidersHorizontal,
+  Users,
+} from 'lucide-react';
 
 type HeirBrief = {
   share: InheritanceShare;
   documents: EvidenceDocument[];
   simulatedShare: number;
   simulatedAmount: number;
+  photo?: ConfirmedHeir | null;
+  traffic: ReturnType<typeof evaluateEvidenceSupport>;
 };
 
-const formatMoney = (amount: number) =>
-  new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 2 }).format(amount || 0);
-
-const formatPercent = (value: number) =>
-  new Intl.NumberFormat('es-DO', { maximumFractionDigits: 2 }).format(value || 0) + '%';
-
-const evidenceState = (documents: EvidenceDocument[]) => {
-  if (documents.length >= 2) return { label: 'Sólido', value: 100, className: 'border-emerald-200 bg-emerald-50 text-emerald-700' };
-  if (documents.length === 1) return { label: 'En progreso', value: 62, className: 'border-amber-200 bg-amber-50 text-amber-700' };
-  return { label: 'Falta soporte', value: 28, className: 'border-red-200 bg-red-50 text-red-700' };
-};
-
-const glossary = [
-  ['Causante', 'Persona cuyo patrimonio se distribuye. En este expediente, Alessandro de Paola Sangiovanni.'],
-  ['Representación', 'Un descendiente ocupa el lugar de su ascendiente fallecido dentro de una rama familiar.'],
-  ['Estirpe', 'Rama familiar que recibe una cuota y luego la divide entre sus descendientes llamados a heredar.'],
-  ['Vocación sucesoral', 'Razón familiar y jurídica por la que una persona puede recibir una parte de la herencia.'],
-  ['Rama colateral', 'Línea que no baja directamente del causante, pero puede entrar cuando no hay descendencia directa documentada.'],
-];
-
-const routeSteps = (share: InheritanceShare) =>
-  share.route
-    .split('|')
-    .flatMap((route) => route.split('->').map((item) => item.trim()))
-    .filter(Boolean);
-
-const printBrief = (brief: HeirBrief, netAmount: number) => {
-  const documentLines = brief.documents.length
-    ? brief.documents.map((document) => '- ' + document.title + ' (' + document.document_type + ')').join('\n')
-    : '- Documentos pendientes de asociar en el expediente.';
-  const content = [
-    'Ficha explicativa de heredero',
-    '',
-    'Heredero: ' + brief.share.member.name,
-    'Porcentaje: ' + formatPercent(brief.simulatedShare),
-    'Monto estimado: ' + formatMoney(brief.simulatedAmount),
-    'Neto usado: ' + formatMoney(netAmount),
-    '',
-    'Base de cálculo:',
-    brief.share.reason,
-    brief.share.paymentBasis,
-    '',
-    'Ruta genealógica:',
-    brief.share.route,
-    '',
-    'Documentos:',
-    documentLines,
-  ].join('\n');
-  const printWindow = window.open('', '_blank', 'width=900,height=700');
-  if (!printWindow) return;
-  printWindow.document.write('<pre style="font-family: Arial, sans-serif; white-space: pre-wrap; line-height: 1.5;">' + content + '</pre>');
-  printWindow.document.close();
-  printWindow.print();
-};
+const initials = (name: string) =>
+  name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase();
 
 const ExplicacionHerederosSienna = () => {
   const [members, setMembers] = useState<SiennaFamilyMember[]>([]);
   const [documents, setDocuments] = useState<EvidenceDocument[]>([]);
+  const [heirs, setHeirs] = useState<ConfirmedHeir[]>([]);
   const [estateAmount, setEstateAmount] = useState('');
   const [lawyerFeePercentage, setLawyerFeePercentage] = useState('0');
   const [excludedHeirs, setExcludedHeirs] = useState<string[]>([]);
@@ -88,13 +77,15 @@ const ExplicacionHerederosSienna = () => {
     const loadData = async () => {
       setLoading(true);
       try {
-        const [membersResponse, documentsResponse, settingsResponse] = await Promise.all([
+        const [membersResponse, documentsResponse, settingsResponse, heirsResponse] = await Promise.all([
           api.listSiennaFamilyMembers(),
           api.listEvidenceDocuments(),
           api.getSettings(),
+          api.listConfirmedHeirs(),
         ]);
         setMembers(membersResponse.members);
         setDocuments(documentsResponse.documents);
+        setHeirs(heirsResponse.heirs);
         setLawyerFeePercentage(String(settingsResponse.settings.lawyer_fee_percentage ?? 0));
       } catch (error) {
         toast({
@@ -115,6 +106,7 @@ const ExplicacionHerederosSienna = () => {
   const lawyerFee = grossAmount * (feePercentage / 100);
   const netAmount = Math.max(0, grossAmount - lawyerFee);
   const plan = useMemo(() => buildDominicanInheritancePlan(members), [members]);
+  const photosByName = useMemo(() => heirPhotoByName(heirs), [heirs]);
 
   const documentsByHeir = useMemo(() => {
     const grouped = new Map<string, EvidenceDocument[]>();
@@ -135,120 +127,289 @@ const ExplicacionHerederosSienna = () => {
       plan.activeHeirs.map((share) => {
         const excluded = excludedHeirs.includes(share.member.id);
         const simulatedShare = excluded || includedTotal <= 0 ? 0 : (share.share / includedTotal) * 100;
+        const heirDocs = documentsByHeir.get(normalizeName(share.member.name)) || [];
         return {
           share,
-          documents: documentsByHeir.get(normalizeName(share.member.name)) || [],
+          documents: heirDocs,
           simulatedShare,
           simulatedAmount: netAmount * (simulatedShare / 100),
+          photo: photosByName.get(normalizeName(share.member.name)) || null,
+          traffic: evaluateEvidenceSupport(heirDocs, share.member, members),
         };
       }),
-    [documentsByHeir, excludedHeirs, includedTotal, netAmount, plan.activeHeirs]
+    [documentsByHeir, excludedHeirs, includedTotal, members, netAmount, photosByName, plan.activeHeirs]
   );
 
-  const supportedCount = briefs.filter((brief) => brief.documents.length > 0).length;
-  const pendingSupport = Math.max(0, briefs.length - supportedCount);
+  const trafficSummary = useMemo(
+    () => ({
+      green: briefs.filter((brief) => brief.traffic.level === 'green').length,
+      amber: briefs.filter((brief) => brief.traffic.level === 'amber').length,
+      red: briefs.filter((brief) => brief.traffic.level === 'red').length,
+    }),
+    [briefs]
+  );
 
   const toggleHeir = (id: string) => {
-    setExcludedHeirs((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+    setExcludedHeirs((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
+    );
   };
 
+  const glossary = useMemo(
+    () => buildCaseGlossary(briefs.map((brief) => brief.share.member.name)),
+    [briefs]
+  );
+
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mb-4">
+    <div className="container mx-auto px-4 py-8 print:py-2">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 print:hidden">
         <BackButton />
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/sienna/arbol-genealogico">Ver árbol Sienna</Link>
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => window.print()}>
+            <Printer className="mr-2 h-4 w-4" />
+            Imprimir reunión
+          </Button>
+        </div>
       </div>
 
       <DocumentHeader
         title="Explicación Sienna para Herederos"
-        subtitle="Resumen claro, fichas individuales, simulación y soporte documental del reparto"
+        subtitle="Por qué heredo, simulación, soporte documental y resumen para reunión"
       />
 
       <div className="mx-auto max-w-7xl space-y-6">
         <div className="grid gap-4 md:grid-cols-4">
-          <Card className="border border-legal-gold/20"><CardContent className="flex items-center gap-3 p-5"><Users className="h-9 w-9 text-legal-blue" /><div><p className="text-sm text-legal-gray">Herederos calculados</p><p className="text-2xl font-bold text-legal-blue">{briefs.length}</p></div></CardContent></Card>
-          <Card className="border border-legal-gold/20"><CardContent className="flex items-center gap-3 p-5"><ShieldCheck className="h-9 w-9 text-legal-blue" /><div><p className="text-sm text-legal-gray">Con soporte</p><p className="text-2xl font-bold text-legal-blue">{supportedCount}</p></div></CardContent></Card>
-          <Card className="border border-legal-gold/20"><CardContent className="flex items-center gap-3 p-5"><AlertTriangle className="h-9 w-9 text-legal-blue" /><div><p className="text-sm text-legal-gray">Pendientes</p><p className="text-2xl font-bold text-legal-blue">{pendingSupport}</p></div></CardContent></Card>
-          <Card className="border border-legal-gold/20"><CardContent className="flex items-center gap-3 p-5"><Landmark className="h-9 w-9 text-legal-blue" /><div><p className="text-sm text-legal-gray">Neto simulado</p><p className="text-2xl font-bold text-legal-blue">{formatMoney(netAmount)}</p></div></CardContent></Card>
+          <Card className="border border-legal-gold/20">
+            <CardContent className="flex items-center gap-3 p-5">
+              <Users className="h-9 w-9 text-legal-blue" />
+              <div>
+                <p className="text-sm text-legal-gray">Herederos calculados</p>
+                <p className="text-2xl font-bold text-legal-blue">{briefs.length}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border border-legal-gold/20">
+            <CardContent className="flex items-center gap-3 p-5">
+              <ShieldCheck className="h-9 w-9 text-emerald-600" />
+              <div>
+                <p className="text-sm text-legal-gray">Sólidos</p>
+                <p className="text-2xl font-bold text-emerald-700">{trafficSummary.green}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border border-legal-gold/20">
+            <CardContent className="flex items-center gap-3 p-5">
+              <AlertTriangle className="h-9 w-9 text-amber-600" />
+              <div>
+                <p className="text-sm text-legal-gray">En progreso / conflicto</p>
+                <p className="text-2xl font-bold text-amber-700">{trafficSummary.amber + trafficSummary.red}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border border-legal-gold/20">
+            <CardContent className="flex items-center gap-3 p-5">
+              <Landmark className="h-9 w-9 text-legal-blue" />
+              <div>
+                <p className="text-sm text-legal-gray">Neto simulado</p>
+                <p className="text-2xl font-bold text-legal-blue">{formatMoney(netAmount)}</p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
-        <Card className="border border-legal-gold/20">
+        <Card className="border border-legal-gold/20" id="resumen-ejecutivo">
           <CardHeader className="border-b bg-legal-blue/5">
-            <CardTitle className="flex items-center gap-2 text-legal-blue"><Scale className="h-5 w-5" />Resumen ejecutivo del reparto</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-legal-blue">
+              <Scale className="h-5 w-5" />
+              Resumen ejecutivo para reunión
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 p-6">
             <p className="text-sm leading-relaxed text-gray-700">{legalCriterionText}</p>
-            <div className="grid gap-4 md:grid-cols-[1fr_220px_220px]">
+            <div className="grid gap-4 md:grid-cols-[1fr_180px_180px_auto] md:items-end">
               <div>
-                <Label>Monto bruto para explicar</Label>
-                <Input type="number" min="0" step="0.01" value={estateAmount} onChange={(event) => setEstateAmount(event.target.value)} placeholder="0.00" />
+                <Label>Monto bruto del caso</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={estateAmount}
+                  onChange={(event) => setEstateAmount(event.target.value)}
+                  placeholder="0.00"
+                />
               </div>
               <div>
                 <Label>% firma de abogados</Label>
-                <Input type="number" min="0" max="100" step="0.01" value={lawyerFeePercentage} onChange={(event) => setLawyerFeePercentage(event.target.value)} />
+                <Input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value={lawyerFeePercentage}
+                  onChange={(event) => setLawyerFeePercentage(event.target.value)}
+                />
               </div>
               <div className="rounded-md border border-legal-blue/15 bg-white p-3">
-                <p className="text-xs uppercase text-legal-gray">Neto explicado</p>
+                <p className="text-xs uppercase text-legal-gray">Neto a repartir</p>
                 <p className="font-bold text-legal-blue">{formatMoney(netAmount)}</p>
                 <p className="text-xs text-legal-gray">Firma: {formatMoney(lawyerFee)}</p>
               </div>
             </div>
+
+            <div className="overflow-x-auto rounded-md border border-legal-blue/15">
+              <table className="w-full min-w-[640px] text-sm">
+                <thead className="bg-legal-blue/5 text-left text-legal-blue">
+                  <tr>
+                    <th className="p-3">Heredero</th>
+                    <th className="p-3">%</th>
+                    <th className="p-3">Monto</th>
+                    <th className="p-3">Ramas</th>
+                    <th className="p-3">Soporte</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {briefs.map((brief) => (
+                    <tr key={brief.share.member.id} className="border-t border-legal-blue/10">
+                      <td className="p-3 font-medium text-legal-blue">{brief.share.member.name}</td>
+                      <td className="p-3">{formatPercent(brief.simulatedShare)}</td>
+                      <td className="p-3">{formatMoney(brief.simulatedAmount)}</td>
+                      <td className="p-3 text-xs text-legal-gray">{brief.share.sources.join(', ') || '-'}</td>
+                      <td className="p-3">
+                        <Badge className={brief.traffic.className}>{brief.traffic.label}</Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </CardContent>
         </Card>
 
-        <Tabs defaultValue="herederos" className="space-y-4">
-          <TabsList className="grid h-auto w-full grid-cols-2 md:grid-cols-5">
-            <TabsTrigger value="herederos">Herederos</TabsTrigger>
+        <Tabs defaultValue="por-que" className="space-y-4">
+          <TabsList className="grid h-auto w-full grid-cols-2 md:grid-cols-6">
+            <TabsTrigger value="por-que">Por qué heredo</TabsTrigger>
             <TabsTrigger value="simulador">Simulador</TabsTrigger>
-            <TabsTrigger value="documentos">Documentos</TabsTrigger>
-            <TabsTrigger value="tiempo">Tiempo</TabsTrigger>
+            <TabsTrigger value="documentos">Semáforo</TabsTrigger>
+            <TabsTrigger value="tiempo">Línea de tiempo</TabsTrigger>
             <TabsTrigger value="glosario">Glosario</TabsTrigger>
+            <TabsTrigger value="resumen">Reparto final</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="herederos" className="space-y-4">
-            {loading && <Card><CardContent className="p-8 text-center text-legal-gray">Cargando explicación...</CardContent></Card>}
-            {!loading && briefs.map((brief) => {
-              const state = evidenceState(brief.documents);
-              return (
+          <TabsContent value="por-que" className="space-y-4">
+            {loading && (
+              <Card>
+                <CardContent className="p-8 text-center text-legal-gray">Cargando explicación...</CardContent>
+              </Card>
+            )}
+            {!loading &&
+              briefs.map((brief) => (
                 <Card key={brief.share.member.id} className="border border-legal-gold/20">
-                  <CardContent className="grid gap-5 p-5 lg:grid-cols-[1.1fr_1fr_220px]">
+                  <CardContent className="grid gap-5 p-5 lg:grid-cols-[auto_1.2fr_1fr_220px]">
+                    <Avatar className="h-20 w-20 border-2 border-legal-gold/40">
+                      {brief.photo?.photo_data && (
+                        <AvatarImage src={brief.photo.photo_data} alt={brief.share.member.name} className="object-cover" />
+                      )}
+                      <AvatarFallback className="bg-legal-blue/10 font-semibold text-legal-blue">
+                        {initials(brief.share.member.name)}
+                      </AvatarFallback>
+                    </Avatar>
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="font-serif text-xl font-bold text-legal-blue">{brief.share.member.name}</h3>
                         <Badge variant="outline">{formatPercent(brief.simulatedShare)}</Badge>
+                        <Badge className={brief.traffic.className}>{brief.traffic.label}</Badge>
                       </div>
-                      <p className="mt-2 text-sm leading-relaxed text-gray-700">{brief.share.reason}</p>
-                      <div className="mt-3 rounded-md bg-legal-blue/5 p-3 text-sm text-legal-gray">{brief.share.paymentBasis}</div>
+                      <p className="mt-3 rounded-md bg-legal-gold/10 p-3 text-sm leading-relaxed text-gray-800">
+                        {buildWhyIInheritText(brief.share, brief.simulatedShare, brief.simulatedAmount)}
+                      </p>
+                      <p className="mt-2 text-xs text-legal-gray">{brief.share.paymentBasis}</p>
                     </div>
                     <div>
-                      <p className="flex items-center gap-2 text-sm font-semibold text-legal-blue"><Route className="h-4 w-4" />Ruta genealógica</p>
-                      <p className="mt-2 text-sm leading-relaxed text-gray-700">{brief.share.route}</p>
+                      <p className="flex items-center gap-2 text-sm font-semibold text-legal-blue">
+                        <Route className="h-4 w-4" />
+                        Ruta genealógica
+                      </p>
+                      <ul className="mt-2 space-y-1">
+                        {routeSteps(brief.share).map((step, index) => (
+                          <li key={`${brief.share.member.id}-route-${index}`} className="flex gap-2 text-sm text-gray-700">
+                            <GitBranch className="mt-0.5 h-4 w-4 shrink-0 text-legal-gold" />
+                            {step}
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                     <div className="space-y-3 rounded-md border border-legal-blue/15 bg-white p-4">
-                      <div><p className="text-xs uppercase text-legal-gray">Monto estimado</p><p className="text-lg font-bold text-legal-blue">{formatMoney(brief.simulatedAmount)}</p></div>
-                      <div><div className="mb-2 flex items-center justify-between"><span className="text-xs uppercase text-legal-gray">Soporte</span><Badge className={state.className}>{state.label}</Badge></div><Progress value={state.value} /></div>
-                      <Button variant="outline" className="w-full" onClick={() => printBrief(brief, netAmount)}><Printer className="mr-2 h-4 w-4" />Imprimir ficha</Button>
+                      <div>
+                        <p className="text-xs uppercase text-legal-gray">Monto estimado</p>
+                        <p className="text-lg font-bold text-legal-blue">{formatMoney(brief.simulatedAmount)}</p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        onClick={() =>
+                          downloadHeirBriefPdf(
+                            {
+                              ...brief,
+                              photoData: brief.photo?.photo_data,
+                            },
+                            netAmount
+                          )
+                        }
+                      >
+                        <FileDown className="mr-2 h-4 w-4" />
+                        PDF individual
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
-              );
-            })}
+              ))}
           </TabsContent>
 
           <TabsContent value="simulador">
             <Card className="border border-legal-gold/20">
-              <CardHeader className="border-b bg-legal-blue/5"><CardTitle className="flex items-center gap-2 text-legal-blue"><SlidersHorizontal className="h-5 w-5" />Simulador de revisión</CardTitle></CardHeader>
+              <CardHeader className="border-b bg-legal-blue/5">
+                <CardTitle className="flex items-center gap-2 text-legal-blue">
+                  <SlidersHorizontal className="h-5 w-5" />
+                  Simulador visual de revisión
+                </CardTitle>
+              </CardHeader>
               <CardContent className="space-y-4 p-6">
-                <p className="text-sm text-gray-700">Marca temporalmente un heredero como incluido o no incluido para explicar una revisión sin guardar cambios.</p>
+                <p className="text-sm text-gray-700">
+                  Incluya o excluya herederos para ver cómo cambian los porcentajes y montos antes de guardar cambios en el
+                  árbol. Para modificar el árbol genealógico use{' '}
+                  <Link to="/sienna/miembros-arbol" className="font-medium text-legal-blue underline">
+                    Miembros del Árbol
+                  </Link>
+                  .
+                </p>
                 <div className="grid gap-3 md:grid-cols-2">
-                  {briefs.map((brief) => (
-                    <div key={brief.share.member.id} className="flex items-center justify-between rounded-md border border-legal-blue/15 p-3">
-                      <div className="flex items-center gap-3">
-                        <Checkbox checked={!excludedHeirs.includes(brief.share.member.id)} onCheckedChange={() => toggleHeir(brief.share.member.id)} />
-                        <div><p className="font-medium text-legal-blue">{brief.share.member.name}</p><p className="text-xs text-legal-gray">Base: {formatPercent(brief.share.share)}</p></div>
+                  {briefs.map((brief) => {
+                    const included = !excludedHeirs.includes(brief.share.member.id);
+                    return (
+                      <div
+                        key={brief.share.member.id}
+                        className={`rounded-md border p-3 ${included ? 'border-legal-gold/40 bg-legal-gold/5' : 'border-legal-blue/15 opacity-70'}`}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <Checkbox checked={included} onCheckedChange={() => toggleHeir(brief.share.member.id)} />
+                            <div>
+                              <p className="font-medium text-legal-blue">{brief.share.member.name}</p>
+                              <p className="text-xs text-legal-gray">Base legal: {formatPercent(brief.share.share)}</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-semibold text-legal-blue">{formatPercent(brief.simulatedShare)}</p>
+                            <p className="text-xs text-legal-gray">{formatMoney(brief.simulatedAmount)}</p>
+                          </div>
+                        </div>
+                        <Progress className="mt-3 h-2" value={brief.simulatedShare} />
                       </div>
-                      <div className="text-right"><p className="font-semibold text-legal-blue">{formatPercent(brief.simulatedShare)}</p><p className="text-xs text-legal-gray">{formatMoney(brief.simulatedAmount)}</p></div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>
@@ -256,17 +417,76 @@ const ExplicacionHerederosSienna = () => {
 
           <TabsContent value="documentos">
             <div className="grid gap-4 md:grid-cols-2">
+              {briefs.map((brief) => (
+                <Card key={brief.share.member.id} className="border border-legal-gold/20">
+                  <CardHeader className="border-b bg-legal-blue/5">
+                    <CardTitle className="flex items-center justify-between gap-2 text-base text-legal-blue">
+                      <span>{brief.share.member.name}</span>
+                      <Badge className={brief.traffic.className}>{brief.traffic.label}</Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3 p-5">
+                    <Progress value={brief.traffic.value} className="h-2" />
+                    {brief.traffic.issues.map((issue) => (
+                      <p key={issue} className="text-xs text-red-700">
+                        {issue}
+                      </p>
+                    ))}
+                    {brief.documents.length === 0 && (
+                      <p className="text-sm text-legal-gray">No hay documentos asociados directamente a este heredero.</p>
+                    )}
+                    {brief.documents.map((document) => (
+                      <div key={document.id} className="rounded-md border border-legal-blue/15 p-3">
+                        <p className="flex items-center gap-2 font-medium text-legal-blue">
+                          <FileText className="h-4 w-4" />
+                          {document.title}
+                        </p>
+                        <p className="mt-1 text-xs text-legal-gray">
+                          {document.document_type} · {document.event_date || 'Fecha pendiente'}
+                          {document.confirms_heir ? ' · Confirma heredero' : ''}
+                        </p>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="tiempo">
+            <div className="grid gap-4 lg:grid-cols-2">
               {briefs.map((brief) => {
-                const state = evidenceState(brief.documents);
+                const timeline = buildMemberLifeTimeline(brief.share.member, brief.share);
                 return (
                   <Card key={brief.share.member.id} className="border border-legal-gold/20">
-                    <CardHeader className="border-b bg-legal-blue/5"><CardTitle className="flex items-center justify-between gap-2 text-base text-legal-blue"><span>{brief.share.member.name}</span><Badge className={state.className}>{state.label}</Badge></CardTitle></CardHeader>
-                    <CardContent className="space-y-3 p-5">
-                      {brief.documents.length === 0 && <p className="text-sm text-legal-gray">No hay documentos asociados directamente a este heredero.</p>}
-                      {brief.documents.map((document) => (
-                        <div key={document.id} className="rounded-md border border-legal-blue/15 p-3">
-                          <p className="flex items-center gap-2 font-medium text-legal-blue"><FileText className="h-4 w-4" />{document.title}</p>
-                          <p className="mt-1 text-xs text-legal-gray">{document.document_type} · {document.event_date || 'Fecha pendiente'}</p>
+                    <CardHeader className="border-b bg-legal-blue/5">
+                      <CardTitle className="flex items-center gap-2 text-base text-legal-blue">
+                        <CalendarDays className="h-5 w-5" />
+                        {brief.share.member.name}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4 p-5">
+                      {timeline.map((event, index) => (
+                        <div key={`${brief.share.member.id}-${index}`} className="flex gap-3">
+                          <div className="flex flex-col items-center">
+                            <div
+                              className={`h-3 w-3 rounded-full ${
+                                event.kind === 'defuncion'
+                                  ? 'bg-red-500'
+                                  : event.kind === 'matrimonio'
+                                    ? 'bg-legal-gold'
+                                    : event.kind === 'vinculo'
+                                      ? 'bg-legal-blue'
+                                      : 'bg-emerald-500'
+                              }`}
+                            />
+                            {index < timeline.length - 1 && <div className="mt-1 w-px flex-1 bg-legal-blue/20" />}
+                          </div>
+                          <div className="pb-2">
+                            <p className="text-xs font-semibold uppercase text-legal-gray">{event.label}</p>
+                            <p className="text-sm font-medium text-legal-blue">{event.date}</p>
+                            {event.detail && <p className="text-sm text-gray-700">{event.detail}</p>}
+                          </div>
                         </div>
                       ))}
                     </CardContent>
@@ -276,30 +496,48 @@ const ExplicacionHerederosSienna = () => {
             </div>
           </TabsContent>
 
-          <TabsContent value="tiempo">
-            <div className="grid gap-4 lg:grid-cols-2">
-              {briefs.map((brief) => (
-                <Card key={brief.share.member.id} className="border border-legal-gold/20">
-                  <CardHeader className="border-b bg-legal-blue/5"><CardTitle className="flex items-center gap-2 text-base text-legal-blue"><CalendarDays className="h-5 w-5" />{brief.share.member.name}</CardTitle></CardHeader>
+          <TabsContent value="glosario">
+            <div className="grid gap-4 md:grid-cols-2">
+              {glossary.map((entry) => (
+                <Card key={entry.term} className="border border-legal-gold/20">
                   <CardContent className="p-5">
-                    <div className="space-y-3">
-                      {routeSteps(brief.share).map((item, index) => (
-                        <div key={brief.share.member.id + '-' + index} className="flex gap-3"><div className="mt-1 h-3 w-3 rounded-full bg-legal-gold" /><p className="text-sm text-gray-700">{item}</p></div>
-                      ))}
-                    </div>
+                    <p className="flex items-center gap-2 font-serif text-lg font-bold text-legal-blue">
+                      <BookOpen className="h-5 w-5" />
+                      {entry.term}
+                    </p>
+                    <p className="mt-2 text-sm leading-relaxed text-gray-700">{entry.text}</p>
+                    <p className="mt-2 rounded-md bg-legal-blue/5 p-2 text-xs text-legal-gray">
+                      <strong>Ejemplo en este caso:</strong> {entry.example}
+                    </p>
                   </CardContent>
                 </Card>
               ))}
             </div>
           </TabsContent>
 
-          <TabsContent value="glosario">
-            <div className="grid gap-4 md:grid-cols-2">
-              {glossary.map(([term, text]) => (
-                <Card key={term} className="border border-legal-gold/20"><CardContent className="p-5"><p className="flex items-center gap-2 font-serif text-lg font-bold text-legal-blue"><BookOpen className="h-5 w-5" />{term}</p><p className="mt-2 text-sm leading-relaxed text-gray-700">{text}</p></CardContent></Card>
-              ))}
-              <Card className="border border-legal-gold/20 md:col-span-2"><CardContent className="flex flex-wrap items-center justify-between gap-3 p-5"><div><p className="font-serif text-lg font-bold text-legal-blue">Paquete para reunión</p><p className="text-sm text-legal-gray">Fichas individuales, resumen ejecutivo, semáforo documental y línea de tiempo.</p></div><Button variant="outline" onClick={() => window.print()}><FileDown className="mr-2 h-4 w-4" />Imprimir pantalla</Button></CardContent></Card>
-            </div>
+          <TabsContent value="resumen">
+            <Card className="border border-legal-gold/20">
+              <CardContent className="space-y-4 p-6">
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="rounded-md border p-4">
+                    <p className="text-xs uppercase text-legal-gray">Bruto</p>
+                    <p className="text-xl font-bold text-legal-blue">{formatMoney(grossAmount)}</p>
+                  </div>
+                  <div className="rounded-md border p-4">
+                    <p className="text-xs uppercase text-legal-gray">Firma ({formatPercent(feePercentage)})</p>
+                    <p className="text-xl font-bold text-legal-blue">{formatMoney(lawyerFee)}</p>
+                  </div>
+                  <div className="rounded-md border border-legal-gold/30 bg-legal-gold/5 p-4">
+                    <p className="text-xs uppercase text-legal-gray">Neto final explicado</p>
+                    <p className="text-xl font-bold text-legal-blue">{formatMoney(netAmount)}</p>
+                  </div>
+                </div>
+                <p className="text-sm text-legal-gray">
+                  {briefs.filter((b) => !excludedHeirs.includes(b.share.member.id)).length} herederos incluidos en el
+                  reparto simulado.
+                </p>
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>
