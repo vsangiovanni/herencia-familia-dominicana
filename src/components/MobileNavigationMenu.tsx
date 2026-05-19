@@ -74,6 +74,12 @@ const MobileNavigationMenu = () => {
               <DropdownMenuItem onClick={() => navigate('/documentos-probatorios')}>
                 Documentos Probatorios
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/sienna/arbol-genealogico')}>
+                Árbol Sienna
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/sienna/miembros-arbol')}>
+                Miembros del Árbol
+              </DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           {isAdmin && (

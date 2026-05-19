@@ -113,6 +113,148 @@ async function ensureDatabase() {
   await schemaConnection.end();
 }
 
+async function ensureSchemaMigrations() {
+  const columns = await query(
+    `SELECT COLUMN_NAME
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = :databaseName AND TABLE_NAME = 'confirmed_heirs'`,
+    { databaseName: dbConfig.database }
+  );
+  const existing = new Set(columns.map((column) => column.COLUMN_NAME));
+  const migrations = [
+    ['photo_file_name', 'ALTER TABLE confirmed_heirs ADD COLUMN photo_file_name VARCHAR(255) NULL AFTER notes'],
+    ['photo_file_type', 'ALTER TABLE confirmed_heirs ADD COLUMN photo_file_type VARCHAR(120) NULL AFTER photo_file_name'],
+    ['photo_data', 'ALTER TABLE confirmed_heirs ADD COLUMN photo_data LONGTEXT NULL AFTER photo_file_type'],
+    ['inheritance_amount', 'ALTER TABLE confirmed_heirs ADD COLUMN inheritance_amount DECIMAL(14,2) NOT NULL DEFAULT 0 AFTER photo_data'],
+  ];
+
+  for (const [columnName, sql] of migrations) {
+    if (!existing.has(columnName)) await query(sql);
+  }
+
+  await query(
+    `INSERT INTO pages (id, name, path, description)
+     VALUES (:id, 'Árbol Sienna', '/sienna/arbol-genealogico', 'Árbol genealógico con foto y monto heredado')
+     ON DUPLICATE KEY UPDATE name = VALUES(name), description = VALUES(description)`,
+    { id: randomUUID() }
+  );
+
+  await query(
+    `CREATE TABLE IF NOT EXISTS sienna_family_members (
+       id VARCHAR(120) PRIMARY KEY,
+       parent_id VARCHAR(120) NULL,
+       relationship_to_parent ENUM('hijo', 'hija', 'conyuge', 'padre', 'madre', 'otro') NULL,
+       name VARCHAR(255) NOT NULL,
+       birth VARCHAR(50) NULL,
+       death VARCHAR(50) NULL,
+       spouse VARCHAR(255) NULL,
+       spouse_birth VARCHAR(50) NULL,
+       inheritance_status ENUM('posible_heredero', 'no_hereda', 'requiere_revision', 'confirmado') NOT NULL DEFAULT 'requiere_revision',
+       inheritance_reason TEXT NULL,
+       is_highlighted_ancestor BOOLEAN NOT NULL DEFAULT FALSE,
+       sort_order INT NOT NULL DEFAULT 0,
+       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+       updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+       INDEX idx_sienna_family_parent (parent_id)
+     )`
+  );
+
+  const memberColumns = await query(
+    `SELECT COLUMN_NAME
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = :databaseName AND TABLE_NAME = 'sienna_family_members'`,
+    { databaseName: dbConfig.database }
+  );
+  const existingMemberColumns = new Set(memberColumns.map((column) => column.COLUMN_NAME));
+  const memberMigrations = [
+    ['relationship_to_parent', "ALTER TABLE sienna_family_members ADD COLUMN relationship_to_parent ENUM('hijo', 'hija', 'conyuge', 'padre', 'madre', 'otro') NULL AFTER parent_id"],
+    ['inheritance_status', "ALTER TABLE sienna_family_members ADD COLUMN inheritance_status ENUM('posible_heredero', 'no_hereda', 'requiere_revision', 'confirmado') NOT NULL DEFAULT 'requiere_revision' AFTER spouse_birth"],
+    ['inheritance_reason', 'ALTER TABLE sienna_family_members ADD COLUMN inheritance_reason TEXT NULL AFTER inheritance_status'],
+  ];
+  for (const [columnName, sql] of memberMigrations) {
+    if (!existingMemberColumns.has(columnName)) await query(sql);
+  }
+
+  await query(
+    `UPDATE sienna_family_members
+     SET inheritance_status = 'posible_heredero',
+         inheritance_reason = 'Descendiente vivo registrado en una o más líneas sucesorales activas.'
+     WHERE id IN ('victor-manuel-martin', 'perla-rosa', 'bernardo-martin', 'jocelyn', 'mayra')
+       AND inheritance_status = 'requiere_revision'`
+  );
+
+  const caseStatuses = [
+    ['alessandro', 'no_hereda', 'Es el causante del expediente; no se clasifica como heredero.'],
+    ['domenico', 'no_hereda', 'Tronco familiar común; sirve para ubicar ramas, no como heredero final.'],
+    ['maria-magdalena', 'no_hereda', 'Madre del causante Alessandro; rama del causante, no heredera final en este análisis.'],
+    ['vincenzo', 'no_hereda', 'Hermano de la madre del causante; abre una rama sucesoral activa por sus descendientes.'],
+    ['paolo', 'no_hereda', 'Hermano de la madre del causante; abre una rama sucesoral activa por sus descendientes.'],
+    ['maria-rosa', 'no_hereda', 'Intermedia fallecida en rama Vincenzo/Vicente y vínculo hacia la doble filiación.'],
+    ['pedro-pablo', 'no_hereda', 'Intermedio fallecido en rama Paolo/Paulino y vínculo hacia la doble filiación.'],
+    ['domingo-ramon', 'no_hereda', 'Intermedio fallecido en rama Vincenzo/Vicente; transmite representación a sus descendientes.'],
+    ['victor-manuel', 'no_hereda', 'Intermedio fallecido; conecta a Víctor Manuel Martín y a Rosa Julia/Perla.'],
+    ['rosa-julia', 'no_hereda', 'Intermedia fallecida; Perla Rosa entra por representación en su rama.'],
+    ['maria-amparo', 'no_hereda', 'Intermedia fallecida; Bernardo Martín entra por representación en su rama.'],
+    ['jose-vicente', 'no_hereda', 'Intermedio fallecido; Jocelyn y Mayra entran por representación en su rama.'],
+    ['victor-manuel-martin', 'posible_heredero', 'Heredero determinado por doble vocación sucesoral: línea Vincenzo/Vicente vía María Rosa y línea Paolo/Paulino vía Pedro Pablo.'],
+    ['perla-rosa', 'posible_heredero', 'Heredera determinada por representación en la rama de Rosa Julia, con doble línea familiar Vincenzo/Vicente y Paolo/Paulino.'],
+    ['bernardo-martin', 'posible_heredero', 'Heredero determinado por la rama Domingo Ramón -> María Amparo dentro de la línea Vincenzo/Vicente.'],
+    ['jocelyn', 'posible_heredero', 'Heredera determinada por la rama Domingo Ramón -> José Vicente dentro de la línea Vincenzo/Vicente.'],
+    ['mayra', 'posible_heredero', 'Heredera determinada por la rama Domingo Ramón -> José Vicente dentro de la línea Vincenzo/Vicente.'],
+  ];
+
+  for (const [id, status, reason] of caseStatuses) {
+    await query(
+      `UPDATE sienna_family_members
+       SET inheritance_status = :status, inheritance_reason = :reason
+       WHERE id = :id`,
+      { id, status, reason }
+    );
+  }
+
+  const existingMembers = await query('SELECT COUNT(*) AS count FROM sienna_family_members');
+  if (Number(existingMembers[0]?.count || 0) === 0) {
+    const members = [
+      ['domenico', null, 'Domenico (Domingo) Sangiovanni', '17/12/1845', null, 'María Rosa Grisolia', '18/07/1852', false, 10],
+      ['maria-magdalena', 'domenico', 'María Magdalena Sangiovanni', '27/04/1874', '07/05/1935', 'Vincenzo de Paola', null, false, 10],
+      ['vincenzo', 'domenico', 'Vincenzo (Vicente) Sangiovanni', '13/08/1880', '07/02/1958', 'María Balbina Pérez Álvarez', null, false, 20],
+      ['paolo', 'domenico', 'Paolo (Paulino) Sangiovanni', '17/01/1885', '31/03/1936', 'Simona Simo', null, false, 30],
+      ['alessandro', 'maria-magdalena', 'Alessandro de Paola Sangiovanni', '18/10/1911', '14/01/1998', null, null, true, 10],
+      ['maria-rosa', 'vincenzo', 'María Rosa Sangiovanni Pérez', '18/02/1906', '07/08/1981', 'Pedro Pablo Sangiovanni Simo', null, false, 10],
+      ['domingo-ramon', 'vincenzo', 'Domingo Ramón Sangiovanni Pérez', '11/07/1907', '03/09/1981', 'María Francisca Gesualdo', null, false, 20],
+      ['pedro-pablo', 'paolo', 'Pedro Pablo Sangiovanni Simo', '29/10/1906', '04/10/1986', null, null, false, 10],
+      ['victor-manuel', 'maria-rosa', 'Víctor Manuel Sangiovanni Sangiovanni', '29/10/1932', '21/10/2007', 'Ana Julia Rodríguez', null, false, 10],
+      ['maria-amparo', 'domingo-ramon', 'María Amparo Sangiovanni Gesualdo', '30/10/1929', '15/01/2004', 'Bernardo Edmundo Lizardo Fernández', null, false, 10],
+      ['jose-vicente', 'domingo-ramon', 'José Vicente Sangiovanni Gesualdo', '19/04/1932', '24/04/1976', 'Ozema Báez', null, false, 20],
+      ['rosa-julia', 'victor-manuel', 'Rosa Julia Sangiovanni Rodríguez', '15/04/1963', '04/10/2024', 'Francisco Brea', null, false, 10],
+      ['victor-manuel-martin', 'victor-manuel', 'Víctor Manuel Martín Sangiovanni Rodríguez', '08/11/1966', null, null, null, false, 20],
+      ['bernardo-martin', 'maria-amparo', 'Bernardo Martín Lizardo Sangiovanni', '28/10/1966', null, null, null, false, 10],
+      ['jocelyn', 'jose-vicente', 'Jocelyn del Jesús Sangiovanni Báez', '06/10/1963', null, null, null, false, 10],
+      ['mayra', 'jose-vicente', 'Mayra Josefina Sangiovanni Báez', '20/11/1965', null, null, null, false, 20],
+      ['perla-rosa', 'rosa-julia', 'Perla Rosa Brea Sangiovanni', '30/04/1989', null, null, null, false, 10],
+    ];
+
+    for (const member of members) {
+      await query(
+        `INSERT INTO sienna_family_members
+         (id, parent_id, name, birth, death, spouse, spouse_birth, is_highlighted_ancestor, sort_order)
+         VALUES (:id, :parentId, :name, :birth, :death, :spouse, :spouseBirth, :highlighted, :sortOrder)`,
+        {
+          id: member[0],
+          parentId: member[1],
+          name: member[2],
+          birth: member[3],
+          death: member[4],
+          spouse: member[5],
+          spouseBirth: member[6],
+          highlighted: Boolean(member[7]),
+          sortOrder: member[8],
+        }
+      );
+    }
+  }
+}
+
 async function ensureAdminUser() {
   const email = process.env.LOCAL_ADMIN_EMAIL;
   const password = process.env.LOCAL_ADMIN_PASSWORD;
@@ -307,7 +449,8 @@ app.get('/api/page-visits', requireAuth, requireAdmin, async (_req, res) => {
 app.get('/api/confirmed-heirs', requireAuth, async (_req, res) => {
   const heirs = await query(
     `SELECT h.id, h.heir_name, h.relationship_summary, h.line_vincenzo, h.line_paolo,
-            h.status, h.notes, h.created_at, h.updated_at,
+            h.status, h.notes, h.photo_file_name, h.photo_file_type, h.photo_data,
+            h.inheritance_amount, h.created_at, h.updated_at,
             COUNT(ed.id) AS evidence_count
      FROM confirmed_heirs h
      LEFT JOIN evidence_documents ed ON ed.related_heir_name = h.heir_name
@@ -320,6 +463,7 @@ app.get('/api/confirmed-heirs', requireAuth, async (_req, res) => {
       ...heir,
       line_vincenzo: Boolean(heir.line_vincenzo),
       line_paolo: Boolean(heir.line_paolo),
+      inheritance_amount: Number(heir.inheritance_amount || 0),
       evidence_count: Number(heir.evidence_count || 0),
     })),
   });
@@ -332,6 +476,10 @@ app.put('/api/confirmed-heirs/:id', requireAuth, async (req, res) => {
     line_paolo,
     status,
     notes,
+    photo_file_name,
+    photo_file_type,
+    photo_data,
+    inheritance_amount,
   } = req.body || {};
 
   await query(
@@ -340,7 +488,11 @@ app.put('/api/confirmed-heirs/:id', requireAuth, async (req, res) => {
          line_vincenzo = :lineVincenzo,
          line_paolo = :linePaolo,
          status = :status,
-         notes = :notes
+         notes = :notes,
+         photo_file_name = :photoFileName,
+         photo_file_type = :photoFileType,
+         photo_data = :photoData,
+         inheritance_amount = :inheritanceAmount
      WHERE id = :id`,
     {
       id: req.params.id,
@@ -349,6 +501,10 @@ app.put('/api/confirmed-heirs/:id', requireAuth, async (req, res) => {
       linePaolo: Boolean(line_paolo),
       status: ['mencionado', 'confirmado', 'pendiente'].includes(status) ? status : 'mencionado',
       notes: notes || null,
+      photoFileName: photo_file_name || null,
+      photoFileType: photo_file_type || null,
+      photoData: photo_data || null,
+      inheritanceAmount: Number(inheritance_amount || 0),
     }
   );
 
@@ -363,23 +519,33 @@ app.post('/api/confirmed-heirs', requireAuth, async (req, res) => {
     line_paolo,
     status,
     notes,
+    photo_file_name,
+    photo_file_type,
+    photo_data,
+    inheritance_amount,
   } = req.body || {};
 
   if (!heir_name) return res.status(400).json({ message: 'El nombre del heredero es requerido' });
 
   await query(
     `INSERT INTO confirmed_heirs (
-       id, heir_name, relationship_summary, line_vincenzo, line_paolo, status, notes
+       id, heir_name, relationship_summary, line_vincenzo, line_paolo, status, notes,
+       photo_file_name, photo_file_type, photo_data, inheritance_amount
      )
      VALUES (
-       :id, :heirName, :relationshipSummary, :lineVincenzo, :linePaolo, :status, :notes
+       :id, :heirName, :relationshipSummary, :lineVincenzo, :linePaolo, :status, :notes,
+       :photoFileName, :photoFileType, :photoData, :inheritanceAmount
      )
      ON DUPLICATE KEY UPDATE
        relationship_summary = VALUES(relationship_summary),
        line_vincenzo = VALUES(line_vincenzo),
        line_paolo = VALUES(line_paolo),
        status = VALUES(status),
-       notes = VALUES(notes)`,
+       notes = VALUES(notes),
+       photo_file_name = VALUES(photo_file_name),
+       photo_file_type = VALUES(photo_file_type),
+       photo_data = VALUES(photo_data),
+       inheritance_amount = VALUES(inheritance_amount)`,
     {
       id: randomUUID(),
       heirName: heir_name,
@@ -388,10 +554,96 @@ app.post('/api/confirmed-heirs', requireAuth, async (req, res) => {
       linePaolo: Boolean(line_paolo),
       status: ['mencionado', 'confirmado', 'pendiente'].includes(status) ? status : 'mencionado',
       notes: notes || null,
+      photoFileName: photo_file_name || null,
+      photoFileType: photo_file_type || null,
+      photoData: photo_data || null,
+      inheritanceAmount: Number(inheritance_amount || 0),
     }
   );
 
   res.status(201).json({ ok: true });
+});
+
+app.get('/api/sienna-family-members', requireAuth, async (_req, res) => {
+  const members = await query(
+    `SELECT id, parent_id, relationship_to_parent, name, birth, death, spouse, spouse_birth,
+            inheritance_status, inheritance_reason, is_highlighted_ancestor, sort_order, created_at, updated_at
+     FROM sienna_family_members
+     ORDER BY COALESCE(parent_id, ''), sort_order, name`
+  );
+
+  res.json({
+    members: members.map((member) => ({
+      ...member,
+      is_highlighted_ancestor: Boolean(member.is_highlighted_ancestor),
+      sort_order: Number(member.sort_order || 0),
+    })),
+  });
+});
+
+app.post('/api/sienna-family-members', requireAuth, async (req, res) => {
+  const {
+    id,
+    parent_id,
+    relationship_to_parent,
+    name,
+    birth,
+    death,
+    spouse,
+    spouse_birth,
+    inheritance_status,
+    inheritance_reason,
+    is_highlighted_ancestor,
+    sort_order,
+  } = req.body || {};
+
+  if (!name) return res.status(400).json({ message: 'El nombre del miembro es requerido' });
+
+  const memberId = id || randomUUID();
+  await query(
+    `INSERT INTO sienna_family_members (
+       id, parent_id, relationship_to_parent, name, birth, death, spouse, spouse_birth,
+       inheritance_status, inheritance_reason, is_highlighted_ancestor, sort_order
+     )
+     VALUES (
+       :id, :parentId, :relationshipToParent, :name, :birth, :death, :spouse, :spouseBirth,
+       :inheritanceStatus, :inheritanceReason, :highlighted, :sortOrder
+     )
+     ON DUPLICATE KEY UPDATE
+       parent_id = VALUES(parent_id),
+       relationship_to_parent = VALUES(relationship_to_parent),
+       name = VALUES(name),
+       birth = VALUES(birth),
+       death = VALUES(death),
+       spouse = VALUES(spouse),
+       spouse_birth = VALUES(spouse_birth),
+       inheritance_status = VALUES(inheritance_status),
+       inheritance_reason = VALUES(inheritance_reason),
+       is_highlighted_ancestor = VALUES(is_highlighted_ancestor),
+       sort_order = VALUES(sort_order)`,
+    {
+      id: memberId,
+      parentId: parent_id || null,
+      relationshipToParent: ['hijo', 'hija', 'conyuge', 'padre', 'madre', 'otro'].includes(relationship_to_parent) ? relationship_to_parent : null,
+      name,
+      birth: birth || null,
+      death: death || null,
+      spouse: spouse || null,
+      spouseBirth: spouse_birth || null,
+      inheritanceStatus: ['posible_heredero', 'no_hereda', 'requiere_revision', 'confirmado'].includes(inheritance_status) ? inheritance_status : 'requiere_revision',
+      inheritanceReason: inheritance_reason || null,
+      highlighted: Boolean(is_highlighted_ancestor),
+      sortOrder: Number(sort_order || 0),
+    }
+  );
+
+  res.status(201).json({ ok: true, member: { id: memberId, ...req.body } });
+});
+
+app.delete('/api/sienna-family-members/:id', requireAuth, async (req, res) => {
+  await query('UPDATE sienna_family_members SET parent_id = NULL WHERE parent_id = :id', { id: req.params.id });
+  await query('DELETE FROM sienna_family_members WHERE id = :id', { id: req.params.id });
+  res.json({ ok: true });
 });
 
 app.get('/api/evidence-documents', requireAuth, async (_req, res) => {
@@ -500,6 +752,7 @@ app.use((err, _req, res, _next) => {
 });
 
 ensureDatabase()
+  .then(ensureSchemaMigrations)
   .then(ensureAdminUser)
   .then(() => {
     app.listen(port, () => {

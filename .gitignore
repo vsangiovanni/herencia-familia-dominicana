@@ -11,6 +11,7 @@ node_modules
 dist
 dist-ssr
 .env
+.deploy_hostinger/
 backup_supabase/
 _migration_safety/
 _migration_work/

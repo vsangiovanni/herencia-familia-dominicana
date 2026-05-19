@@ -26,7 +26,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from '@/components/ui/use-toast';
-import { Archive, FileImage, FileSearch, Save, Trash2, UserCheck } from 'lucide-react';
+import { Archive, FileImage, FileSearch, Image, Save, Trash2, UserCheck } from 'lucide-react';
 
 type DocumentForm = Omit<EvidenceDocument, 'id' | 'created_at' | 'updated_at'>;
 
@@ -155,6 +155,13 @@ const parsePeopleList = (value: string | string[] | undefined) => {
     .filter(Boolean);
 };
 
+const formatMoney = (amount: number | string | null | undefined) =>
+  new Intl.NumberFormat('es-DO', {
+    style: 'currency',
+    currency: 'DOP',
+    minimumFractionDigits: 2,
+  }).format(Number(amount || 0));
+
 const DocumentosProbatorios = () => {
   const [form, setForm] = useState<DocumentForm>(emptyForm);
   const [documents, setDocuments] = useState<EvidenceDocument[]>([]);
@@ -162,6 +169,7 @@ const DocumentosProbatorios = () => {
   const [ocrBusy, setOcrBusy] = useState(false);
   const [saveBusy, setSaveBusy] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
+  const [heirDrafts, setHeirDrafts] = useState<Record<string, Partial<ConfirmedHeir>>>({});
 
   const selectedHeir = useMemo(
     () => heirs.find((heir) => heir.heir_name === form.related_heir_name),
@@ -186,6 +194,19 @@ const DocumentosProbatorios = () => {
       });
     });
   }, []);
+
+  useEffect(() => {
+    setHeirDrafts((current) => {
+      const next: Record<string, Partial<ConfirmedHeir>> = {};
+      heirs.forEach((heir) => {
+        next[heir.id] = {
+          ...heir,
+          ...(current[heir.id] || {}),
+        };
+      });
+      return next;
+    });
+  }, [heirs]);
 
   const updateForm = (field: keyof DocumentForm, value: string | boolean | string[]) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -267,6 +288,52 @@ const DocumentosProbatorios = () => {
     if (!id) return;
     await api.deleteEvidenceDocument(id);
     await loadData();
+  };
+
+  const updateHeirDraft = (id: string, value: Partial<ConfirmedHeir>) => {
+    setHeirDrafts((current) => ({
+      ...current,
+      [id]: {
+        ...(current[id] || {}),
+        ...value,
+      },
+    }));
+  };
+
+  const handleHeirPhoto = async (heir: ConfirmedHeir, file?: File) => {
+    if (!file) return;
+    const photoData = await readFileAsDataUrl(file);
+    updateHeirDraft(heir.id, {
+      photo_data: photoData,
+      photo_file_name: file.name,
+      photo_file_type: file.type,
+    });
+  };
+
+  const saveHeirPresentation = async (heir: ConfirmedHeir) => {
+    const draft = heirDrafts[heir.id] || {};
+    try {
+      await api.updateConfirmedHeir(heir.id, {
+        heir_name: heir.heir_name,
+        relationship_summary: heir.relationship_summary,
+        line_vincenzo: heir.line_vincenzo,
+        line_paolo: heir.line_paolo,
+        status: heir.status,
+        notes: heir.notes,
+        photo_file_name: draft.photo_file_name ?? heir.photo_file_name ?? null,
+        photo_file_type: draft.photo_file_type ?? heir.photo_file_type ?? null,
+        photo_data: draft.photo_data ?? heir.photo_data ?? null,
+        inheritance_amount: Number(draft.inheritance_amount ?? heir.inheritance_amount ?? 0),
+      });
+      await loadData();
+      toast({ title: 'Heredero actualizado', description: 'Foto y monto quedaron guardados para el árbol Sienna.' });
+    } catch (error) {
+      toast({
+        title: 'No se pudo actualizar el heredero',
+        description: error instanceof Error ? error.message : 'Error desconocido',
+        variant: 'destructive',
+      });
+    }
   };
 
   const evidenceByHeir = useMemo(() => {
@@ -464,13 +531,19 @@ const DocumentosProbatorios = () => {
                   <TableHead>Líneas</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead>Actas</TableHead>
+                  <TableHead>Foto</TableHead>
+                  <TableHead>Monto heredado</TableHead>
+                  <TableHead className="text-right">Guardar</TableHead>
                   <TableHead>Resumen</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {heirs.map((heir) => (
+                {heirs.map((heir) => {
+                  const draft = heirDrafts[heir.id] || heir;
+                  const photo = draft.photo_data || heir.photo_data;
+                  return (
                   <TableRow key={heir.id}>
-                    <TableCell className="font-medium text-legal-blue">{heir.heir_name}</TableCell>
+                    <TableCell className="font-medium text-legal-blue min-w-[240px]">{heir.heir_name}</TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-2">
                         {heir.line_vincenzo && <Badge variant="outline">Vincenzo/Vicente</Badge>}
@@ -483,9 +556,48 @@ const DocumentosProbatorios = () => {
                       </Badge>
                     </TableCell>
                     <TableCell>{evidenceByHeir[heir.heir_name] || heir.evidence_count || 0}</TableCell>
+                    <TableCell className="min-w-[220px]">
+                      <div className="flex items-center gap-3">
+                        <div className="h-12 w-12 overflow-hidden rounded-full border bg-legal-blue/5 flex items-center justify-center">
+                          {photo ? (
+                            <img src={String(photo)} alt={heir.heir_name} className="h-full w-full object-cover" />
+                          ) : (
+                            <Image className="h-5 w-5 text-legal-gray" />
+                          )}
+                        </div>
+                        <Input
+                          type="file"
+                          accept="image/*"
+                          className="min-w-[150px]"
+                          onChange={(event) => handleHeirPhoto(heir, event.target.files?.[0])}
+                        />
+                      </div>
+                    </TableCell>
+                    <TableCell className="min-w-[180px]">
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={String(draft.inheritance_amount ?? heir.inheritance_amount ?? 0)}
+                        onChange={(event) => updateHeirDraft(heir.id, { inheritance_amount: event.target.value })}
+                      />
+                      <p className="mt-1 text-xs text-legal-gray">{formatMoney(draft.inheritance_amount ?? heir.inheritance_amount)}</p>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => saveHeirPresentation(heir)}
+                      >
+                        <Save className="h-4 w-4 mr-2" />
+                        Guardar
+                      </Button>
+                    </TableCell>
                     <TableCell className="min-w-[280px] text-sm text-gray-700">{heir.relationship_summary}</TableCell>
                   </TableRow>
-                ))}
+                );
+                })}
               </TableBody>
             </Table>
           </CardContent>

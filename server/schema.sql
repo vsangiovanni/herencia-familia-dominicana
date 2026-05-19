@@ -52,6 +52,10 @@ CREATE TABLE IF NOT EXISTS confirmed_heirs (
   line_paolo BOOLEAN NOT NULL DEFAULT FALSE,
   status ENUM('mencionado', 'confirmado', 'pendiente') NOT NULL DEFAULT 'mencionado',
   notes TEXT NULL,
+  photo_file_name VARCHAR(255) NULL,
+  photo_file_type VARCHAR(120) NULL,
+  photo_data LONGTEXT NULL,
+  inheritance_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
@@ -80,6 +84,25 @@ CREATE TABLE IF NOT EXISTS evidence_documents (
   CONSTRAINT fk_evidence_created_by FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL
 );
 
+CREATE TABLE IF NOT EXISTS sienna_family_members (
+  id VARCHAR(120) PRIMARY KEY,
+  parent_id VARCHAR(120) NULL,
+  relationship_to_parent ENUM('hijo', 'hija', 'conyuge', 'padre', 'madre', 'otro') NULL,
+  name VARCHAR(255) NOT NULL,
+  birth VARCHAR(50) NULL,
+  death VARCHAR(50) NULL,
+  spouse VARCHAR(255) NULL,
+  spouse_birth VARCHAR(50) NULL,
+  inheritance_status ENUM('posible_heredero', 'no_hereda', 'requiere_revision', 'confirmado') NOT NULL DEFAULT 'requiere_revision',
+  inheritance_reason TEXT NULL,
+  is_highlighted_ancestor BOOLEAN NOT NULL DEFAULT FALSE,
+  sort_order INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_sienna_family_parent (parent_id),
+  CONSTRAINT fk_sienna_family_parent FOREIGN KEY (parent_id) REFERENCES sienna_family_members(id) ON DELETE SET NULL
+);
+
 INSERT INTO pages (id, name, path, description)
 VALUES
   (UUID(), 'Dashboard', '/dashboard', 'Panel principal'),
@@ -91,7 +114,8 @@ VALUES
   (UUID(), 'Administración de Usuarios', '/admin-users', 'Gestión de usuarios'),
   (UUID(), 'Hallazgos', '/hallazgos', 'Hallazgos e inconsistencias detectadas'),
   (UUID(), 'Cálculo por Filiación', '/calculo-filiacion', 'Distribución por líneas familiares'),
-  (UUID(), 'Documentos Probatorios', '/documentos-probatorios', 'Expediente documental de actas y herederos')
+  (UUID(), 'Documentos Probatorios', '/documentos-probatorios', 'Expediente documental de actas y herederos'),
+  (UUID(), 'Árbol Sienna', '/sienna/arbol-genealogico', 'Árbol genealógico con foto y monto heredado')
 ON DUPLICATE KEY UPDATE
   name = VALUES(name),
   description = VALUES(description);
@@ -116,3 +140,34 @@ ON DUPLICATE KEY UPDATE
   line_vincenzo = VALUES(line_vincenzo),
   line_paolo = VALUES(line_paolo),
   notes = VALUES(notes);
+
+INSERT INTO sienna_family_members (
+  id, parent_id, name, birth, death, spouse, spouse_birth, is_highlighted_ancestor, sort_order
+)
+VALUES
+  ('domenico', NULL, 'Domenico (Domingo) Sangiovanni', '17/12/1845', NULL, 'María Rosa Grisolia', '18/07/1852', FALSE, 10),
+  ('maria-magdalena', 'domenico', 'María Magdalena Sangiovanni', '27/04/1874', '07/05/1935', 'Vincenzo de Paola', NULL, FALSE, 10),
+  ('vincenzo', 'domenico', 'Vincenzo (Vicente) Sangiovanni', '13/08/1880', '07/02/1958', 'María Balbina Pérez Álvarez', NULL, FALSE, 20),
+  ('paolo', 'domenico', 'Paolo (Paulino) Sangiovanni', '17/01/1885', '31/03/1936', 'Simona Simo', NULL, FALSE, 30),
+  ('alessandro', 'maria-magdalena', 'Alessandro de Paola Sangiovanni', '18/10/1911', '14/01/1998', NULL, NULL, TRUE, 10),
+  ('maria-rosa', 'vincenzo', 'María Rosa Sangiovanni Pérez', '18/02/1906', '07/08/1981', 'Pedro Pablo Sangiovanni Simo', NULL, FALSE, 10),
+  ('domingo-ramon', 'vincenzo', 'Domingo Ramón Sangiovanni Pérez', '11/07/1907', '03/09/1981', 'María Francisca Gesualdo', NULL, FALSE, 20),
+  ('pedro-pablo', 'paolo', 'Pedro Pablo Sangiovanni Simo', '29/10/1906', '04/10/1986', NULL, NULL, FALSE, 10),
+  ('victor-manuel', 'maria-rosa', 'Víctor Manuel Sangiovanni Sangiovanni', '29/10/1932', '21/10/2007', 'Ana Julia Rodríguez', NULL, FALSE, 10),
+  ('maria-amparo', 'domingo-ramon', 'María Amparo Sangiovanni Gesualdo', '30/10/1929', '15/01/2004', 'Bernardo Edmundo Lizardo Fernández', NULL, FALSE, 10),
+  ('jose-vicente', 'domingo-ramon', 'José Vicente Sangiovanni Gesualdo', '19/04/1932', '24/04/1976', 'Ozema Báez', NULL, FALSE, 20),
+  ('rosa-julia', 'victor-manuel', 'Rosa Julia Sangiovanni Rodríguez', '15/04/1963', '04/10/2024', 'Francisco Brea', NULL, FALSE, 10),
+  ('victor-manuel-martin', 'victor-manuel', 'Víctor Manuel Martín Sangiovanni Rodríguez', '08/11/1966', NULL, NULL, NULL, FALSE, 20),
+  ('bernardo-martin', 'maria-amparo', 'Bernardo Martín Lizardo Sangiovanni', '28/10/1966', NULL, NULL, NULL, FALSE, 10),
+  ('jocelyn', 'jose-vicente', 'Jocelyn del Jesús Sangiovanni Báez', '06/10/1963', NULL, NULL, NULL, FALSE, 10),
+  ('mayra', 'jose-vicente', 'Mayra Josefina Sangiovanni Báez', '20/11/1965', NULL, NULL, NULL, FALSE, 20),
+  ('perla-rosa', 'rosa-julia', 'Perla Rosa Brea Sangiovanni', '30/04/1989', NULL, NULL, NULL, FALSE, 10)
+ON DUPLICATE KEY UPDATE
+  name = VALUES(name),
+  parent_id = VALUES(parent_id),
+  birth = VALUES(birth),
+  death = VALUES(death),
+  spouse = VALUES(spouse),
+  spouse_birth = VALUES(spouse_birth),
+  is_highlighted_ancestor = VALUES(is_highlighted_ancestor),
+  sort_order = VALUES(sort_order);

@@ -83,6 +83,14 @@ function query_one(string $sql, array $params = []): ?array {
   return $row ?: null;
 }
 
+function column_exists(string $table, string $column): bool {
+  $row = query_one(
+    'SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :tableName AND COLUMN_NAME = :columnName LIMIT 1',
+    ['tableName' => $table, 'columnName' => $column]
+  );
+  return (bool)$row;
+}
+
 function ensure_schema(): void {
   db()->exec("
     CREATE TABLE IF NOT EXISTS profiles (
@@ -136,6 +144,10 @@ function ensure_schema(): void {
       line_paolo BOOLEAN NOT NULL DEFAULT FALSE,
       status ENUM('mencionado', 'confirmado', 'pendiente') NOT NULL DEFAULT 'mencionado',
       notes TEXT NULL,
+      photo_file_name VARCHAR(255) NULL,
+      photo_file_type VARCHAR(120) NULL,
+      photo_data LONGTEXT NULL,
+      inheritance_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     );
@@ -163,6 +175,24 @@ function ensure_schema(): void {
       updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       CONSTRAINT fk_evidence_created_by FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL
     );
+
+    CREATE TABLE IF NOT EXISTS sienna_family_members (
+      id VARCHAR(120) PRIMARY KEY,
+      parent_id VARCHAR(120) NULL,
+      relationship_to_parent ENUM('hijo', 'hija', 'conyuge', 'padre', 'madre', 'otro') NULL,
+      name VARCHAR(255) NOT NULL,
+      birth VARCHAR(50) NULL,
+      death VARCHAR(50) NULL,
+      spouse VARCHAR(255) NULL,
+      spouse_birth VARCHAR(50) NULL,
+      inheritance_status ENUM('posible_heredero', 'no_hereda', 'requiere_revision', 'confirmado') NOT NULL DEFAULT 'requiere_revision',
+      inheritance_reason TEXT NULL,
+      is_highlighted_ancestor BOOLEAN NOT NULL DEFAULT FALSE,
+      sort_order INT NOT NULL DEFAULT 0,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_sienna_family_parent (parent_id)
+    );
   ");
 
   $pages = [
@@ -176,6 +206,7 @@ function ensure_schema(): void {
     ['Hallazgos', '/hallazgos', 'Hallazgos e inconsistencias detectadas'],
     ['Cálculo por Filiación', '/calculo-filiacion', 'Distribución por líneas familiares'],
     ['Documentos Probatorios', '/documentos-probatorios', 'Expediente documental de actas y herederos'],
+    ['Árbol Sienna', '/sienna/arbol-genealogico', 'Árbol genealógico con foto y monto heredado'],
   ];
 
   foreach ($pages as [$name, $path, $description]) {
@@ -202,6 +233,107 @@ function ensure_schema(): void {
        ON DUPLICATE KEY UPDATE relationship_summary = VALUES(relationship_summary), line_vincenzo = VALUES(line_vincenzo), line_paolo = VALUES(line_paolo), notes = VALUES(notes)",
       ['id' => uuid(), 'name' => $name, 'summary' => $summary, 'vincenzo' => $vincenzo, 'paolo' => $paolo]
     );
+  }
+
+  $migrations = [
+    ['photo_file_name', 'ALTER TABLE confirmed_heirs ADD COLUMN photo_file_name VARCHAR(255) NULL AFTER notes'],
+    ['photo_file_type', 'ALTER TABLE confirmed_heirs ADD COLUMN photo_file_type VARCHAR(120) NULL AFTER photo_file_name'],
+    ['photo_data', 'ALTER TABLE confirmed_heirs ADD COLUMN photo_data LONGTEXT NULL AFTER photo_file_type'],
+    ['inheritance_amount', 'ALTER TABLE confirmed_heirs ADD COLUMN inheritance_amount DECIMAL(14,2) NOT NULL DEFAULT 0 AFTER photo_data'],
+  ];
+
+  foreach ($migrations as [$column, $sql]) {
+    if (!column_exists('confirmed_heirs', $column)) {
+      db()->exec($sql);
+    }
+  }
+
+  $memberMigrations = [
+    ['relationship_to_parent', "ALTER TABLE sienna_family_members ADD COLUMN relationship_to_parent ENUM('hijo', 'hija', 'conyuge', 'padre', 'madre', 'otro') NULL AFTER parent_id"],
+    ['inheritance_status', "ALTER TABLE sienna_family_members ADD COLUMN inheritance_status ENUM('posible_heredero', 'no_hereda', 'requiere_revision', 'confirmado') NOT NULL DEFAULT 'requiere_revision' AFTER spouse_birth"],
+    ['inheritance_reason', 'ALTER TABLE sienna_family_members ADD COLUMN inheritance_reason TEXT NULL AFTER inheritance_status'],
+  ];
+
+  foreach ($memberMigrations as [$column, $sql]) {
+    if (!column_exists('sienna_family_members', $column)) {
+      db()->exec($sql);
+    }
+  }
+
+  exec_sql(
+    "UPDATE sienna_family_members
+     SET inheritance_status = 'posible_heredero',
+         inheritance_reason = 'Descendiente vivo registrado en una o más líneas sucesorales activas.'
+     WHERE id IN ('victor-manuel-martin', 'perla-rosa', 'bernardo-martin', 'jocelyn', 'mayra')
+       AND inheritance_status = 'requiere_revision'"
+  );
+
+  $caseStatuses = [
+    ['alessandro', 'no_hereda', 'Es el causante del expediente; no se clasifica como heredero.'],
+    ['domenico', 'no_hereda', 'Tronco familiar común; sirve para ubicar ramas, no como heredero final.'],
+    ['maria-magdalena', 'no_hereda', 'Madre del causante Alessandro; rama del causante, no heredera final en este análisis.'],
+    ['vincenzo', 'no_hereda', 'Hermano de la madre del causante; abre una rama sucesoral activa por sus descendientes.'],
+    ['paolo', 'no_hereda', 'Hermano de la madre del causante; abre una rama sucesoral activa por sus descendientes.'],
+    ['maria-rosa', 'no_hereda', 'Intermedia fallecida en rama Vincenzo/Vicente y vínculo hacia la doble filiación.'],
+    ['pedro-pablo', 'no_hereda', 'Intermedio fallecido en rama Paolo/Paulino y vínculo hacia la doble filiación.'],
+    ['domingo-ramon', 'no_hereda', 'Intermedio fallecido en rama Vincenzo/Vicente; transmite representación a sus descendientes.'],
+    ['victor-manuel', 'no_hereda', 'Intermedio fallecido; conecta a Víctor Manuel Martín y a Rosa Julia/Perla.'],
+    ['rosa-julia', 'no_hereda', 'Intermedia fallecida; Perla Rosa entra por representación en su rama.'],
+    ['maria-amparo', 'no_hereda', 'Intermedia fallecida; Bernardo Martín entra por representación en su rama.'],
+    ['jose-vicente', 'no_hereda', 'Intermedio fallecido; Jocelyn y Mayra entran por representación en su rama.'],
+    ['victor-manuel-martin', 'posible_heredero', 'Heredero determinado por doble vocación sucesoral: línea Vincenzo/Vicente vía María Rosa y línea Paolo/Paulino vía Pedro Pablo.'],
+    ['perla-rosa', 'posible_heredero', 'Heredera determinada por representación en la rama de Rosa Julia, con doble línea familiar Vincenzo/Vicente y Paolo/Paulino.'],
+    ['bernardo-martin', 'posible_heredero', 'Heredero determinado por la rama Domingo Ramón -> María Amparo dentro de la línea Vincenzo/Vicente.'],
+    ['jocelyn', 'posible_heredero', 'Heredera determinada por la rama Domingo Ramón -> José Vicente dentro de la línea Vincenzo/Vicente.'],
+    ['mayra', 'posible_heredero', 'Heredera determinada por la rama Domingo Ramón -> José Vicente dentro de la línea Vincenzo/Vicente.'],
+  ];
+
+  foreach ($caseStatuses as [$id, $status, $reason]) {
+    exec_sql(
+      'UPDATE sienna_family_members SET inheritance_status = :status, inheritance_reason = :reason WHERE id = :id',
+      ['id' => $id, 'status' => $status, 'reason' => $reason]
+    );
+  }
+
+  $memberCount = query_one('SELECT COUNT(*) AS count FROM sienna_family_members');
+  if ((int)($memberCount['count'] ?? 0) === 0) {
+    $members = [
+      ['domenico', null, 'Domenico (Domingo) Sangiovanni', '17/12/1845', null, 'María Rosa Grisolia', '18/07/1852', 0, 10],
+      ['maria-magdalena', 'domenico', 'María Magdalena Sangiovanni', '27/04/1874', '07/05/1935', 'Vincenzo de Paola', null, 0, 10],
+      ['vincenzo', 'domenico', 'Vincenzo (Vicente) Sangiovanni', '13/08/1880', '07/02/1958', 'María Balbina Pérez Álvarez', null, 0, 20],
+      ['paolo', 'domenico', 'Paolo (Paulino) Sangiovanni', '17/01/1885', '31/03/1936', 'Simona Simo', null, 0, 30],
+      ['alessandro', 'maria-magdalena', 'Alessandro de Paola Sangiovanni', '18/10/1911', '14/01/1998', null, null, 1, 10],
+      ['maria-rosa', 'vincenzo', 'María Rosa Sangiovanni Pérez', '18/02/1906', '07/08/1981', 'Pedro Pablo Sangiovanni Simo', null, 0, 10],
+      ['domingo-ramon', 'vincenzo', 'Domingo Ramón Sangiovanni Pérez', '11/07/1907', '03/09/1981', 'María Francisca Gesualdo', null, 0, 20],
+      ['pedro-pablo', 'paolo', 'Pedro Pablo Sangiovanni Simo', '29/10/1906', '04/10/1986', null, null, 0, 10],
+      ['victor-manuel', 'maria-rosa', 'Víctor Manuel Sangiovanni Sangiovanni', '29/10/1932', '21/10/2007', 'Ana Julia Rodríguez', null, 0, 10],
+      ['maria-amparo', 'domingo-ramon', 'María Amparo Sangiovanni Gesualdo', '30/10/1929', '15/01/2004', 'Bernardo Edmundo Lizardo Fernández', null, 0, 10],
+      ['jose-vicente', 'domingo-ramon', 'José Vicente Sangiovanni Gesualdo', '19/04/1932', '24/04/1976', 'Ozema Báez', null, 0, 20],
+      ['rosa-julia', 'victor-manuel', 'Rosa Julia Sangiovanni Rodríguez', '15/04/1963', '04/10/2024', 'Francisco Brea', null, 0, 10],
+      ['victor-manuel-martin', 'victor-manuel', 'Víctor Manuel Martín Sangiovanni Rodríguez', '08/11/1966', null, null, null, 0, 20],
+      ['bernardo-martin', 'maria-amparo', 'Bernardo Martín Lizardo Sangiovanni', '28/10/1966', null, null, null, 0, 10],
+      ['jocelyn', 'jose-vicente', 'Jocelyn del Jesús Sangiovanni Báez', '06/10/1963', null, null, null, 0, 10],
+      ['mayra', 'jose-vicente', 'Mayra Josefina Sangiovanni Báez', '20/11/1965', null, null, null, 0, 20],
+      ['perla-rosa', 'rosa-julia', 'Perla Rosa Brea Sangiovanni', '30/04/1989', null, null, null, 0, 10],
+    ];
+
+    foreach ($members as [$id, $parentId, $name, $birth, $death, $spouse, $spouseBirth, $highlighted, $sortOrder]) {
+      exec_sql(
+        'INSERT INTO sienna_family_members (id, parent_id, name, birth, death, spouse, spouse_birth, is_highlighted_ancestor, sort_order)
+         VALUES (:id, :parentId, :name, :birth, :death, :spouse, :spouseBirth, :highlighted, :sortOrder)',
+        [
+          'id' => $id,
+          'parentId' => $parentId,
+          'name' => $name,
+          'birth' => $birth,
+          'death' => $death,
+          'spouse' => $spouse,
+          'spouseBirth' => $spouseBirth,
+          'highlighted' => $highlighted,
+          'sortOrder' => $sortOrder,
+        ]
+      );
+    }
   }
 
   $email = env_value('LOCAL_ADMIN_EMAIL');
@@ -471,9 +603,9 @@ try {
     require_user();
     $data = body();
     exec_sql(
-      'INSERT INTO confirmed_heirs (id, heir_name, relationship_summary, line_vincenzo, line_paolo, status, notes)
-       VALUES (:id, :name, :summary, :vincenzo, :paolo, :status, :notes)
-       ON DUPLICATE KEY UPDATE relationship_summary = VALUES(relationship_summary), line_vincenzo = VALUES(line_vincenzo), line_paolo = VALUES(line_paolo), status = VALUES(status), notes = VALUES(notes)',
+      'INSERT INTO confirmed_heirs (id, heir_name, relationship_summary, line_vincenzo, line_paolo, status, notes, photo_file_name, photo_file_type, photo_data, inheritance_amount)
+       VALUES (:id, :name, :summary, :vincenzo, :paolo, :status, :notes, :photoFileName, :photoFileType, :photoData, :inheritanceAmount)
+       ON DUPLICATE KEY UPDATE relationship_summary = VALUES(relationship_summary), line_vincenzo = VALUES(line_vincenzo), line_paolo = VALUES(line_paolo), status = VALUES(status), notes = VALUES(notes), photo_file_name = VALUES(photo_file_name), photo_file_type = VALUES(photo_file_type), photo_data = VALUES(photo_data), inheritance_amount = VALUES(inheritance_amount)',
       [
         'id' => uuid(),
         'name' => $data['heir_name'] ?? '',
@@ -482,6 +614,10 @@ try {
         'paolo' => bool_value($data['line_paolo'] ?? false),
         'status' => $data['status'] ?? 'mencionado',
         'notes' => $data['notes'] ?? null,
+        'photoFileName' => $data['photo_file_name'] ?? null,
+        'photoFileType' => $data['photo_file_type'] ?? null,
+        'photoData' => $data['photo_data'] ?? null,
+        'inheritanceAmount' => (float)($data['inheritance_amount'] ?? 0),
       ]
     );
     json_response(['ok' => true]);
@@ -491,7 +627,7 @@ try {
     require_user();
     $data = body();
     exec_sql(
-      'UPDATE confirmed_heirs SET heir_name = :name, relationship_summary = :summary, line_vincenzo = :vincenzo, line_paolo = :paolo, status = :status, notes = :notes WHERE id = :id',
+      'UPDATE confirmed_heirs SET heir_name = :name, relationship_summary = :summary, line_vincenzo = :vincenzo, line_paolo = :paolo, status = :status, notes = :notes, photo_file_name = :photoFileName, photo_file_type = :photoFileType, photo_data = :photoData, inheritance_amount = :inheritanceAmount WHERE id = :id',
       [
         'id' => $m[1],
         'name' => $data['heir_name'] ?? '',
@@ -500,8 +636,63 @@ try {
         'paolo' => bool_value($data['line_paolo'] ?? false),
         'status' => $data['status'] ?? 'mencionado',
         'notes' => $data['notes'] ?? null,
+        'photoFileName' => $data['photo_file_name'] ?? null,
+        'photoFileType' => $data['photo_file_type'] ?? null,
+        'photoData' => $data['photo_data'] ?? null,
+        'inheritanceAmount' => (float)($data['inheritance_amount'] ?? 0),
       ]
     );
+    json_response(['ok' => true]);
+  }
+
+  if ($method === 'GET' && $path === '/sienna-family-members') {
+    require_user();
+    $members = query_all(
+      'SELECT id, parent_id, relationship_to_parent, name, birth, death, spouse, spouse_birth, inheritance_status, inheritance_reason, is_highlighted_ancestor, sort_order, created_at, updated_at
+       FROM sienna_family_members
+       ORDER BY COALESCE(parent_id, \'\'), sort_order, name'
+    );
+    foreach ($members as &$member) {
+      $member['is_highlighted_ancestor'] = (bool)$member['is_highlighted_ancestor'];
+      $member['sort_order'] = (int)$member['sort_order'];
+    }
+    json_response(['members' => $members]);
+  }
+
+  if ($method === 'POST' && $path === '/sienna-family-members') {
+    require_user();
+    $data = body();
+    if (empty($data['name'])) {
+      json_response(['message' => 'El nombre del miembro es requerido'], 400);
+    }
+
+    $id = $data['id'] ?? uuid();
+    exec_sql(
+      'INSERT INTO sienna_family_members (id, parent_id, relationship_to_parent, name, birth, death, spouse, spouse_birth, inheritance_status, inheritance_reason, is_highlighted_ancestor, sort_order)
+       VALUES (:id, :parentId, :relationshipToParent, :name, :birth, :death, :spouse, :spouseBirth, :inheritanceStatus, :inheritanceReason, :highlighted, :sortOrder)
+       ON DUPLICATE KEY UPDATE parent_id = VALUES(parent_id), relationship_to_parent = VALUES(relationship_to_parent), name = VALUES(name), birth = VALUES(birth), death = VALUES(death), spouse = VALUES(spouse), spouse_birth = VALUES(spouse_birth), inheritance_status = VALUES(inheritance_status), inheritance_reason = VALUES(inheritance_reason), is_highlighted_ancestor = VALUES(is_highlighted_ancestor), sort_order = VALUES(sort_order)',
+      [
+        'id' => $id,
+        'parentId' => $data['parent_id'] ?? null,
+        'relationshipToParent' => $data['relationship_to_parent'] ?? null,
+        'name' => $data['name'],
+        'birth' => $data['birth'] ?? null,
+        'death' => $data['death'] ?? null,
+        'spouse' => $data['spouse'] ?? null,
+        'spouseBirth' => $data['spouse_birth'] ?? null,
+        'inheritanceStatus' => $data['inheritance_status'] ?? 'requiere_revision',
+        'inheritanceReason' => $data['inheritance_reason'] ?? null,
+        'highlighted' => bool_value($data['is_highlighted_ancestor'] ?? false),
+        'sortOrder' => (int)($data['sort_order'] ?? 0),
+      ]
+    );
+    json_response(['ok' => true, 'member' => array_merge($data, ['id' => $id])], 201);
+  }
+
+  if (preg_match('#^/sienna-family-members/([^/]+)$#', $path, $m) && $method === 'DELETE') {
+    require_user();
+    exec_sql('UPDATE sienna_family_members SET parent_id = NULL WHERE parent_id = :id', ['id' => $m[1]]);
+    exec_sql('DELETE FROM sienna_family_members WHERE id = :id', ['id' => $m[1]]);
     json_response(['ok' => true]);
   }
 

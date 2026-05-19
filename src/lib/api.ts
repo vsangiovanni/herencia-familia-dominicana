@@ -13,7 +13,7 @@ export interface UserPage {
   id: string;
   name: string;
   path: string;
-  description?: string | null;
+  description: string | null;
 }
 
 export interface ConfirmedHeir {
@@ -24,6 +24,10 @@ export interface ConfirmedHeir {
   line_paolo: boolean;
   status: "mencionado" | "confirmado" | "pendiente";
   notes?: string | null;
+  photo_file_name?: string | null;
+  photo_file_type?: string | null;
+  photo_data?: string | null;
+  inheritance_amount?: number | string | null;
   evidence_count?: number;
 }
 
@@ -45,6 +49,23 @@ export interface EvidenceDocument {
   file_name?: string | null;
   file_type?: string | null;
   file_data?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface SiennaFamilyMember {
+  id: string;
+  parent_id?: string | null;
+  relationship_to_parent?: "hijo" | "hija" | "conyuge" | "padre" | "madre" | "otro" | null;
+  name: string;
+  birth?: string | null;
+  death?: string | null;
+  spouse?: string | null;
+  spouse_birth?: string | null;
+  inheritance_status?: "posible_heredero" | "no_hereda" | "requiere_revision" | "confirmado" | null;
+  inheritance_reason?: string | null;
+  is_highlighted_ancestor?: boolean;
+  sort_order?: number;
   created_at?: string | null;
   updated_at?: string | null;
 }
@@ -133,4 +154,13 @@ export const api = {
     }),
   deleteEvidenceDocument: (id: string) =>
     request<{ ok: boolean }>(`/api/evidence-documents/${id}`, { method: "DELETE" }),
+  listSiennaFamilyMembers: () =>
+    request<{ members: SiennaFamilyMember[] }>("/api/sienna-family-members"),
+  saveSiennaFamilyMember: (data: Omit<SiennaFamilyMember, "created_at" | "updated_at">) =>
+    request<{ ok: boolean; member?: SiennaFamilyMember }>("/api/sienna-family-members", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  deleteSiennaFamilyMember: (id: string) =>
+    request<{ ok: boolean }>(`/api/sienna-family-members/${id}`, { method: "DELETE" }),
 };

@@ -24,6 +24,8 @@ import DeterminacionHerederos from './pages/DeterminacionHerederos';
 import Hallazgos from './pages/Hallazgos';
 import CalculoFiliacion from './pages/CalculoFiliacion';
 import DocumentosProbatorios from './pages/DocumentosProbatorios';
+import ArbolGenealogicoSienna from './pages/ArbolGenealogicoSienna';
+import MiembrosArbolSienna from './pages/MiembrosArbolSienna';
 
 const queryClient = new QueryClient();
 
@@ -41,94 +43,110 @@ function App() {
                 <Routes>
                   <Route path="/" element={<Landing />} />
                   <Route path="/auth" element={<Auth />} />
-                  <Route 
-                    path="/dashboard" 
+                  <Route
+                    path="/dashboard"
                     element={
                       <ProtectedRoute>
                         <Dashboard />
                       </ProtectedRoute>
-                    } 
+                    }
                   />
-                  <Route 
-                    path="/perfil" 
+                  <Route
+                    path="/perfil"
                     element={
                       <ProtectedRoute>
                         <Profile />
                       </ProtectedRoute>
-                    } 
+                    }
                   />
                   <Route path="/legal" element={<Legal />} />
-                  <Route 
-                    path="/admin-users" 
+                  <Route
+                    path="/admin-users"
                     element={
                       <ProtectedRoute requireAdmin={true}>
                         <AdminUsers />
                       </ProtectedRoute>
-                    } 
+                    }
                   />
-                  <Route 
-                    path="/calculo-herencias" 
+                  <Route
+                    path="/calculo-herencias"
                     element={
                       <ProtectedRoute requireAdmin={true}>
                         <CalculoHerencias />
                       </ProtectedRoute>
-                    } 
+                    }
                   />
-                  <Route 
-                    path="/arbol-genealogico" 
+                  <Route
+                    path="/arbol-genealogico"
                     element={
                       <ProtectedRoute>
                         <ArbolGenealogico />
                       </ProtectedRoute>
-                    } 
+                    }
                   />
-                  <Route 
-                    path="/arbol-genealogico-clasico" 
+                  <Route
+                    path="/arbol-genealogico-clasico"
                     element={
                       <ProtectedRoute>
                         <ArbolGenealogicoClasico />
                       </ProtectedRoute>
-                    } 
+                    }
                   />
-                  <Route 
-                    path="/lineas-familiares" 
+                  <Route
+                    path="/lineas-familiares"
                     element={
                       <ProtectedRoute>
                         <LineasFamiliares />
                       </ProtectedRoute>
-                    } 
+                    }
                   />
-                  <Route 
-                    path="/determinacion-herederos" 
+                  <Route
+                    path="/determinacion-herederos"
                     element={
                       <ProtectedRoute>
                         <DeterminacionHerederos />
                       </ProtectedRoute>
-                    } 
+                    }
                   />
-                  <Route 
-                    path="/hallazgos" 
+                  <Route
+                    path="/hallazgos"
                     element={
                       <ProtectedRoute>
                         <Hallazgos />
                       </ProtectedRoute>
-                    } 
+                    }
                   />
-                  <Route 
-                    path="/calculo-filiacion" 
+                  <Route
+                    path="/calculo-filiacion"
                     element={
                       <ProtectedRoute>
                         <CalculoFiliacion />
                       </ProtectedRoute>
-                    } 
+                    }
                   />
-                  <Route 
-                    path="/documentos-probatorios" 
+                  <Route
+                    path="/sienna/arbol-genealogico"
+                    element={
+                      <ProtectedRoute>
+                        <ArbolGenealogicoSienna />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/sienna/miembros-arbol"
+                    element={
+                      <ProtectedRoute>
+                        <MiembrosArbolSienna />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/documentos-probatorios"
                     element={
                       <ProtectedRoute>
                         <DocumentosProbatorios />
                       </ProtectedRoute>
-                    } 
+                    }
                   />
                 </Routes>
               </main>

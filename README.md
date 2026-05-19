@@ -1,8 +1,12 @@
-# Welcome to your Lovable project
+# HerenciaRD
 
-## Project info
+Sistema especializado para documentar, explicar y calcular herencias familiares en la República Dominicana.
+
+## Proyecto
 
 **URL**: https://lovable.dev/projects/7f633c8a-c2f3-4efb-90df-5640b3e808da
+
+**Producción**: https://herenciard.vmsencf.com
 
 ## How can I edit this code?
 
@@ -50,7 +54,40 @@ npm run dev
 - Click on "New codespace" to launch a new Codespace environment.
 - Edit files directly within the Codespace and commit and push your changes once you're done.
 
-## What technologies are used for this project?
+## Sección Sienna
+
+La sección Sienna contiene las pantallas de trabajo especializadas para el expediente familiar:
+
+- `/sienna/arbol-genealogico`: árbol genealógico clásico, dinámico y enfocado en explicar quién hereda, por qué hereda y cuánto recibe.
+- `/sienna/miembros-arbol`: CRUD administrativo para agregar, editar y clasificar miembros del árbol sin contaminar la pantalla de presentación.
+- `/documentos-probatorios`: carga y revisión de documentos, herederos confirmados, foto del heredero y monto heredado.
+
+El árbol Sienna usa la información documentada del caso Alessandro para marcar herederos finales, enlaces genealógicos y ramas activas. El monto total de la herencia se puede calcular en pantalla y se refleja en los nodos del árbol; al guardar, queda persistido en los herederos confirmados.
+
+## Backend y datos
+
+El desarrollo local usa Node.js + Express contra MySQL. Producción en Hostinger usa el backend PHP `public/api.php` y `public/.htaccess`, porque es el flujo estable para el hosting compartido.
+
+Tablas relevantes:
+
+- `confirmed_heirs`: herederos confirmados, líneas familiares, foto y monto heredado.
+- `sienna_family_members`: miembros del árbol, parentesco, nodo superior, estado hereditario y razón explicativa.
+
+## Desarrollo local
+
+```sh
+node server/index.js
+./node_modules/.bin/vite --host 0.0.0.0 --port 8080
+```
+
+URLs locales:
+
+- Frontend: http://localhost:8080/
+- Backend health: http://127.0.0.1:3001/api/health
+- Árbol Sienna: http://localhost:8080/sienna/arbol-genealogico
+- CRUD miembros: http://localhost:8080/sienna/miembros-arbol
+
+## Tecnologías
 
 This project is built with:
 
@@ -60,9 +97,16 @@ This project is built with:
 - shadcn-ui
 - Tailwind CSS
 
-## How can I deploy this project?
+## Despliegue
 
-Simply open [Lovable](https://lovable.dev/projects/7f633c8a-c2f3-4efb-90df-5640b3e808da) and click on Share -> Publish.
+El flujo estable actual es:
+
+1. Validar cambios localmente.
+2. Ejecutar `./node_modules/.bin/vite build`.
+3. Subir el contenido de `dist/` por FTP al subdominio de Hostinger.
+4. Verificar `https://herenciard.vmsencf.com/api/health` y rutas críticas.
+
+No subir `.env`, `.deploy_hostinger/`, dumps ni credenciales.
 
 ## Can I connect a custom domain to my Lovable project?
 

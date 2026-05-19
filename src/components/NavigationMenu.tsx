@@ -68,6 +68,12 @@ const NavigationMenu = () => {
               <DropdownMenuItem asChild>
                 <Link to="/documentos-probatorios">Documentos Probatorios</Link>
               </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link to="/sienna/arbol-genealogico">Árbol Sienna</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link to="/sienna/miembros-arbol">Miembros del Árbol</Link>
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </>
