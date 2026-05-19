@@ -6,6 +6,8 @@ import PageVisitsStats from '@/components/PageVisitsStats';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
@@ -16,7 +18,7 @@ import {
 } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/ui/use-toast';
-import { CheckCheck, UserCheck, UserX, Users, BarChart3 } from 'lucide-react';
+import { CheckCheck, UserCheck, UserPlus, UserX, Users, BarChart3 } from 'lucide-react';
 
 interface UserData {
   id: string;
@@ -46,6 +48,14 @@ const AdminUsers = () => {
   const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
   const [permissionsDialogOpen, setPermissionsDialogOpen] = useState(false);
   const [savingPermissions, setSavingPermissions] = useState(false);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [creatingUser, setCreatingUser] = useState(false);
+  const [newUser, setNewUser] = useState({
+    email: '',
+    full_name: '',
+    password: '',
+    is_approved: true,
+  });
 
   const fetchUsers = async () => {
     try {
@@ -155,6 +165,34 @@ const AdminUsers = () => {
     }
   };
 
+  const createUser = async () => {
+    try {
+      setCreatingUser(true);
+      await api.createUser({
+        email: newUser.email,
+        full_name: newUser.full_name || null,
+        password: newUser.password,
+        role: 'regular',
+        is_approved: newUser.is_approved,
+      });
+      toast({
+        title: 'Usuario creado',
+        description: `${newUser.email} ya puede acceder con la contraseña asignada.`,
+      });
+      setNewUser({ email: '', full_name: '', password: '', is_approved: true });
+      setCreateDialogOpen(false);
+      fetchUsers();
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'No se pudo crear el usuario',
+        description: error instanceof Error ? error.message : 'Error desconocido',
+      });
+    } finally {
+      setCreatingUser(false);
+    }
+  };
+
   if (!isAdmin) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -193,13 +231,19 @@ const AdminUsers = () => {
           <TabsContent value="users" className="space-y-6">
             <Card>
               <CardContent className="p-6">
-                <div className="flex justify-between items-center mb-6">
+                <div className="flex justify-between items-center mb-6 gap-3">
                   <h2 className="text-xl font-serif font-bold text-legal-blue">
                     Usuarios del Sistema
                   </h2>
-                  <Button onClick={fetchUsers} variant="outline" size="sm">
-                    Actualizar lista
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button onClick={() => setCreateDialogOpen(true)} size="sm">
+                      <UserPlus className="h-4 w-4 mr-1" />
+                      Crear usuario
+                    </Button>
+                    <Button onClick={fetchUsers} variant="outline" size="sm">
+                      Actualizar lista
+                    </Button>
+                  </div>
                 </div>
 
                 {loading ? (
@@ -302,6 +346,63 @@ const AdminUsers = () => {
             </Button>
             <Button onClick={savePermissions} disabled={savingPermissions}>
               {savingPermissions ? 'Guardando...' : 'Guardar permisos'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Crear Usuario</DialogTitle>
+            <DialogDescription>
+              El usuario se crea como regular. Solo administradores pueden crear usuarios.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div>
+              <Label>Correo</Label>
+              <Input
+                type="email"
+                value={newUser.email}
+                onChange={(event) => setNewUser({ ...newUser, email: event.target.value })}
+                placeholder="correo@ejemplo.com"
+              />
+            </div>
+            <div>
+              <Label>Nombre</Label>
+              <Input
+                value={newUser.full_name}
+                onChange={(event) => setNewUser({ ...newUser, full_name: event.target.value })}
+                placeholder="Nombre completo"
+              />
+            </div>
+            <div>
+              <Label>Contraseña temporal</Label>
+              <Input
+                type="password"
+                value={newUser.password}
+                onChange={(event) => setNewUser({ ...newUser, password: event.target.value })}
+                placeholder="Mínimo 6 caracteres"
+              />
+            </div>
+            <div className="flex items-center justify-between rounded-md border p-3">
+              <div>
+                <p className="font-medium">Aprobar acceso</p>
+                <p className="text-sm text-gray-500">Si está activo, entra a la app inmediatamente.</p>
+              </div>
+              <Switch
+                checked={newUser.is_approved}
+                onCheckedChange={(checked) => setNewUser({ ...newUser, is_approved: checked })}
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={createUser} disabled={creatingUser}>
+              {creatingUser ? 'Creando...' : 'Crear usuario'}
             </Button>
           </div>
         </DialogContent>

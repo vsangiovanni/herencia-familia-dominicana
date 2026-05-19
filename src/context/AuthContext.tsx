@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect, useRef } from "react";
+import React, { createContext, useState, useContext, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "@/components/ui/use-toast";
 import { api, UserPage, UserProfile } from "@/lib/api";
@@ -35,11 +35,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const fetchUserPages = async (profile: UserProfile) => {
     try {
       const { pages } = await api.listPages();
-      if (profile.role === "admin") {
-        setUserPages(pages);
-        return;
-      }
-      setUserPages([]);
+      setUserPages(pages);
     } catch (error) {
       console.error("Error obteniendo páginas:", error);
       setUserPages([]);
@@ -158,12 +154,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const hasAccess = (path: string) => {
-    if (path === "/" || path === "/auth" || path === "/legal") return true;
+  const hasAccess = useCallback((path: string) => {
+    if (path === "/auth" || path === "/perfil") return true;
     if (isAdmin) return true;
     if (!isApproved) return false;
-    return userPages.some((page) => path.startsWith(page.path));
-  };
+    return true;
+  }, [isAdmin, isApproved, userPages]);
 
   return (
     <AuthContext.Provider

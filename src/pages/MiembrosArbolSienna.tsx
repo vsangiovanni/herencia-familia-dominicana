@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import BackButton from '@/components/BackButton';
 import DocumentHeader from '@/components/DocumentHeader';
+import SiennaPageLayout from '@/components/sienna/SiennaPageLayout';
 import { api, SiennaFamilyMember } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -244,7 +245,7 @@ const MiembrosArbolSienna = () => {
   }), [members]);
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <SiennaPageLayout>
       <div className="mb-4">
         <BackButton />
       </div>
@@ -263,8 +264,8 @@ const MiembrosArbolSienna = () => {
         </Button>
       </div>
 
-      <div className="mx-auto max-w-7xl space-y-6">
-        <div className="grid gap-4 md:grid-cols-4">
+      <div className="w-full space-y-6">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Card><CardContent className="p-5"><p className="text-sm text-legal-gray">Miembros</p><p className="text-2xl font-bold text-legal-blue">{stats.total}</p></CardContent></Card>
           <Card><CardContent className="p-5"><p className="text-sm text-legal-gray">Herederos</p><p className="text-2xl font-bold text-legal-blue">{stats.heirs}</p></CardContent></Card>
           <Card><CardContent className="p-5"><p className="text-sm text-legal-gray">Enlaces</p><p className="text-2xl font-bold text-legal-blue">{stats.connectors}</p></CardContent></Card>
@@ -278,7 +279,7 @@ const MiembrosArbolSienna = () => {
               {form.id ? 'Editar Miembro' : 'Agregar Miembro'}
             </CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-4 p-6 md:grid-cols-4">
+          <CardContent className="grid grid-cols-1 gap-4 p-4 sm:p-6 md:grid-cols-2 lg:grid-cols-4">
             <div className="md:col-span-2">
               <Label>Nombre</Label>
               <Input value={form.name} onChange={(event) => updateForm('name', event.target.value)} />
@@ -364,9 +365,15 @@ const MiembrosArbolSienna = () => {
               </Badge>
               <p className="mt-2 text-sm leading-relaxed text-gray-700">{evaluation.inheritance_reason}</p>
             </div>
-            <div className="flex justify-end gap-2 md:col-span-2">
-              <Button variant="outline" onClick={resetForm}>Limpiar</Button>
-              <Button onClick={saveMember} disabled={saving} className="bg-legal-gold hover:bg-legal-gold/90 text-white">
+            <div className="flex flex-col justify-end gap-2 sm:flex-row md:col-span-2">
+              <Button variant="outline" onClick={resetForm} className="w-full sm:w-auto">
+                Limpiar
+              </Button>
+              <Button
+                onClick={saveMember}
+                disabled={saving}
+                className="w-full bg-legal-gold text-white hover:bg-legal-gold/90 sm:w-auto"
+              >
                 <Save className="mr-2 h-4 w-4" />
                 Guardar
               </Button>
@@ -421,8 +428,8 @@ const MiembrosArbolSienna = () => {
               Tabla de Miembros
             </CardTitle>
           </CardHeader>
-          <CardContent className="overflow-x-auto p-6">
-            <Table>
+          <CardContent className="overflow-x-auto p-4 sm:p-6">
+            <Table className="min-w-[720px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>Nombre</TableHead>
@@ -431,7 +438,7 @@ const MiembrosArbolSienna = () => {
                   <TableHead>Estado</TableHead>
                   <TableHead>Fechas</TableHead>
                   <TableHead>Razón</TableHead>
-                  <TableHead>Auditoría</TableHead>
+                  <TableHead className="hidden lg:table-cell">Auditoría</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
@@ -453,7 +460,7 @@ const MiembrosArbolSienna = () => {
                       </TableCell>
                       <TableCell>{member.birth || '-'} {member.death ? ` / ${member.death}` : ''}</TableCell>
                       <TableCell className="min-w-[280px] text-sm text-gray-700">{member.inheritance_reason || '-'}</TableCell>
-                      <TableCell className="min-w-[220px] text-xs text-legal-gray">
+                      <TableCell className="hidden min-w-[220px] text-xs text-legal-gray lg:table-cell">
                         <p><span className="font-semibold">Creado:</span> {auditName(member.created_by_name, member.created_by_email)}</p>
                         <p>{formatAuditDate(member.created_at)}</p>
                         <p className="mt-1"><span className="font-semibold">Modificado:</span> {auditName(member.updated_by_name, member.updated_by_email)}</p>
@@ -477,7 +484,7 @@ const MiembrosArbolSienna = () => {
           </CardContent>
         </Card>
       </div>
-    </div>
+    </SiennaPageLayout>
   );
 };
 

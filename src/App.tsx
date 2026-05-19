@@ -42,7 +42,14 @@ function App() {
               <NavBar />
               <main className="flex-1">
                 <Routes>
-                  <Route path="/" element={<Landing />} />
+                  <Route
+                    path="/"
+                    element={
+                      <ProtectedRoute>
+                        <Landing />
+                      </ProtectedRoute>
+                    }
+                  />
                   <Route path="/auth" element={<Auth />} />
                   <Route
                     path="/dashboard"
@@ -60,7 +67,14 @@ function App() {
                       </ProtectedRoute>
                     }
                   />
-                  <Route path="/legal" element={<Legal />} />
+                  <Route
+                    path="/legal"
+                    element={
+                      <ProtectedRoute>
+                        <Legal />
+                      </ProtectedRoute>
+                    }
+                  />
                   <Route
                     path="/admin-users"
                     element={
@@ -72,7 +86,7 @@ function App() {
                   <Route
                     path="/calculo-herencias"
                     element={
-                      <ProtectedRoute requireAdmin={true}>
+                      <ProtectedRoute>
                         <CalculoHerencias />
                       </ProtectedRoute>
                     }

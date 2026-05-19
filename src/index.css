@@ -165,3 +165,72 @@
     }
   }
 }
+
+/* Sienna: arbol clasico responsivo (movil y pantallas grandes) */
+.classic-family-tree {
+  width: 100%;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+
+.classic-tree-root {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1.5rem;
+  padding-bottom: 1rem;
+}
+
+.classic-tree-children {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1rem;
+  padding-top: 1.5rem;
+}
+
+.sienna-tabs-scroll {
+  display: flex;
+  width: 100%;
+  flex-wrap: nowrap;
+  gap: 0.25rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (min-width: 768px) {
+  .sienna-tabs-scroll {
+    display: grid;
+    overflow-x: visible;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 767px) {
+  .classic-tree-root {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .classic-tree-children {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .classic-tree-children > .absolute {
+    display: none;
+  }
+
+  .classic-family-tree .classic-tree-children::before,
+  .classic-family-tree .classic-tree-children > div.absolute {
+    display: none;
+  }
+}
+
+@media (min-width: 1536px) {
+  .classic-tree-root {
+    gap: 2.5rem;
+  }
+}

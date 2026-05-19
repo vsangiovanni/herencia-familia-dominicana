@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import LoadingScreen from './LoadingScreen';
 
@@ -15,7 +15,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requireApproved = true,
   children 
 }) => {
-  const { user, loading, isAdmin, isApproved } = useAuth();
+  const { user, loading, isAdmin, isApproved, hasAccess } = useAuth();
+  const location = useLocation();
   const [redirectPath, setRedirectPath] = useState<string | null>(null);
   const [evaluating, setEvaluating] = useState(true);
   
@@ -35,12 +36,14 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
       path = '/';
     } else if (requireApproved && !isApproved && user) {
       path = '/perfil';
+    } else if (!requireAdmin && !hasAccess(location.pathname)) {
+      path = '/';
     }
     
     setRedirectPath(path);
     setEvaluating(false);
     
-  }, [user, loading, isAdmin, isApproved, requireAdmin, requireApproved]);
+  }, [user, loading, isAdmin, isApproved, requireAdmin, requireApproved, hasAccess, location.pathname]);
 
   // Don't render anything until the loading state is resolved
   if (loading || evaluating) {

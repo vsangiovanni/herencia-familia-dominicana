@@ -44,6 +44,14 @@ CREATE TABLE IF NOT EXISTS page_visits (
   CONSTRAINT fk_page_visits_user FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS app_settings (
+  setting_key VARCHAR(120) PRIMARY KEY,
+  setting_value TEXT NULL,
+  updated_by CHAR(36) NULL,
+  updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_app_settings_updated_by FOREIGN KEY (updated_by) REFERENCES profiles(id) ON DELETE SET NULL
+);
+
 CREATE TABLE IF NOT EXISTS confirmed_heirs (
   id CHAR(36) PRIMARY KEY,
   heir_name VARCHAR(255) NOT NULL UNIQUE,
@@ -56,8 +64,12 @@ CREATE TABLE IF NOT EXISTS confirmed_heirs (
   photo_file_type VARCHAR(120) NULL,
   photo_data LONGTEXT NULL,
   inheritance_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+  created_by CHAR(36) NULL,
+  updated_by CHAR(36) NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_confirmed_heirs_created_by FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL,
+  CONSTRAINT fk_confirmed_heirs_updated_by FOREIGN KEY (updated_by) REFERENCES profiles(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS evidence_documents (
@@ -79,9 +91,11 @@ CREATE TABLE IF NOT EXISTS evidence_documents (
   file_type VARCHAR(120) NULL,
   file_data LONGTEXT NULL,
   created_by CHAR(36) NULL,
+  updated_by CHAR(36) NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  CONSTRAINT fk_evidence_created_by FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL
+  CONSTRAINT fk_evidence_created_by FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL,
+  CONSTRAINT fk_evidence_updated_by FOREIGN KEY (updated_by) REFERENCES profiles(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS sienna_family_members (
@@ -97,10 +111,14 @@ CREATE TABLE IF NOT EXISTS sienna_family_members (
   inheritance_reason TEXT NULL,
   is_highlighted_ancestor BOOLEAN NOT NULL DEFAULT FALSE,
   sort_order INT NOT NULL DEFAULT 0,
+  created_by CHAR(36) NULL,
+  updated_by CHAR(36) NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_sienna_family_parent (parent_id),
-  CONSTRAINT fk_sienna_family_parent FOREIGN KEY (parent_id) REFERENCES sienna_family_members(id) ON DELETE SET NULL
+  CONSTRAINT fk_sienna_family_parent FOREIGN KEY (parent_id) REFERENCES sienna_family_members(id) ON DELETE SET NULL,
+  CONSTRAINT fk_sienna_family_created_by FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL,
+  CONSTRAINT fk_sienna_family_updated_by FOREIGN KEY (updated_by) REFERENCES profiles(id) ON DELETE SET NULL
 );
 
 INSERT INTO pages (id, name, path, description)
@@ -115,10 +133,15 @@ VALUES
   (UUID(), 'Hallazgos', '/hallazgos', 'Hallazgos e inconsistencias detectadas'),
   (UUID(), 'Cálculo por Filiación', '/calculo-filiacion', 'Distribución por líneas familiares'),
   (UUID(), 'Documentos Probatorios', '/documentos-probatorios', 'Expediente documental de actas y herederos'),
-  (UUID(), 'Árbol Sienna', '/sienna/arbol-genealogico', 'Árbol genealógico con foto y monto heredado')
+  (UUID(), 'Árbol Sienna', '/sienna/arbol-genealogico', 'Árbol genealógico con foto y monto heredado'),
+  (UUID(), 'Miembros del Árbol Sienna', '/sienna/miembros-arbol', 'CRUD de miembros del árbol genealógico Sienna')
 ON DUPLICATE KEY UPDATE
   name = VALUES(name),
   description = VALUES(description);
+
+INSERT INTO app_settings (setting_key, setting_value)
+VALUES ('lawyer_fee_percentage', '0')
+ON DUPLICATE KEY UPDATE setting_key = setting_key;
 
 INSERT INTO confirmed_heirs (
   id,

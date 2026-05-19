@@ -5,20 +5,22 @@ const Footer = () => {
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer className="bg-legal-blue text-white py-6 mt-12">
+    <footer className="mt-12 bg-legal-blue py-6 text-white">
       <div className="container mx-auto px-4">
-        <div className="flex flex-col md:flex-row justify-between items-center">
-          <div className="mb-4 md:mb-0">
-            <h3 className="text-xl font-serif font-bold">Herencia Familia Dominicana</h3>
-            <p className="text-sm mt-1 text-legal-beige/70">Documentación legal para determinación de herederos</p>
-          </div>
-          
-          <div className="flex flex-col items-center md:items-end">
-            <p className="text-sm text-legal-beige/70">
-              Documento preparado para el Tribunal de Tierras
+        <div className="flex flex-col items-center justify-between gap-4 md:flex-row md:items-start">
+          <div className="text-center md:text-left">
+            <h3 className="font-serif text-xl font-bold">HerenciaRD</h3>
+            <p className="mt-1 text-sm text-legal-beige/70">
+              Herencia familiar dominicana — árbol genealógico y determinación de herederos
             </p>
-            <p className="text-xs mt-2 text-legal-beige/50">
-              © {currentYear} Todos los derechos reservados
+          </div>
+
+          <div className="text-center md:text-right">
+            <p className="text-sm text-legal-beige/80">
+              Desarrollado por <span className="font-semibold text-legal-gold">Víctor Sangiovanni</span>
+            </p>
+            <p className="mt-1 text-xs text-legal-beige/50">
+              © {currentYear} Víctor Sangiovanni. Todos los derechos reservados.
             </p>
           </div>
         </div>

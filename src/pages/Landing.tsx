@@ -75,12 +75,12 @@ const Landing = () => {
           
           {!user ? (
             <div className="flex justify-center">
-              <Link to="/auth" className="inline-block">
-                <img 
-                  src="/lovable-uploads/4bd2be60-c6cb-438c-92b7-c316c8c4eaea.png" 
-                  alt="Herencia y Familia" 
-                  className="max-w-xs md:max-w-sm rounded-lg shadow-lg hover:opacity-90 transition-opacity"
-                />
+              <Link
+                to="/auth"
+                className="inline-flex flex-col items-center gap-3 rounded-lg border border-legal-gold/40 bg-white/10 px-8 py-6 shadow-lg transition hover:bg-white/15"
+              >
+                <TreePine className="h-16 w-16 text-legal-gold md:h-20 md:w-20" />
+                <span className="font-serif text-lg text-white">Acceder a HerenciaRD</span>
               </Link>
             </div>
           ) : !isApproved ? (

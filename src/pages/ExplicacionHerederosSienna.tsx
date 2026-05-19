@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import BackButton from '@/components/BackButton';
 import DocumentHeader from '@/components/DocumentHeader';
+import SiennaPageLayout from '@/components/sienna/SiennaPageLayout';
 import { api, ConfirmedHeir, EvidenceDocument, SiennaFamilyMember } from '@/lib/api';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -161,7 +162,7 @@ const ExplicacionHerederosSienna = () => {
   );
 
   return (
-    <div className="container mx-auto px-4 py-8 print:py-2">
+    <SiennaPageLayout className="print:py-2">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 print:hidden">
         <BackButton />
         <div className="flex flex-wrap gap-2">
@@ -180,8 +181,8 @@ const ExplicacionHerederosSienna = () => {
         subtitle="Por qué heredo, simulación, soporte documental y resumen para reunión"
       />
 
-      <div className="mx-auto max-w-7xl space-y-6">
-        <div className="grid gap-4 md:grid-cols-4">
+      <div className="w-full space-y-6">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Card className="border border-legal-gold/20">
             <CardContent className="flex items-center gap-3 p-5">
               <Users className="h-9 w-9 text-legal-blue" />
@@ -229,7 +230,7 @@ const ExplicacionHerederosSienna = () => {
           </CardHeader>
           <CardContent className="space-y-4 p-6">
             <p className="text-sm leading-relaxed text-gray-700">{legalCriterionText}</p>
-            <div className="grid gap-4 md:grid-cols-[1fr_180px_180px_auto] md:items-end">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[1fr_180px_180px_auto] lg:items-end">
               <div>
                 <Label>Monto bruto del caso</Label>
                 <Input
@@ -289,13 +290,25 @@ const ExplicacionHerederosSienna = () => {
         </Card>
 
         <Tabs defaultValue="por-que" className="space-y-4">
-          <TabsList className="grid h-auto w-full grid-cols-2 md:grid-cols-6">
-            <TabsTrigger value="por-que">Por qué heredo</TabsTrigger>
-            <TabsTrigger value="simulador">Simulador</TabsTrigger>
-            <TabsTrigger value="documentos">Semáforo</TabsTrigger>
-            <TabsTrigger value="tiempo">Línea de tiempo</TabsTrigger>
-            <TabsTrigger value="glosario">Glosario</TabsTrigger>
-            <TabsTrigger value="resumen">Reparto final</TabsTrigger>
+          <TabsList className="sienna-tabs-scroll h-auto">
+            <TabsTrigger value="por-que" className="shrink-0 text-xs sm:text-sm">
+              Por qué heredo
+            </TabsTrigger>
+            <TabsTrigger value="simulador" className="shrink-0 text-xs sm:text-sm">
+              Simulador
+            </TabsTrigger>
+            <TabsTrigger value="documentos" className="shrink-0 text-xs sm:text-sm">
+              Semáforo
+            </TabsTrigger>
+            <TabsTrigger value="tiempo" className="shrink-0 text-xs sm:text-sm">
+              Línea de tiempo
+            </TabsTrigger>
+            <TabsTrigger value="glosario" className="shrink-0 text-xs sm:text-sm">
+              Glosario
+            </TabsTrigger>
+            <TabsTrigger value="resumen" className="shrink-0 text-xs sm:text-sm">
+              Reparto final
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="por-que" className="space-y-4">
@@ -307,7 +320,7 @@ const ExplicacionHerederosSienna = () => {
             {!loading &&
               briefs.map((brief) => (
                 <Card key={brief.share.member.id} className="border border-legal-gold/20">
-                  <CardContent className="grid gap-5 p-5 lg:grid-cols-[auto_1.2fr_1fr_220px]">
+                  <CardContent className="grid gap-5 p-4 sm:p-5 sm:grid-cols-2 xl:grid-cols-[auto_1.2fr_1fr_minmax(0,220px)]">
                     <Avatar className="h-20 w-20 border-2 border-legal-gold/40">
                       {brief.photo?.photo_data && (
                         <AvatarImage src={brief.photo.photo_data} alt={brief.share.member.name} className="object-cover" />
@@ -541,7 +554,7 @@ const ExplicacionHerederosSienna = () => {
           </TabsContent>
         </Tabs>
       </div>
-    </div>
+    </SiennaPageLayout>
   );
 };
 

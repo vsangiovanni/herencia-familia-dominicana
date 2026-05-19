@@ -126,17 +126,50 @@ async function ensureSchemaMigrations() {
     ['photo_file_type', 'ALTER TABLE confirmed_heirs ADD COLUMN photo_file_type VARCHAR(120) NULL AFTER photo_file_name'],
     ['photo_data', 'ALTER TABLE confirmed_heirs ADD COLUMN photo_data LONGTEXT NULL AFTER photo_file_type'],
     ['inheritance_amount', 'ALTER TABLE confirmed_heirs ADD COLUMN inheritance_amount DECIMAL(14,2) NOT NULL DEFAULT 0 AFTER photo_data'],
+    ['created_by', 'ALTER TABLE confirmed_heirs ADD COLUMN created_by CHAR(36) NULL AFTER inheritance_amount'],
+    ['updated_by', 'ALTER TABLE confirmed_heirs ADD COLUMN updated_by CHAR(36) NULL AFTER created_by'],
   ];
 
   for (const [columnName, sql] of migrations) {
     if (!existing.has(columnName)) await query(sql);
   }
 
+  const evidenceColumns = await query(
+    `SELECT COLUMN_NAME
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = :databaseName AND TABLE_NAME = 'evidence_documents'`,
+    { databaseName: dbConfig.database }
+  );
+  const existingEvidenceColumns = new Set(evidenceColumns.map((column) => column.COLUMN_NAME));
+  if (!existingEvidenceColumns.has('updated_by')) {
+    await query('ALTER TABLE evidence_documents ADD COLUMN updated_by CHAR(36) NULL AFTER created_by');
+  }
+
+  await query(
+    `CREATE TABLE IF NOT EXISTS app_settings (
+       setting_key VARCHAR(120) PRIMARY KEY,
+       setting_value TEXT NULL,
+       updated_by CHAR(36) NULL,
+       updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+     )`
+  );
+
   await query(
     `INSERT INTO pages (id, name, path, description)
      VALUES (:id, 'Árbol Sienna', '/sienna/arbol-genealogico', 'Árbol genealógico con foto y monto heredado')
      ON DUPLICATE KEY UPDATE name = VALUES(name), description = VALUES(description)`,
     { id: randomUUID() }
+  );
+  await query(
+    `INSERT INTO pages (id, name, path, description)
+     VALUES (:id, 'Miembros del Árbol Sienna', '/sienna/miembros-arbol', 'CRUD de miembros del árbol genealógico Sienna')
+     ON DUPLICATE KEY UPDATE name = VALUES(name), description = VALUES(description)`,
+    { id: randomUUID() }
+  );
+  await query(
+    `INSERT INTO app_settings (setting_key, setting_value)
+     VALUES ('lawyer_fee_percentage', '0')
+     ON DUPLICATE KEY UPDATE setting_key = setting_key`
   );
 
   await query(
@@ -170,6 +203,8 @@ async function ensureSchemaMigrations() {
     ['relationship_to_parent', "ALTER TABLE sienna_family_members ADD COLUMN relationship_to_parent ENUM('hijo', 'hija', 'conyuge', 'padre', 'madre', 'otro') NULL AFTER parent_id"],
     ['inheritance_status', "ALTER TABLE sienna_family_members ADD COLUMN inheritance_status ENUM('posible_heredero', 'no_hereda', 'requiere_revision', 'confirmado') NOT NULL DEFAULT 'requiere_revision' AFTER spouse_birth"],
     ['inheritance_reason', 'ALTER TABLE sienna_family_members ADD COLUMN inheritance_reason TEXT NULL AFTER inheritance_status'],
+    ['created_by', 'ALTER TABLE sienna_family_members ADD COLUMN created_by CHAR(36) NULL AFTER sort_order'],
+    ['updated_by', 'ALTER TABLE sienna_family_members ADD COLUMN updated_by CHAR(36) NULL AFTER created_by'],
   ];
   for (const [columnName, sql] of memberMigrations) {
     if (!existingMemberColumns.has(columnName)) await query(sql);
@@ -288,24 +323,7 @@ app.get('/api/health', async (_req, res) => {
 });
 
 app.post('/api/auth/signup', async (req, res) => {
-  const { email, password } = req.body || {};
-  if (!email || !password || password.length < 6) {
-    return res.status(400).json({ message: 'Email y contraseña válida son requeridos' });
-  }
-
-  const existing = await query('SELECT id FROM profiles WHERE email = :email LIMIT 1', { email });
-  if (existing.length > 0) {
-    return res.status(409).json({ message: 'Ya existe un usuario con ese email' });
-  }
-
-  const passwordHash = await bcrypt.hash(password, 12);
-  await query(
-    `INSERT INTO profiles (id, email, password_hash, role, is_approved)
-     VALUES (:id, :email, :passwordHash, 'regular', FALSE)`,
-    { id: randomUUID(), email, passwordHash }
-  );
-
-  res.status(201).json({ ok: true });
+  res.status(403).json({ message: 'El auto-registro está deshabilitado. Solicita tus credenciales al administrador.' });
 });
 
 app.post('/api/auth/signin', async (req, res) => {
@@ -349,6 +367,28 @@ app.get('/api/pages', requireAuth, async (_req, res) => {
   res.json({ pages });
 });
 
+app.get('/api/settings', requireAuth, async (_req, res) => {
+  const rows = await query('SELECT setting_key, setting_value FROM app_settings');
+  res.json({
+    settings: rows.reduce((acc, row) => {
+      acc[row.setting_key] = row.setting_value;
+      return acc;
+    }, {}),
+  });
+});
+
+app.put('/api/settings', requireAuth, requireAdmin, async (req, res) => {
+  const rawFee = Number(req.body?.lawyer_fee_percentage || 0);
+  const lawyerFeePercentage = Math.min(100, Math.max(0, rawFee));
+  await query(
+    `INSERT INTO app_settings (setting_key, setting_value, updated_by)
+     VALUES ('lawyer_fee_percentage', :value, :updatedBy)
+     ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_by = VALUES(updated_by)`,
+    { value: String(lawyerFeePercentage), updatedBy: req.user.id }
+  );
+  res.json({ ok: true, settings: { lawyer_fee_percentage: lawyerFeePercentage } });
+});
+
 app.get('/api/profiles/me', requireAuth, async (req, res) => {
   res.json({ profile: req.user });
 });
@@ -376,6 +416,32 @@ app.get('/api/users', requireAuth, requireAdmin, async (_req, res) => {
       .map((permission) => ({ page_id: permission.page_id })),
   }));
   res.json({ users: usersWithPermissions });
+});
+
+app.post('/api/users', requireAuth, requireAdmin, async (req, res) => {
+  const { email, password, full_name, role = 'regular', is_approved = true } = req.body || {};
+  if (!email || !password) return res.status(400).json({ message: 'Correo y contraseña son requeridos' });
+  if (String(password).length < 6) return res.status(400).json({ message: 'La contraseña debe tener al menos 6 caracteres' });
+
+  const existing = await query('SELECT id FROM profiles WHERE email = :email LIMIT 1', { email });
+  if (existing.length) return res.status(409).json({ message: 'Ese correo ya existe' });
+
+  const id = randomUUID();
+  const passwordHash = await bcrypt.hash(password, 10);
+  await query(
+    `INSERT INTO profiles (id, email, password_hash, full_name, role, is_approved)
+     VALUES (:id, :email, :passwordHash, :fullName, :role, :isApproved)`,
+    {
+      id,
+      email,
+      passwordHash,
+      fullName: full_name || null,
+      role: ['admin', 'regular'].includes(role) ? role : 'regular',
+      isApproved: Boolean(is_approved),
+    }
+  );
+
+  res.status(201).json({ profile: publicProfile(await getProfileById(id)) });
 });
 
 app.patch('/api/users/:id', requireAuth, requireAdmin, async (req, res) => {
@@ -450,10 +516,14 @@ app.get('/api/confirmed-heirs', requireAuth, async (_req, res) => {
   const heirs = await query(
     `SELECT h.id, h.heir_name, h.relationship_summary, h.line_vincenzo, h.line_paolo,
             h.status, h.notes, h.photo_file_name, h.photo_file_type, h.photo_data,
-            h.inheritance_amount, h.created_at, h.updated_at,
+            h.inheritance_amount, h.created_by, h.updated_by, h.created_at, h.updated_at,
+            creator.email AS created_by_email, creator.full_name AS created_by_name,
+            updater.email AS updated_by_email, updater.full_name AS updated_by_name,
             COUNT(ed.id) AS evidence_count
      FROM confirmed_heirs h
      LEFT JOIN evidence_documents ed ON ed.related_heir_name = h.heir_name
+     LEFT JOIN profiles creator ON creator.id = h.created_by
+     LEFT JOIN profiles updater ON updater.id = h.updated_by
      GROUP BY h.id
      ORDER BY h.heir_name`
   );
@@ -492,7 +562,8 @@ app.put('/api/confirmed-heirs/:id', requireAuth, async (req, res) => {
          photo_file_name = :photoFileName,
          photo_file_type = :photoFileType,
          photo_data = :photoData,
-         inheritance_amount = :inheritanceAmount
+         inheritance_amount = :inheritanceAmount,
+         updated_by = :updatedBy
      WHERE id = :id`,
     {
       id: req.params.id,
@@ -505,6 +576,7 @@ app.put('/api/confirmed-heirs/:id', requireAuth, async (req, res) => {
       photoFileType: photo_file_type || null,
       photoData: photo_data || null,
       inheritanceAmount: Number(inheritance_amount || 0),
+      updatedBy: req.user.id,
     }
   );
 
@@ -530,11 +602,11 @@ app.post('/api/confirmed-heirs', requireAuth, async (req, res) => {
   await query(
     `INSERT INTO confirmed_heirs (
        id, heir_name, relationship_summary, line_vincenzo, line_paolo, status, notes,
-       photo_file_name, photo_file_type, photo_data, inheritance_amount
+       photo_file_name, photo_file_type, photo_data, inheritance_amount, created_by, updated_by
      )
      VALUES (
        :id, :heirName, :relationshipSummary, :lineVincenzo, :linePaolo, :status, :notes,
-       :photoFileName, :photoFileType, :photoData, :inheritanceAmount
+       :photoFileName, :photoFileType, :photoData, :inheritanceAmount, :createdBy, :updatedBy
      )
      ON DUPLICATE KEY UPDATE
        relationship_summary = VALUES(relationship_summary),
@@ -545,7 +617,8 @@ app.post('/api/confirmed-heirs', requireAuth, async (req, res) => {
        photo_file_name = VALUES(photo_file_name),
        photo_file_type = VALUES(photo_file_type),
        photo_data = VALUES(photo_data),
-       inheritance_amount = VALUES(inheritance_amount)`,
+       inheritance_amount = VALUES(inheritance_amount),
+       updated_by = VALUES(updated_by)`,
     {
       id: randomUUID(),
       heirName: heir_name,
@@ -558,6 +631,8 @@ app.post('/api/confirmed-heirs', requireAuth, async (req, res) => {
       photoFileType: photo_file_type || null,
       photoData: photo_data || null,
       inheritanceAmount: Number(inheritance_amount || 0),
+      createdBy: req.user.id,
+      updatedBy: req.user.id,
     }
   );
 
@@ -566,9 +641,14 @@ app.post('/api/confirmed-heirs', requireAuth, async (req, res) => {
 
 app.get('/api/sienna-family-members', requireAuth, async (_req, res) => {
   const members = await query(
-    `SELECT id, parent_id, relationship_to_parent, name, birth, death, spouse, spouse_birth,
-            inheritance_status, inheritance_reason, is_highlighted_ancestor, sort_order, created_at, updated_at
-     FROM sienna_family_members
+    `SELECT sfm.id, sfm.parent_id, sfm.relationship_to_parent, sfm.name, sfm.birth, sfm.death, sfm.spouse, sfm.spouse_birth,
+            sfm.inheritance_status, sfm.inheritance_reason, sfm.is_highlighted_ancestor, sfm.sort_order,
+            sfm.created_by, sfm.updated_by, sfm.created_at, sfm.updated_at,
+            creator.email AS created_by_email, creator.full_name AS created_by_name,
+            updater.email AS updated_by_email, updater.full_name AS updated_by_name
+     FROM sienna_family_members sfm
+     LEFT JOIN profiles creator ON creator.id = sfm.created_by
+     LEFT JOIN profiles updater ON updater.id = sfm.updated_by
      ORDER BY COALESCE(parent_id, ''), sort_order, name`
   );
 
@@ -603,11 +683,11 @@ app.post('/api/sienna-family-members', requireAuth, async (req, res) => {
   await query(
     `INSERT INTO sienna_family_members (
        id, parent_id, relationship_to_parent, name, birth, death, spouse, spouse_birth,
-       inheritance_status, inheritance_reason, is_highlighted_ancestor, sort_order
+       inheritance_status, inheritance_reason, is_highlighted_ancestor, sort_order, created_by, updated_by
      )
      VALUES (
        :id, :parentId, :relationshipToParent, :name, :birth, :death, :spouse, :spouseBirth,
-       :inheritanceStatus, :inheritanceReason, :highlighted, :sortOrder
+       :inheritanceStatus, :inheritanceReason, :highlighted, :sortOrder, :createdBy, :updatedBy
      )
      ON DUPLICATE KEY UPDATE
        parent_id = VALUES(parent_id),
@@ -620,7 +700,8 @@ app.post('/api/sienna-family-members', requireAuth, async (req, res) => {
        inheritance_status = VALUES(inheritance_status),
        inheritance_reason = VALUES(inheritance_reason),
        is_highlighted_ancestor = VALUES(is_highlighted_ancestor),
-       sort_order = VALUES(sort_order)`,
+       sort_order = VALUES(sort_order),
+       updated_by = VALUES(updated_by)`,
     {
       id: memberId,
       parentId: parent_id || null,
@@ -634,6 +715,8 @@ app.post('/api/sienna-family-members', requireAuth, async (req, res) => {
       inheritanceReason: inheritance_reason || null,
       highlighted: Boolean(is_highlighted_ancestor),
       sortOrder: Number(sort_order || 0),
+      createdBy: req.user.id,
+      updatedBy: req.user.id,
     }
   );
 
@@ -692,12 +775,12 @@ app.post('/api/evidence-documents', requireAuth, async (req, res) => {
     `INSERT INTO evidence_documents (
        id, title, document_type, primary_person, event_date, event_place,
        father_name, mother_name, spouse_name, related_heir_name, confirms_heir,
-       people_involved, extracted_text, notes, file_name, file_type, file_data, created_by
+       people_involved, extracted_text, notes, file_name, file_type, file_data, created_by, updated_by
      )
      VALUES (
        :id, :title, :documentType, :primaryPerson, :eventDate, :eventPlace,
        :fatherName, :motherName, :spouseName, :relatedHeirName, :confirmsHeir,
-       :peopleInvolved, :extractedText, :notes, :fileName, :fileType, :fileData, :createdBy
+       :peopleInvolved, :extractedText, :notes, :fileName, :fileType, :fileData, :createdBy, :updatedBy
      )`,
     {
       id: randomUUID(),
@@ -718,15 +801,16 @@ app.post('/api/evidence-documents', requireAuth, async (req, res) => {
       fileType: file_type || null,
       fileData: file_data || null,
       createdBy: req.user.id,
+      updatedBy: req.user.id,
     }
   );
 
   if (related_heir_name && confirms_heir) {
     await query(
       `UPDATE confirmed_heirs
-       SET status = 'confirmado'
+       SET status = 'confirmado', updated_by = :updatedBy
        WHERE heir_name = :heirName`,
-      { heirName: related_heir_name }
+      { heirName: related_heir_name, updatedBy: req.user.id }
     );
   }
 

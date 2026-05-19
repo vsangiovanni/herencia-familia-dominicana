@@ -66,6 +66,12 @@ export interface SiennaFamilyMember {
   inheritance_reason?: string | null;
   is_highlighted_ancestor?: boolean;
   sort_order?: number;
+  created_by?: string | null;
+  updated_by?: string | null;
+  created_by_email?: string | null;
+  created_by_name?: string | null;
+  updated_by_email?: string | null;
+  updated_by_name?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 }
@@ -114,6 +120,11 @@ export const api = {
     }),
   listPages: () => request<{ pages: UserPage[] }>("/api/pages"),
   listUsers: () => request<{ users: Array<UserProfile & { permissions?: { page_id: string }[] }> }>("/api/users"),
+  createUser: (data: { email: string; password: string; full_name?: string | null; role?: "admin" | "regular"; is_approved?: boolean }) =>
+    request<{ profile: UserProfile }>("/api/users", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
   updateUser: (id: string, data: Partial<Pick<UserProfile, "is_approved" | "role">>) =>
     request<{ profile: UserProfile }>(`/api/users/${id}`, {
       method: "PATCH",
@@ -133,6 +144,13 @@ export const api = {
     }),
   listPageVisits: () =>
     request<{ visits: any[] }>("/api/page-visits"),
+  getSettings: () =>
+    request<{ settings: Record<string, string | number | null> }>("/api/settings"),
+  updateSettings: (data: { lawyer_fee_percentage?: number }) =>
+    request<{ ok: boolean; settings: Record<string, string | number | null> }>("/api/settings", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
   listConfirmedHeirs: () =>
     request<{ heirs: ConfirmedHeir[] }>("/api/confirmed-heirs"),
   saveConfirmedHeir: (data: Omit<ConfirmedHeir, "id" | "evidence_count">) =>
