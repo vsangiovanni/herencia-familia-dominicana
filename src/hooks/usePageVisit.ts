@@ -15,6 +15,7 @@ const pageNames: PageConfig = {
   '/arbol-genealogico-clasico': 'Árbol Genealógico Clásico',
   '/lineas-familiares': 'Líneas Familiares',
   '/determinacion-herederos': 'Determinación de Herederos',
+  '/sienna/explicacion-herederos': 'Explicación Sienna para Herederos',
   '/perfil': 'Perfil de Usuario',
   '/admin/usuarios': 'Administración de Usuarios',
   '/auth': 'Autenticación'

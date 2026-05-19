@@ -74,6 +74,9 @@ const NavigationMenu = () => {
               <DropdownMenuItem asChild>
                 <Link to="/sienna/miembros-arbol">Miembros del Árbol</Link>
               </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link to="/sienna/explicacion-herederos">Explicación Herederos</Link>
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </>

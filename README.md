@@ -60,6 +60,7 @@ La sección Sienna contiene las pantallas de trabajo especializadas para el expe
 
 - `/sienna/arbol-genealogico`: árbol genealógico clásico, dinámico y enfocado en explicar quién hereda, por qué hereda y cuánto recibe.
 - `/sienna/miembros-arbol`: CRUD administrativo para agregar, editar y clasificar miembros del árbol sin contaminar la pantalla de presentación.
+- `/sienna/explicacion-herederos`: resumen ejecutivo para herederos con fichas individuales, simulador de revisión, semáforo documental, línea de tiempo y glosario.
 - `/documentos-probatorios`: carga y revisión de documentos, herederos confirmados, foto del heredero y monto heredado.
 
 El árbol Sienna usa la información documentada del caso Alessandro para marcar herederos finales, enlaces genealógicos y ramas activas. El monto total de la herencia se puede calcular en pantalla y se refleja en los nodos del árbol; al guardar, queda persistido en los herederos confirmados.

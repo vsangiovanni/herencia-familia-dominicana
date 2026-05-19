@@ -80,6 +80,9 @@ const MobileNavigationMenu = () => {
               <DropdownMenuItem onClick={() => navigate('/sienna/miembros-arbol')}>
                 Miembros del Árbol
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/sienna/explicacion-herederos')}>
+                Explicación Herederos
+              </DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           {isAdmin && (

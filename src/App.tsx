@@ -26,6 +26,7 @@ import CalculoFiliacion from './pages/CalculoFiliacion';
 import DocumentosProbatorios from './pages/DocumentosProbatorios';
 import ArbolGenealogicoSienna from './pages/ArbolGenealogicoSienna';
 import MiembrosArbolSienna from './pages/MiembrosArbolSienna';
+import ExplicacionHerederosSienna from './pages/ExplicacionHerederosSienna';
 
 const queryClient = new QueryClient();
 
@@ -137,6 +138,14 @@ function App() {
                     element={
                       <ProtectedRoute>
                         <MiembrosArbolSienna />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/sienna/explicacion-herederos"
+                    element={
+                      <ProtectedRoute>
+                        <ExplicacionHerederosSienna />
                       </ProtectedRoute>
                     }
                   />
