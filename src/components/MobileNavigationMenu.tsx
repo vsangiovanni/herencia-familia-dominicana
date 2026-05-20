@@ -9,9 +9,6 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Menu, User } from "lucide-react";
@@ -62,29 +59,27 @@ const MobileNavigationMenu = () => {
             Determinación de Herederos
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>Sienna</DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="w-56">
-              <DropdownMenuItem onClick={() => navigate('/hallazgos')}>
-                Hallazgos
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate('/calculo-filiacion')}>
-                Cálculo por Filiación
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate('/documentos-probatorios')}>
-                Documentos Probatorios
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate('/sienna/arbol-genealogico')}>
-                Árbol Sienna
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate('/sienna/miembros-arbol')}>
-                Miembros del Árbol
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate('/sienna/explicacion-herederos')}>
-                Explicación Herederos
-              </DropdownMenuItem>
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
+          <DropdownMenuLabel className="text-xs uppercase tracking-wide text-legal-gray">
+            Sienna
+          </DropdownMenuLabel>
+          <DropdownMenuItem onClick={() => navigate('/hallazgos')}>
+            Hallazgos
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => navigate('/calculo-filiacion')}>
+            Cálculo por Filiación
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => navigate('/documentos-probatorios')}>
+            Documentos Probatorios
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => navigate('/sienna/arbol-genealogico')}>
+            Árbol Sienna
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => navigate('/sienna/miembros-arbol')}>
+            Miembros del Árbol
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => navigate('/sienna/explicacion-herederos')}>
+            Explicación Herederos
+          </DropdownMenuItem>
           {isAdmin && (
             <>
               <DropdownMenuSeparator />
@@ -93,6 +88,9 @@ const MobileNavigationMenu = () => {
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => navigate('/admin-users')}>
                 Admin Usuarios
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/admin/settings')}>
+                Settings
               </DropdownMenuItem>
             </>
           )}

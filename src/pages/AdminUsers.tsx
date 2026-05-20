@@ -442,10 +442,22 @@ const AdminUsers = () => {
         </div>
 
         <Tabs defaultValue="users" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="users" className="flex items-center gap-2"><Users className="h-4 w-4" /> Control de usuarios</TabsTrigger>
-            <TabsTrigger value="audit" className="flex items-center gap-2"><Activity className="h-4 w-4" /> Auditoría de usuarios</TabsTrigger>
-            <TabsTrigger value="usage" className="flex items-center gap-2"><Clock3 className="h-4 w-4" /> Auditoría de uso app</TabsTrigger>
+          <TabsList className="admin-tabs-scroll h-auto justify-start">
+            <TabsTrigger value="users" className="shrink-0 text-xs sm:text-sm flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              <span className="sm:hidden">Usuarios</span>
+              <span className="hidden sm:inline">Control de usuarios</span>
+            </TabsTrigger>
+            <TabsTrigger value="audit" className="shrink-0 text-xs sm:text-sm flex items-center gap-2">
+              <Activity className="h-4 w-4" />
+              <span className="sm:hidden">Auditoría</span>
+              <span className="hidden sm:inline">Auditoría de usuarios</span>
+            </TabsTrigger>
+            <TabsTrigger value="usage" className="shrink-0 text-xs sm:text-sm flex items-center gap-2">
+              <Clock3 className="h-4 w-4" />
+              <span className="sm:hidden">Uso app</span>
+              <span className="hidden sm:inline">Auditoría de uso app</span>
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="users" className="space-y-4">

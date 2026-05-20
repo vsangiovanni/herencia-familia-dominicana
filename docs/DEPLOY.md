@@ -13,6 +13,12 @@ npm run deploy          # sube dist/ por FTP
 npm run check:prod      # verifica health y rutas Sienna
 ```
 
+Despliegue alterno por MCP Hostinger (cuando FTP esté inestable):
+
+- Tool: `hosting_deployStaticWebsite`
+- Dominio: `herenciard.vmsencf.com`
+- Archivo: zip de `dist/` ya compilado.
+
 Solo cambió el backend PHP:
 
 ```sh
@@ -42,6 +48,11 @@ npm run release
 2. `python3 scripts/deploy-dist.py` — sube todo `dist/` por FTP **sin** sobrescribir `.env` remoto.
 3. `bash scripts/post-deploy-check.sh` — health + rutas Sienna en HTTP 200.
 
+Si usas MCP para static deploy:
+
+4. Verificar inmediatamente `GET /api/health` y login.
+5. Confirmar que `.env` del servidor siga presente y válido (DB/JWT), porque un deploy estático mal empaquetado puede romper backend.
+
 ## Scripts
 
 | Script | Función |
@@ -53,6 +64,7 @@ npm run release
 | `scripts/run-release.sh` | Build + deploy-dist + check |
 
 Los scripts de deploy **nunca** suben ni sobrescriben `.env` en el servidor.
+En cambio, el despliegue estático por MCP depende de lo que venga dentro del zip.
 
 ## Variables en servidor
 
@@ -107,7 +119,7 @@ Tras desplegar, si sigue el icono antiguo:
 ## Verificación
 
 ```sh
-curl -s https://herenciard.vmsencf.com/api/health
+curl --max-time 20 -s https://herenciard.vmsencf.com/api/health
 # {"ok":true,"storage":"mysql","runtime":"php"}
 ```
 

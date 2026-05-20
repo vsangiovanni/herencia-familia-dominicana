@@ -99,7 +99,7 @@ def upload_dist() -> int:
         raise FileNotFoundError(f"Falta {DIST_DIR}. Ejecute npm run build primero.")
 
     host, user, password, remote_dir = ftp_connection_params(load_credentials())
-    ftp = FTP(host, timeout=120)
+    ftp = FTP(host, timeout=300)
     ftp.login(user, password)
     cwd_to_remote(ftp, remote_dir)
     print(f"PWD deploy: {ftp.pwd()}")

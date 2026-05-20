@@ -12,6 +12,8 @@ Sistema genealógico y de determinación de herederos para la República Dominic
 
 HerenciaRD documenta expedientes familiares, construye árboles genealógicos y calcula repartos sucesorios según criterios operativos de la legislación dominicana. La sección **Sienna** concentra las pantallas de reunión con herederos: explicación del reparto, semáforo documental, simulador y árbol clásico.
 
+La ruta `/` redirige al panel (`/dashboard`) para uso operativo directo.
+
 ## Desarrollo local
 
 Requisitos: Node.js 18+ y MySQL.
@@ -27,7 +29,7 @@ npm run dev
 
 | Servicio | URL |
 |----------|-----|
-| Frontend | http://localhost:8080/ |
+| Frontend (redirige a dashboard) | http://localhost:8080/ |
 | API (Node) | http://127.0.0.1:3001/api/health |
 | Árbol Sienna | http://localhost:8080/sienna/arbol-genealogico |
 | Explicación herederos | http://localhost:8080/sienna/explicacion-herederos |
@@ -39,10 +41,12 @@ Documentación: [docs/SIENNA.md](docs/SIENNA.md)
 
 | Ruta | Uso |
 |------|-----|
-| `/sienna/arbol-genealogico` | Árbol clásico, montos y resumen «Por qué heredan» |
+| `/sienna/arbol-genealogico` | Árbol clásico, montos, doble linaje, pantalla completa y resumen «Por qué heredan» |
 | `/sienna/miembros-arbol` | CRUD de miembros y simulador antes de guardar |
 | `/sienna/explicacion-herederos` | Reunión con herederos: pestañas, PDF, semáforo, timeline |
-| `/documentos-probatorios` | Evidencias y herederos confirmados |
+| `/documentos-probatorios` | Evidencias vinculadas a miembros del árbol (titular + parentescos autoasistidos) |
+| `/hallazgos` | Hallazgos dinámicos calculados con data actual (miembros, herederos y documentos) |
+| `/admin/settings` | Configuración central del caso Sienna (solo administradores) |
 
 Lógica compartida: `src/lib/dominicanInheritance.ts`, `src/lib/siennaHeirExplain.ts`.
 
@@ -52,6 +56,8 @@ Documentación: [docs/UI.md](docs/UI.md)
 
 - **Ayuda (?):** popover no invasivo en cada pantalla; textos en `src/data/screenHelp.ts`.
 - **Atrás:** visible solo fuera de inicio, login y panel; con historial vuelve atrás, si no va al dashboard.
+- **Perfil:** vista renovada con tarjetas de identidad/seguridad y mejor jerarquía visual.
+- **Navegación móvil:** la sección Sienna se muestra en lista directa para evitar submenús recortados.
 
 ## Backend
 

@@ -6,9 +6,22 @@ Pantallas especializadas del expediente familiar (caso Alessandro y derivados).
 
 | Ruta | Archivo | Propósito |
 |------|---------|-----------|
-| `/sienna/arbol-genealogico` | `ArbolGenealogicoSienna.tsx` | Árbol clásico, cálculo de montos, resumen por heredero |
+| `/sienna/arbol-genealogico` | `ArbolGenealogicoSienna.tsx` | Árbol clásico, cálculo de montos, doble linaje, pantalla completa y resumen por heredero |
 | `/sienna/miembros-arbol` | `MiembrosArbolSienna.tsx` | CRUD con línea parental, rama sucesoral, conexión al árbol y si hereda |
 | `/sienna/explicacion-herederos` | `ExplicacionHerederosSienna.tsx` | Reunión: por qué heredo, simulador, semáforo, timeline, glosario, PDF |
+| `/hallazgos` | `Hallazgos.tsx` | Hallazgos dinámicos de consistencia (sin texto hardcodeado) según data vigente |
+| `/admin/settings` | `AdminSettings.tsx` | Editor guiado de settings globales y configuración del caso (solo admin) |
+
+## Documentos probatorios (vinculación)
+
+- Pantalla: `/documentos-probatorios`.
+- Flujo operativo:
+  1. Cargar archivo.
+  2. Seleccionar tipo de documento.
+  3. Seleccionar **miembro titular (árbol)** (obligatorio).
+  4. Usar **Recalcular parentescos automáticos** para completar padre/madre/cónyuge según el árbol.
+- Los campos de parentesco se guardan vinculados por `*_member_id` para evitar duplicidades por texto libre.
+- En `Miembros del Árbol Sienna`, la tabla incluye foto del miembro, conteo de documentos y botón **Ver documentación** con visor (imagen/PDF/texto).
 
 ## Ayuda en pantalla
 
@@ -16,10 +29,27 @@ En las tres rutas Sienna hay un icono **?** (esquina superior derecha del encabe
 
 ## Layout responsivo
 
-- Contenedor: `SiennaPageLayout` — ancho máximo 1600px, padding adaptativo.
+- Contenedor base: `app-shell` (en `src/index.css`) — ancho máximo 1700px y padding lateral optimizado para móvil y desktop.
+- Contenedor Sienna: `SiennaPageLayout` usa `app-shell` para mantener consistencia visual entre módulos.
 - Árbol: scroll horizontal en desktop; en móvil las ramas se apilan (`src/index.css`).
 - Pestañas de explicación: `.sienna-tabs-scroll` — scroll horizontal en móvil, grid en `md+`.
 - Tabla de miembros: scroll horizontal; columna auditoría oculta en pantallas pequeñas.
+
+## Doble linaje y cruces
+
+- El árbol detecta herederos con concurrencia de ramas (`Vincenzo/Vicente` y `Paolo/Paulino`) y los marca con badge **Doble linaje**.
+- Cada nodo puede mostrar:
+  - **Padre/Madre base** (desde `parent_id`)
+  - **Otro vínculo parental** (inferido por pareja `spouse`, incluso en referencia inversa).
+- La foto del heredero puede mostrarse en la esquina superior derecha del nodo con borde redondeado para lectura rápida en reuniones.
+- En nodos de cruce se muestra un bloque visual con **línea punteada transversal** para exposición.
+- Además se genera la tarjeta **Cruces de ramas (doble linaje)** para resumen narrativo frente a familia/abogados.
+
+## Modo exposición y pantalla completa
+
+- `Modo exposición`: amplía distribución de contenido del módulo.
+- `Pantalla completa`: activa Fullscreen API sobre la vista del árbol para presentaciones en monitor/TV.
+- Ambos modos se pueden usar juntos.
 
 ## Librerías
 
@@ -38,6 +68,21 @@ En las tres rutas Sienna hay un icono **?** (esquina superior derecha del encabe
 | Resumen ejecutivo | Explicación (parte superior) |
 | PDF por heredero | Botón en cada ficha |
 | Resumen en árbol | Árbol → «Por qué heredan» |
+
+## Hallazgos dinámicos
+
+- La pantalla `/hallazgos` ya no depende de observaciones fijas.
+- El análisis se recalcula con `members`, `heirs` y `documents` en cada carga.
+- Evalúa automáticamente: doble línea, conflictos de fechas, herederos sin soporte, documentos sin miembro titular y estados pendientes.
+- Muestra severidad por hallazgo (alta/media/baja) y próximos pasos contextuales.
+
+## PDF de explicación (mosaico de soporte)
+
+- En `siennaHeirExplain.ts`, el mosaico de documentos soporta:
+  - imagen en `data:image/...`,
+  - base64 crudo con detección de mime (`jpeg/png/gif/webp`),
+  - fallback textual para PDF u otros formatos.
+- El render usa normalización proporcional para evitar imágenes deformadas o invisibles.
 
 ## Pruebas manuales recomendadas
 
