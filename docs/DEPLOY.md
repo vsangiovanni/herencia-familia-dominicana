@@ -42,11 +42,30 @@ git push origin main
 npm run release
 ```
 
+## Migración de filiación (uniones + vínculos parentales)
+
+Después de desplegar código con tablas `family_unions` y `member_parent_links`:
+
+1. **Local (opcional, ya hecho en desarrollo):**
+   ```sh
+   npm run migrate:genealogy
+   ```
+2. **Producción (obligatorio la primera vez):** con credenciales en `.env.prod.working` (no versionar):
+   ```sh
+   npm run migrate:genealogy:prod
+   ```
+   El script crea tablas si faltan, repuebla uniones y `member_parent_links` desde `parent_id` / `spouse_member_id` sin borrar campos legacy. Marca inconsistencias (p. ej. cónyuge solo en texto).
+
+3. Verificar API autenticada: `GET /api/sienna-family-members` debe incluir `unions` y `parent_links`.
+
+Las tablas también se crean al primer request si `api.php` arranca migraciones embebidas; la **población** de datos históricos requiere el script anterior.
+
 ## Checklist manual
 
 1. `npm run build` — genera `dist/` (HTML, assets, `api.php`, `.htaccess`, favicon).
 2. `python3 scripts/deploy-dist.py` — sube todo `dist/` por FTP **sin** sobrescribir `.env` remoto.
-3. `bash scripts/post-deploy-check.sh` — health + rutas Sienna en HTTP 200.
+3. `npm run migrate:genealogy:prod` — migración de filiación en MySQL de producción (solo cuando el release lo incluya).
+4. `bash scripts/post-deploy-check.sh` — health + rutas Sienna en HTTP 200.
 
 Si usas MCP para static deploy:
 

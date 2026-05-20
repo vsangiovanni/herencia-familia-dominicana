@@ -140,6 +140,45 @@ CREATE TABLE IF NOT EXISTS sienna_family_members (
   CONSTRAINT fk_sienna_family_updated_by FOREIGN KEY (updated_by) REFERENCES profiles(id) ON DELETE SET NULL
 );
 
+CREATE TABLE IF NOT EXISTS family_unions (
+  id VARCHAR(160) PRIMARY KEY,
+  partner_a_member_id VARCHAR(120) NOT NULL,
+  partner_b_member_id VARCHAR(120) NULL,
+  union_type ENUM('matrimonio', 'union_libre', 'otra') NOT NULL DEFAULT 'matrimonio',
+  start_date VARCHAR(50) NULL,
+  end_date VARCHAR(50) NULL,
+  notes TEXT NULL,
+  migration_source VARCHAR(80) NULL,
+  confidence ENUM('alta', 'media', 'baja') NOT NULL DEFAULT 'media',
+  is_inconsistent BOOLEAN NOT NULL DEFAULT FALSE,
+  inconsistency_reason TEXT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_family_unions_partner_a (partner_a_member_id),
+  INDEX idx_family_unions_partner_b (partner_b_member_id)
+);
+
+CREATE TABLE IF NOT EXISTS member_parent_links (
+  id VARCHAR(200) PRIMARY KEY,
+  child_member_id VARCHAR(120) NOT NULL,
+  parent_member_id VARCHAR(120) NOT NULL,
+  parent_role ENUM('padre', 'madre', 'progenitor') NOT NULL DEFAULT 'progenitor',
+  union_id VARCHAR(160) NULL,
+  link_type ENUM('biologico', 'adoptivo', 'legal') NOT NULL DEFAULT 'biologico',
+  is_primary_line BOOLEAN NOT NULL DEFAULT FALSE,
+  migration_source VARCHAR(80) NULL,
+  confidence ENUM('alta', 'media', 'baja') NOT NULL DEFAULT 'media',
+  is_inconsistent BOOLEAN NOT NULL DEFAULT FALSE,
+  inconsistency_reason TEXT NULL,
+  source_document_id VARCHAR(120) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_parent_links_child (child_member_id),
+  INDEX idx_parent_links_parent (parent_member_id),
+  INDEX idx_parent_links_union (union_id),
+  UNIQUE KEY uq_parent_link_child_parent_union (child_member_id, parent_member_id, union_id)
+);
+
 INSERT INTO pages (id, name, path, description)
 VALUES
   (UUID(), 'Dashboard', '/dashboard', 'Panel principal'),

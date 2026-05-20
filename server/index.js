@@ -64,6 +64,117 @@ async function query(sql, params = {}) {
   return rows;
 }
 
+const normalizedMemberId = (value) => String(value || '').trim();
+
+const buildUnionId = (partnerA, partnerB) => {
+  const ids = [normalizedMemberId(partnerA), normalizedMemberId(partnerB)].filter(Boolean).sort();
+  return ids.length === 2 ? `union-${ids[0]}-${ids[1]}` : `union-${ids[0] || 'solo'}`;
+};
+
+const buildParentLinkId = (childId, parentId, unionId = null) => {
+  const base = `link-${normalizedMemberId(childId)}-${normalizedMemberId(parentId)}`;
+  return unionId ? `${base}-${normalizedMemberId(unionId)}` : base;
+};
+
+const mapUnionRow = (row) => ({
+  ...row,
+  is_inconsistent: Boolean(row.is_inconsistent),
+});
+
+const mapParentLinkRow = (row) => ({
+  ...row,
+  is_primary_line: Boolean(row.is_primary_line),
+  is_inconsistent: Boolean(row.is_inconsistent),
+});
+
+async function loadGenealogyBundle() {
+  const unions = await query('SELECT * FROM family_unions ORDER BY partner_a_member_id, partner_b_member_id');
+  const parentLinks = await query('SELECT * FROM member_parent_links ORDER BY child_member_id, parent_member_id');
+  return {
+    unions: unions.map(mapUnionRow),
+    parent_links: parentLinks.map(mapParentLinkRow),
+  };
+}
+
+async function syncMemberFiliation({
+  memberId,
+  parentId,
+  relationshipToParent,
+  filiation,
+}) {
+  const isChild =
+    relationshipToParent === 'hijo' ||
+    relationshipToParent === 'hija' ||
+    !relationshipToParent;
+
+  if (!isChild || !parentId) {
+    await query('DELETE FROM member_parent_links WHERE child_member_id = :childId', { childId: memberId });
+    return;
+  }
+
+  const unionId = filiation?.union_id ? normalizedMemberId(filiation.union_id) : null;
+  const secondParentId = filiation?.second_parent_id ? normalizedMemberId(filiation.second_parent_id) : null;
+  const secondParentRole = ['padre', 'madre', 'progenitor'].includes(filiation?.second_parent_role)
+    ? filiation.second_parent_role
+    : 'progenitor';
+
+  const primaryRole =
+    relationshipToParent === 'hija' ? 'madre' : relationshipToParent === 'hijo' ? 'padre' : 'progenitor';
+
+  await query('DELETE FROM member_parent_links WHERE child_member_id = :childId', { childId: memberId });
+
+  await query(
+    `INSERT INTO member_parent_links (
+       id, child_member_id, parent_member_id, parent_role, union_id, link_type,
+       is_primary_line, migration_source, confidence, is_inconsistent, inconsistency_reason
+     )
+     VALUES (
+       :id, :childId, :parentId, :parentRole, :unionId, 'biologico',
+       TRUE, 'form_sync', 'alta', FALSE, NULL
+     )
+     ON DUPLICATE KEY UPDATE
+       parent_role = VALUES(parent_role),
+       union_id = VALUES(union_id),
+       is_primary_line = VALUES(is_primary_line),
+       migration_source = VALUES(migration_source),
+       confidence = VALUES(confidence),
+       updated_at = CURRENT_TIMESTAMP`,
+    {
+      id: buildParentLinkId(memberId, parentId, unionId),
+      childId: memberId,
+      parentId,
+      parentRole: primaryRole,
+      unionId,
+    }
+  );
+
+  if (secondParentId && secondParentId !== parentId) {
+    await query(
+      `INSERT INTO member_parent_links (
+         id, child_member_id, parent_member_id, parent_role, union_id, link_type,
+         is_primary_line, migration_source, confidence, is_inconsistent, inconsistency_reason
+       )
+       VALUES (
+         :id, :childId, :parentId, :parentRole, :unionId, 'biologico',
+         FALSE, 'form_sync', 'alta', FALSE, NULL
+       )
+       ON DUPLICATE KEY UPDATE
+         parent_role = VALUES(parent_role),
+         union_id = VALUES(union_id),
+         migration_source = VALUES(migration_source),
+         confidence = VALUES(confidence),
+         updated_at = CURRENT_TIMESTAMP`,
+      {
+        id: buildParentLinkId(memberId, secondParentId, unionId),
+        childId: memberId,
+        parentId: secondParentId,
+        parentRole: secondParentRole,
+        unionId,
+      }
+    );
+  }
+}
+
 async function getProfileById(id) {
   const rows = await query('SELECT * FROM profiles WHERE id = :id LIMIT 1', { id });
   return rows[0] || null;
@@ -262,6 +373,49 @@ async function ensureSchemaMigrations() {
   for (const [columnName, sql] of memberMigrations) {
     if (!existingMemberColumns.has(columnName)) await query(sql);
   }
+
+  await query(
+    `CREATE TABLE IF NOT EXISTS family_unions (
+       id VARCHAR(160) PRIMARY KEY,
+       partner_a_member_id VARCHAR(120) NOT NULL,
+       partner_b_member_id VARCHAR(120) NULL,
+       union_type ENUM('matrimonio', 'union_libre', 'otra') NOT NULL DEFAULT 'matrimonio',
+       start_date VARCHAR(50) NULL,
+       end_date VARCHAR(50) NULL,
+       notes TEXT NULL,
+       migration_source VARCHAR(80) NULL,
+       confidence ENUM('alta', 'media', 'baja') NOT NULL DEFAULT 'media',
+       is_inconsistent BOOLEAN NOT NULL DEFAULT FALSE,
+       inconsistency_reason TEXT NULL,
+       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+       updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+       INDEX idx_family_unions_partner_a (partner_a_member_id),
+       INDEX idx_family_unions_partner_b (partner_b_member_id)
+     )`
+  );
+
+  await query(
+    `CREATE TABLE IF NOT EXISTS member_parent_links (
+       id VARCHAR(200) PRIMARY KEY,
+       child_member_id VARCHAR(120) NOT NULL,
+       parent_member_id VARCHAR(120) NOT NULL,
+       parent_role ENUM('padre', 'madre', 'progenitor') NOT NULL DEFAULT 'progenitor',
+       union_id VARCHAR(160) NULL,
+       link_type ENUM('biologico', 'adoptivo', 'legal') NOT NULL DEFAULT 'biologico',
+       is_primary_line BOOLEAN NOT NULL DEFAULT FALSE,
+       migration_source VARCHAR(80) NULL,
+       confidence ENUM('alta', 'media', 'baja') NOT NULL DEFAULT 'media',
+       is_inconsistent BOOLEAN NOT NULL DEFAULT FALSE,
+       inconsistency_reason TEXT NULL,
+       source_document_id VARCHAR(120) NULL,
+       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+       updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+       INDEX idx_parent_links_child (child_member_id),
+       INDEX idx_parent_links_parent (parent_member_id),
+       INDEX idx_parent_links_union (union_id),
+       UNIQUE KEY uq_parent_link_child_parent_union (child_member_id, parent_member_id, union_id)
+     )`
+  );
 
   await query(
     `UPDATE confirmed_heirs ch
@@ -725,6 +879,7 @@ app.get('/api/sienna-family-members', requireAuth, async (_req, res) => {
      LEFT JOIN profiles updater ON updater.id = sfm.updated_by
      ORDER BY COALESCE(parent_id, ''), sort_order, name`
   );
+  const genealogy = await loadGenealogyBundle();
 
   res.json({
     members: members.map((member) => ({
@@ -732,6 +887,8 @@ app.get('/api/sienna-family-members', requireAuth, async (_req, res) => {
       is_highlighted_ancestor: Boolean(member.is_highlighted_ancestor),
       sort_order: Number(member.sort_order || 0),
     })),
+    unions: genealogy.unions,
+    parent_links: genealogy.parent_links,
   });
 });
 
@@ -750,6 +907,7 @@ app.post('/api/sienna-family-members', requireAuth, async (req, res) => {
     inheritance_reason,
     is_highlighted_ancestor,
     sort_order,
+    filiation,
   } = req.body || {};
 
   if (!name) return res.status(400).json({ message: 'El nombre del miembro es requerido' });
@@ -805,14 +963,49 @@ app.post('/api/sienna-family-members', requireAuth, async (req, res) => {
     }
   );
 
+  await syncMemberFiliation({
+    memberId,
+    parentId: parent_id || null,
+    relationshipToParent: ['hijo', 'hija', 'conyuge', 'padre', 'madre', 'otro'].includes(relationship_to_parent)
+      ? relationship_to_parent
+      : null,
+    filiation,
+  });
+
+  if (sanitizedSpouseMemberId) {
+    const unionId = buildUnionId(memberId, sanitizedSpouseMemberId);
+    await query(
+      `INSERT INTO family_unions (
+         id, partner_a_member_id, partner_b_member_id, union_type, migration_source, confidence, is_inconsistent
+       )
+       VALUES (:id, :partnerA, :partnerB, 'matrimonio', 'spouse_member_id', 'alta', FALSE)
+       ON DUPLICATE KEY UPDATE
+         partner_a_member_id = VALUES(partner_a_member_id),
+         partner_b_member_id = VALUES(partner_b_member_id),
+         updated_at = CURRENT_TIMESTAMP`,
+      {
+        id: unionId,
+        partnerA: [memberId, sanitizedSpouseMemberId].sort()[0],
+        partnerB: [memberId, sanitizedSpouseMemberId].sort()[1],
+      }
+    );
+  }
+
   const rows = await query('SELECT * FROM sienna_family_members WHERE id = :id LIMIT 1', { id: memberId });
-  res.status(201).json({ ok: true, member: rows[0] || null });
+  const genealogy = await loadGenealogyBundle();
+  res.status(201).json({ ok: true, member: rows[0] || null, ...genealogy });
 });
 
 app.delete('/api/sienna-family-members/:id', requireAuth, requireAdmin, async (req, res) => {
-  await query('UPDATE sienna_family_members SET parent_id = NULL WHERE parent_id = :id', { id: req.params.id });
-  await query('UPDATE sienna_family_members SET spouse_member_id = NULL WHERE spouse_member_id = :id', { id: req.params.id });
-  await query('DELETE FROM sienna_family_members WHERE id = :id', { id: req.params.id });
+  const memberId = req.params.id;
+  await query('DELETE FROM member_parent_links WHERE child_member_id = :id OR parent_member_id = :id', { id: memberId });
+  await query(
+    'DELETE FROM family_unions WHERE partner_a_member_id = :id OR partner_b_member_id = :id',
+    { id: memberId }
+  );
+  await query('UPDATE sienna_family_members SET parent_id = NULL WHERE parent_id = :id', { id: memberId });
+  await query('UPDATE sienna_family_members SET spouse_member_id = NULL WHERE spouse_member_id = :id', { id: memberId });
+  await query('DELETE FROM sienna_family_members WHERE id = :id', { id: memberId });
   res.json({ ok: true });
 });
 

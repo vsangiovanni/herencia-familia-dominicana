@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import BackButton from '@/components/BackButton';
 import DocumentHeader from '@/components/DocumentHeader';
 import SiennaPageLayout from '@/components/sienna/SiennaPageLayout';
-import { api, SiennaFamilyMember } from '@/lib/api';
+import { api, FamilyUnion, MemberParentLink, SiennaFamilyMember } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -33,11 +33,31 @@ import {
   formatParentOptionLabel,
   sortMembersByTree,
 } from '@/lib/siennaFamilyTree';
+import {
+  formatUnionLabel,
+  getParentLinksForChild,
+  getUnionsForMember,
+} from '@/lib/siennaGenealogy';
 import { formatPercent } from '@/lib/siennaHeirExplain';
 import MemberTreeContextPanel from '@/components/sienna/MemberTreeContextPanel';
 import PageHelp from '@/components/PageHelp';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Edit, Eye, FileText, GitBranch, Image as ImageIcon, Loader2, Save, Search, SlidersHorizontal, Trash2, UserPlus, Users } from 'lucide-react';
+import {
+  AlertTriangle,
+  Edit,
+  Eye,
+  FileText,
+  GitBranch,
+  GitMerge,
+  Image as ImageIcon,
+  Loader2,
+  Save,
+  Search,
+  SlidersHorizontal,
+  Trash2,
+  UserPlus,
+  Users,
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Progress } from '@/components/ui/progress';
 import { useAuth } from '@/context/AuthContext';
@@ -56,6 +76,8 @@ type MemberForm = {
   inheritance_reason: string;
   is_highlighted_ancestor: boolean;
   sort_order: string;
+  filiation_union_id: string;
+  second_parent_id: string;
 };
 
 const emptyForm: MemberForm = {
@@ -72,6 +94,8 @@ const emptyForm: MemberForm = {
   inheritance_reason: '',
   is_highlighted_ancestor: false,
   sort_order: '0',
+  filiation_union_id: '',
+  second_parent_id: '',
 };
 
 const makeId = (name: string) =>
@@ -123,25 +147,40 @@ const determineInheritance = (form: MemberForm, members: SiennaFamilyMember[]) =
   return classifyMemberByDominicanLaw(draftMember, draftMembers);
 };
 
-const toForm = (member: SiennaFamilyMember): MemberForm => ({
-  id: member.id,
-  parent_id: member.parent_id || 'root',
-  relationship_to_parent: (member.relationship_to_parent as MemberForm['relationship_to_parent']) || 'hijo',
-  name: member.name || '',
-  birth: member.birth || '',
-  death: member.death || '',
-  spouse_member_id: member.spouse_member_id || '',
-  spouse: member.spouse || '',
-  spouse_birth: member.spouse_birth || '',
-  inheritance_status: (member.inheritance_status as MemberForm['inheritance_status']) || 'requiere_revision',
-  inheritance_reason: member.inheritance_reason || '',
-  is_highlighted_ancestor: Boolean(member.is_highlighted_ancestor),
-  sort_order: String(member.sort_order || 0),
-});
+const toForm = (
+  member: SiennaFamilyMember,
+  parentLinks: MemberParentLink[] = []
+): MemberForm => {
+  const links = getParentLinksForChild(member.id, parentLinks);
+  const primaryLink = links.find((link) => link.is_primary_line) || links[0];
+  const secondaryLink = links.find(
+    (link) => link.parent_member_id !== (member.parent_id || primaryLink?.parent_member_id)
+  );
+
+  return {
+    id: member.id,
+    parent_id: member.parent_id || 'root',
+    relationship_to_parent: (member.relationship_to_parent as MemberForm['relationship_to_parent']) || 'hijo',
+    name: member.name || '',
+    birth: member.birth || '',
+    death: member.death || '',
+    spouse_member_id: member.spouse_member_id || '',
+    spouse: member.spouse || '',
+    spouse_birth: member.spouse_birth || '',
+    inheritance_status: (member.inheritance_status as MemberForm['inheritance_status']) || 'requiere_revision',
+    inheritance_reason: member.inheritance_reason || '',
+    is_highlighted_ancestor: Boolean(member.is_highlighted_ancestor),
+    sort_order: String(member.sort_order || 0),
+    filiation_union_id: primaryLink?.union_id || links.find((link) => link.union_id)?.union_id || '',
+    second_parent_id: secondaryLink?.parent_member_id || '',
+  };
+};
 
 const MiembrosArbolSienna = () => {
   const { isAdmin } = useAuth();
   const [members, setMembers] = useState<SiennaFamilyMember[]>([]);
+  const [unions, setUnions] = useState<FamilyUnion[]>([]);
+  const [parentLinks, setParentLinks] = useState<MemberParentLink[]>([]);
   const [documents, setDocuments] = useState<EvidenceDocument[]>([]);
   const [heirs, setHeirs] = useState<ConfirmedHeir[]>([]);
   const [form, setForm] = useState<MemberForm>(emptyForm);
@@ -163,6 +202,8 @@ const MiembrosArbolSienna = () => {
       ]);
       setLoadingMessage('Vinculando documentos y herederos al árbol...');
       setMembers(membersResponse.members);
+      setUnions(membersResponse.unions || []);
+      setParentLinks(membersResponse.parent_links || []);
       setDocuments(documentsResponse.documents);
       setHeirs(heirsResponse.heirs);
     } catch (error) {
@@ -194,7 +235,14 @@ const MiembrosArbolSienna = () => {
     ? form.inheritance_reason || 'Estado definido manualmente en la administración del árbol.'
     : evaluation.inheritance_reason;
 
-  const inheritancePlan = useMemo(() => buildDominicanInheritancePlan(members), [members]);
+  const genealogy = useMemo(
+    () => ({ unions, parent_links: parentLinks }),
+    [parentLinks, unions]
+  );
+  const inheritancePlan = useMemo(
+    () => buildDominicanInheritancePlan(members, genealogy),
+    [genealogy, members]
+  );
 
   const sortedMembers = useMemo(
     () => sortMembersByTree(members, inheritancePlan),
@@ -213,8 +261,14 @@ const MiembrosArbolSienna = () => {
   );
 
   const memberContexts = useMemo(
-    () => new Map(sortedMembers.map((member) => [member.id, buildMemberTreeContext(member, members, inheritancePlan)])),
-    [inheritancePlan, members, sortedMembers]
+    () =>
+      new Map(
+        sortedMembers.map((member) => [
+          member.id,
+          buildMemberTreeContext(member, members, inheritancePlan, genealogy),
+        ])
+      ),
+    [genealogy, inheritancePlan, members, sortedMembers]
   );
 
   const filteredMembers = useMemo(() => {
@@ -283,12 +337,12 @@ const MiembrosArbolSienna = () => {
       sort_order: Number(form.sort_order || 0),
     };
 
-    return buildMemberTreeContext(draftMember, draftMembers, inheritancePlan);
-  }, [draftMembers, form, inheritancePlan, resolvedInheritanceReason, resolvedInheritanceStatus]);
+    return buildMemberTreeContext(draftMember, draftMembers, inheritancePlan, genealogy);
+  }, [draftMembers, form, genealogy, inheritancePlan, resolvedInheritanceReason, resolvedInheritanceStatus]);
 
   const simulation = useMemo(() => {
-    const current = buildDominicanInheritancePlan(members);
-    const projected = buildDominicanInheritancePlan(draftMembers);
+    const current = buildDominicanInheritancePlan(members, genealogy);
+    const projected = buildDominicanInheritancePlan(draftMembers, genealogy);
     const names = new Set([
       ...current.activeHeirs.map((share) => share.member.id),
       ...projected.activeHeirs.map((share) => share.member.id),
@@ -305,7 +359,24 @@ const MiembrosArbolSienna = () => {
         delta: (after?.share || 0) - (before?.share || 0),
       };
     }).sort((a, b) => b.afterShare - a.afterShare || a.name.localeCompare(b.name));
-  }, [draftMembers, members]);
+  }, [draftMembers, genealogy, members]);
+
+  const filiationUnionOptions = useMemo(() => {
+    if (form.parent_id === 'root') return [];
+    const parent = membersById.get(form.parent_id);
+    if (!parent) return [];
+    return getUnionsForMember(parent.id, unions);
+  }, [form.parent_id, membersById, unions]);
+
+  const secondParentOptions = useMemo(() => {
+    if (form.parent_id === 'root') return [];
+    const parent = membersById.get(form.parent_id);
+    if (!parent) return [];
+    const spouseId = parent.spouse_member_id;
+    if (!spouseId || spouseId === form.id) return [];
+    const spouse = membersById.get(spouseId);
+    return spouse ? [spouse] : [];
+  }, [form.id, form.parent_id, membersById]);
 
   const saveMember = async () => {
     if (!form.name.trim()) {
@@ -329,6 +400,14 @@ const MiembrosArbolSienna = () => {
         inheritance_reason: resolvedInheritanceReason,
         is_highlighted_ancestor: form.is_highlighted_ancestor,
         sort_order: Number(form.sort_order || 0),
+        filiation:
+          form.parent_id !== 'root' &&
+          (form.relationship_to_parent === 'hijo' || form.relationship_to_parent === 'hija')
+            ? {
+                union_id: form.filiation_union_id || null,
+                second_parent_id: form.second_parent_id || null,
+              }
+            : undefined,
       });
       resetForm();
       await loadMembers();
@@ -363,7 +442,15 @@ const MiembrosArbolSienna = () => {
     heirs: members.filter((member) => member.inheritance_status === 'posible_heredero' || member.inheritance_status === 'confirmado').length,
     connectors: members.filter((member) => member.inheritance_status === 'no_hereda').length,
     pending: members.filter((member) => member.inheritance_status === 'requiere_revision').length,
-  }), [members]);
+    unions: unions.length,
+    parentLinks: parentLinks.length,
+    inconsistentUnions: unions.filter((union) => union.is_inconsistent).length,
+  }), [members, parentLinks.length, unions]);
+
+  const showChildFiliationFields =
+    form.parent_id !== 'root' &&
+    (form.relationship_to_parent === 'hijo' || form.relationship_to_parent === 'hija');
+  const selectedParent = form.parent_id !== 'root' ? membersById.get(form.parent_id) : null;
 
   const heirsByMemberId = useMemo(
     () => new Map(heirs.filter((heir) => heir.sienna_member_id).map((heir) => [String(heir.sienna_member_id), heir])),
@@ -448,12 +535,59 @@ const MiembrosArbolSienna = () => {
           </Card>
         )}
 
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
           <Card><CardContent className="p-5"><p className="text-sm text-legal-gray">Miembros</p><p className="text-2xl font-bold text-legal-blue">{stats.total}</p></CardContent></Card>
           <Card><CardContent className="p-5"><p className="text-sm text-legal-gray">Herederos</p><p className="text-2xl font-bold text-legal-blue">{stats.heirs}</p></CardContent></Card>
           <Card><CardContent className="p-5"><p className="text-sm text-legal-gray">Enlaces</p><p className="text-2xl font-bold text-legal-blue">{stats.connectors}</p></CardContent></Card>
           <Card><CardContent className="p-5"><p className="text-sm text-legal-gray">Pendientes</p><p className="text-2xl font-bold text-legal-blue">{stats.pending}</p></CardContent></Card>
+          <Card><CardContent className="p-5"><p className="text-sm text-legal-gray">Uniones</p><p className="text-2xl font-bold text-legal-blue">{stats.unions}</p></CardContent></Card>
+          <Card><CardContent className="p-5"><p className="text-sm text-legal-gray">Vínculos filiación</p><p className="text-2xl font-bold text-legal-blue">{stats.parentLinks}</p></CardContent></Card>
         </div>
+
+        <Card className="border border-legal-blue/25 bg-legal-blue/[0.03]">
+          <CardHeader className="border-b border-legal-blue/15 py-3">
+            <CardTitle className="flex flex-wrap items-center gap-2 text-base text-legal-blue">
+              <GitMerge className="h-5 w-5" />
+              Uniones matrimoniales y filiación
+              {stats.inconsistentUnions > 0 && (
+                <Badge variant="outline" className="border-amber-500/50 text-amber-800">
+                  <AlertTriangle className="mr-1 h-3 w-3" />
+                  {stats.inconsistentUnions} unión(es) por revisar
+                </Badge>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 p-4 text-sm text-gray-700">
+            <p>
+              <strong>No hay una pantalla aparte.</strong> Las uniones se crean al guardar un adulto con{' '}
+              <strong>Cónyuge enlazado</strong> (miembro del árbol). La filiación del hijo se define al guardar un{' '}
+              <strong>hijo/hija</strong> en la sección del formulario más abajo.
+            </p>
+            <ol className="list-decimal space-y-1 pl-5">
+              <li>Edite al padre o madre → enlace su cónyuge → Guarde (se crea la unión).</li>
+              <li>Edite al hijo → Parentesco Hijo/Hija → elija la unión de filiación → Guarde.</li>
+            </ol>
+            {unions.length > 0 ? (
+              <ul className="max-h-40 space-y-1 overflow-y-auto rounded-md border border-legal-blue/15 bg-white/80 p-3 text-xs">
+                {unions.slice(0, 24).map((union) => (
+                  <li key={union.id} className="flex flex-wrap items-center gap-2">
+                    <span className="text-legal-blue">{formatUnionLabel(union, membersById)}</span>
+                    {union.is_inconsistent && (
+                      <Badge variant="outline" className="text-amber-700">
+                        revisar
+                      </Badge>
+                    )}
+                  </li>
+                ))}
+                {unions.length > 24 && (
+                  <li className="text-legal-gray">… y {unions.length - 24} más</li>
+                )}
+              </ul>
+            ) : (
+              <p className="text-legal-gray">Aún no hay uniones cargadas. Enlace cónyuges al guardar adultos.</p>
+            )}
+          </CardContent>
+        </Card>
 
         <Card className="border border-legal-gold/20">
           <CardHeader className="bg-legal-blue/5 border-b">
@@ -505,6 +639,130 @@ const MiembrosArbolSienna = () => {
                 </SelectContent>
               </Select>
             </div>
+            <div className="md:col-span-4 space-y-4 rounded-lg border-2 border-legal-blue/25 bg-legal-blue/[0.04] p-4">
+              <div>
+                <p className="flex items-center gap-2 text-sm font-semibold text-legal-blue">
+                  <GitMerge className="h-4 w-4" />
+                  Unión matrimonial de esta persona
+                </p>
+                <p className="mt-1 text-xs text-legal-gray">
+                  Aplica al adulto que está guardando (no al hijo). Al elegir cónyuge del árbol y guardar, se registra la
+                  pareja para poder asignar hijos a ese matrimonio.
+                </p>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <Label>Cónyuge en el árbol</Label>
+                  <Select
+                    value={form.spouse_member_id || '__none__'}
+                    onValueChange={(value) => {
+                      if (value === '__none__') {
+                        updateForm('spouse_member_id', '');
+                        updateForm('spouse', '');
+                        updateForm('spouse_birth', '');
+                        return;
+                      }
+                      const spouseMember = membersById.get(value);
+                      updateForm('spouse_member_id', value);
+                      updateForm('spouse', spouseMember?.name || '');
+                      updateForm('spouse_birth', spouseMember?.birth || '');
+                    }}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Seleccione un cónyuge del árbol" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Sin cónyuge enlazado</SelectItem>
+                      {spouseOptions.map((member) => (
+                        <SelectItem key={member.id} value={member.id}>
+                          {member.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Nacimiento del cónyuge</Label>
+                  <Input
+                    value={form.spouse_birth}
+                    onChange={(event) => updateForm('spouse_birth', event.target.value)}
+                    placeholder="dd/mm/aaaa"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="md:col-span-4 space-y-4 rounded-lg border-2 border-legal-gold/35 bg-legal-gold/[0.06] p-4">
+              <div>
+                <p className="text-sm font-semibold text-legal-blue">Filiación del hijo o hija</p>
+                <p className="mt-1 text-xs text-legal-gray">
+                  Solo para parentesco Hijo/Hija con un superior elegido. Distingue hijos del matrimonio vs hijos de otra
+                  relación.
+                </p>
+              </div>
+              {showChildFiliationFields ? (
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <Label>Unión de filiación (matrimonio / pareja)</Label>
+                    <Select
+                      value={form.filiation_union_id || '__none__'}
+                      onValueChange={(value) =>
+                        updateForm('filiation_union_id', value === '__none__' ? '' : value)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sin unión registrada" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">Sin unión (hijo de otra relación / solo este progenitor)</SelectItem>
+                        {filiationUnionOptions.map((union) => (
+                          <SelectItem key={union.id} value={union.id}>
+                            {formatUnionLabel(union, membersById)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {filiationUnionOptions.length === 0 && selectedParent && (
+                      <p className="mt-2 flex items-start gap-1 text-xs text-amber-800">
+                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                        El superior «{selectedParent.name}» no tiene unión registrada. Edítelo, enlace su cónyuge en la
+                        sección azul de arriba, guarde, y vuelva a este hijo.
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <Label>Segundo progenitor (opcional)</Label>
+                    <Select
+                      value={form.second_parent_id || '__none__'}
+                      onValueChange={(value) =>
+                        updateForm('second_parent_id', value === '__none__' ? '' : value)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sin segundo progenitor" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">Sin segundo progenitor</SelectItem>
+                        {secondParentOptions.map((member) => (
+                          <SelectItem key={member.id} value={member.id}>
+                            {member.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {secondParentOptions.length === 0 && selectedParent?.spouse_member_id && (
+                      <p className="mt-1 text-xs text-legal-gray">
+                        El superior no tiene cónyuge enlazado por ID; use la sección azul en el registro del progenitor.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-legal-gray">
+                  Elija un <strong>nodo superior</strong> y parentesco <strong>Hijo</strong> o <strong>Hija</strong> para
+                  activar estos campos.
+                </p>
+              )}
+            </div>
+
             <div>
               <Label>Nacimiento</Label>
               <Input value={form.birth} onChange={(event) => updateForm('birth', event.target.value)} placeholder="dd/mm/aaaa" />
@@ -512,45 +770,6 @@ const MiembrosArbolSienna = () => {
             <div>
               <Label>Defunción</Label>
               <Input value={form.death} onChange={(event) => updateForm('death', event.target.value)} placeholder="dd/mm/aaaa" />
-            </div>
-            <div>
-              <Label>Cónyuge (doble filiación / representación)</Label>
-              <Select
-                value={form.spouse_member_id || '__none__'}
-                onValueChange={(value) => {
-                  if (value === '__none__') {
-                    updateForm('spouse_member_id', '');
-                    updateForm('spouse', '');
-                    updateForm('spouse_birth', '');
-                    return;
-                  }
-                  const spouseMember = membersById.get(value);
-                  updateForm('spouse_member_id', value);
-                  updateForm('spouse', spouseMember?.name || '');
-                  updateForm('spouse_birth', spouseMember?.birth || '');
-                }}
-              >
-                <SelectTrigger><SelectValue placeholder="Seleccione un cónyuge del árbol" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">Sin cónyuge enlazado</SelectItem>
-                  {spouseOptions.map((member) => (
-                    <SelectItem key={member.id} value={member.id}>
-                      {member.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="mt-1 text-xs text-legal-gray">
-                Para doble filiación, vincule el cónyuge desde un miembro ya existente en el árbol.
-              </p>
-            </div>
-            <div>
-              <Label>Nacimiento del cónyuge</Label>
-              <Input
-                value={form.spouse_birth}
-                onChange={(event) => updateForm('spouse_birth', event.target.value)}
-                placeholder="dd/mm/aaaa"
-              />
             </div>
             <div>
               <Label>Orden entre hermanos</Label>
@@ -901,7 +1120,7 @@ const MiembrosArbolSienna = () => {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
-                            <Button variant="outline" size="sm" onClick={() => setForm(toForm(member))}>
+                            <Button variant="outline" size="sm" onClick={() => setForm(toForm(member, parentLinks))}>
                               <Edit className="h-4 w-4" />
                             </Button>
                             {isAdmin && (

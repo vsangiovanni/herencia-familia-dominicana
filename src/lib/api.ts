@@ -94,6 +94,49 @@ export interface SiennaFamilyMember {
   updated_at?: string | null;
 }
 
+export type FamilyUnionType = "matrimonio" | "union_libre" | "otra";
+export type GenealogyConfidence = "alta" | "media" | "baja";
+export type ParentRole = "padre" | "madre" | "progenitor";
+
+export interface FamilyUnion {
+  id: string;
+  partner_a_member_id: string;
+  partner_b_member_id?: string | null;
+  union_type: FamilyUnionType;
+  start_date?: string | null;
+  end_date?: string | null;
+  notes?: string | null;
+  migration_source?: string | null;
+  confidence: GenealogyConfidence;
+  is_inconsistent: boolean;
+  inconsistency_reason?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface MemberParentLink {
+  id: string;
+  child_member_id: string;
+  parent_member_id: string;
+  parent_role: ParentRole;
+  union_id?: string | null;
+  link_type: "biologico" | "adoptivo" | "legal";
+  is_primary_line: boolean;
+  migration_source?: string | null;
+  confidence: GenealogyConfidence;
+  is_inconsistent: boolean;
+  inconsistency_reason?: string | null;
+  source_document_id?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export type MemberFiliationPayload = {
+  union_id?: string | null;
+  second_parent_id?: string | null;
+  second_parent_role?: ParentRole;
+};
+
 export interface SiennaCaseConfig {
   causante_name: string;
   family_trunk_name: string;
@@ -199,9 +242,20 @@ export const api = {
   deleteEvidenceDocument: (id: string) =>
     request<{ ok: boolean }>(`/api/evidence-documents/${id}`, { method: "DELETE" }),
   listSiennaFamilyMembers: () =>
-    request<{ members: SiennaFamilyMember[] }>("/api/sienna-family-members"),
-  saveSiennaFamilyMember: (data: Omit<SiennaFamilyMember, "created_at" | "updated_at">) =>
-    request<{ ok: boolean; member?: SiennaFamilyMember }>("/api/sienna-family-members", {
+    request<{
+      members: SiennaFamilyMember[];
+      unions: FamilyUnion[];
+      parent_links: MemberParentLink[];
+    }>("/api/sienna-family-members"),
+  saveSiennaFamilyMember: (
+    data: Omit<SiennaFamilyMember, "created_at" | "updated_at"> & { filiation?: MemberFiliationPayload }
+  ) =>
+    request<{
+      ok: boolean;
+      member?: SiennaFamilyMember;
+      unions?: FamilyUnion[];
+      parent_links?: MemberParentLink[];
+    }>("/api/sienna-family-members", {
       method: "POST",
       body: JSON.stringify(data),
     }),

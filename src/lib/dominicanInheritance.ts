@@ -1,4 +1,5 @@
 import { SiennaFamilyMember } from './api';
+import { getDescendantsForRepresentation, SiennaGenealogyBundle } from './siennaGenealogy';
 
 export type InheritanceStatus = 'posible_heredero' | 'no_hereda' | 'requiere_revision' | 'confirmado';
 
@@ -236,8 +237,15 @@ const descendantsForRepresentation = (
   member: SiennaFamilyMember,
   members: SiennaFamilyMember[],
   membersByName: Map<string, SiennaFamilyMember>,
-  membersById: Map<string, SiennaFamilyMember>
+  membersById: Map<string, SiennaFamilyMember>,
+  genealogy?: SiennaGenealogyBundle
 ) => {
+  if (genealogy && (genealogy.parent_links.length > 0 || genealogy.unions.length > 0)) {
+    return uniqueMembers(
+      getDescendantsForRepresentation(member, members, genealogy, findSpousePartner)
+    );
+  }
+
   const ownChildren = directChildrenOf(members, member.id);
   const spousePartner = findSpousePartner(member, membersByName, membersById);
   const spouseChildren = spousePartner ? directChildrenOf(members, spousePartner.id) : [];
@@ -254,7 +262,8 @@ const distributeByRepresentation = (
   share: number,
   source: string,
   route: string,
-  visited: Set<string>
+  visited: Set<string>,
+  genealogy?: SiennaGenealogyBundle
 ) => {
   const visitKey = `${source}:${member.id}`;
   if (visited.has(visitKey)) return;
@@ -265,7 +274,7 @@ const distributeByRepresentation = (
     return;
   }
 
-  const descendants = descendantsForRepresentation(member, members, membersByName, membersById);
+  const descendants = descendantsForRepresentation(member, members, membersByName, membersById, genealogy);
   if (!descendants.length) return;
 
   const childShare = share / descendants.length;
@@ -279,12 +288,16 @@ const distributeByRepresentation = (
       childShare,
       source,
       `${route} -> ${child.name}`,
-      new Set(visited)
+      new Set(visited),
+      genealogy
     );
   });
 };
 
-export const buildDominicanInheritancePlan = (members: SiennaFamilyMember[]): InheritancePlan => {
+export const buildDominicanInheritancePlan = (
+  members: SiennaFamilyMember[],
+  genealogy?: SiennaGenealogyBundle
+): InheritancePlan => {
   const membersByName = byNameKey(members);
   const membersById = byIdKey(members);
   const causante = membersByName.get(normalizeName(caseCausanteName));
@@ -304,7 +317,8 @@ export const buildDominicanInheritancePlan = (members: SiennaFamilyMember[]): In
           share,
           'Descendencia directa',
           `${causante.name} -> ${child.name}`,
-          new Set()
+          new Set(),
+          genealogy
         );
       });
       const activeHeirs = Array.from(sharesById.values()).sort((a, b) => b.share - a.share || a.member.name.localeCompare(b.member.name));
@@ -331,7 +345,8 @@ export const buildDominicanInheritancePlan = (members: SiennaFamilyMember[]): In
       rootShare,
       root.label,
       root.member.name,
-      new Set()
+      new Set(),
+      genealogy
     );
   });
 

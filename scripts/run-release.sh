@@ -17,6 +17,13 @@ npm run build
 echo "=== DEPLOY dist/ (FTP, no toca .env remoto) ==="
 python3 scripts/deploy-dist.py
 
+if [ -f "$ROOT/.env.prod.working" ]; then
+  echo "=== MIGRACION GENEALOGIA (produccion) ==="
+  ENV_FILE="$ROOT/.env.prod.working" node scripts/migrate-sienna-genealogy.cjs
+else
+  echo "AVISO: sin .env.prod.working; omitiendo migrate:genealogy:prod"
+fi
+
 echo "=== CHECK PRODUCCION ==="
 bash scripts/post-deploy-check.sh
 

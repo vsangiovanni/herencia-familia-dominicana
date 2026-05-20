@@ -316,6 +316,44 @@ function ensure_schema(): void {
     }
   }
 
+  db()->exec("
+    CREATE TABLE IF NOT EXISTS family_unions (
+      id VARCHAR(160) PRIMARY KEY,
+      partner_a_member_id VARCHAR(120) NOT NULL,
+      partner_b_member_id VARCHAR(120) NULL,
+      union_type ENUM('matrimonio', 'union_libre', 'otra') NOT NULL DEFAULT 'matrimonio',
+      start_date VARCHAR(50) NULL,
+      end_date VARCHAR(50) NULL,
+      notes TEXT NULL,
+      migration_source VARCHAR(80) NULL,
+      confidence ENUM('alta', 'media', 'baja') NOT NULL DEFAULT 'media',
+      is_inconsistent BOOLEAN NOT NULL DEFAULT FALSE,
+      inconsistency_reason TEXT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )
+  ");
+
+  db()->exec("
+    CREATE TABLE IF NOT EXISTS member_parent_links (
+      id VARCHAR(200) PRIMARY KEY,
+      child_member_id VARCHAR(120) NOT NULL,
+      parent_member_id VARCHAR(120) NOT NULL,
+      parent_role ENUM('padre', 'madre', 'progenitor') NOT NULL DEFAULT 'progenitor',
+      union_id VARCHAR(160) NULL,
+      link_type ENUM('biologico', 'adoptivo', 'legal') NOT NULL DEFAULT 'biologico',
+      is_primary_line BOOLEAN NOT NULL DEFAULT FALSE,
+      migration_source VARCHAR(80) NULL,
+      confidence ENUM('alta', 'media', 'baja') NOT NULL DEFAULT 'media',
+      is_inconsistent BOOLEAN NOT NULL DEFAULT FALSE,
+      inconsistency_reason TEXT NULL,
+      source_document_id VARCHAR(120) NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_parent_link_child_parent_union (child_member_id, parent_member_id, union_id)
+    )
+  ");
+
   exec_sql(
     "UPDATE confirmed_heirs ch
      JOIN sienna_family_members sfm ON LOWER(TRIM(ch.heir_name)) = LOWER(TRIM(sfm.name))
@@ -850,7 +888,16 @@ try {
       $member['is_highlighted_ancestor'] = (bool)$member['is_highlighted_ancestor'];
       $member['sort_order'] = (int)$member['sort_order'];
     }
-    json_response(['members' => $members]);
+    $unions = query_all('SELECT * FROM family_unions ORDER BY partner_a_member_id, partner_b_member_id');
+    $parentLinks = query_all('SELECT * FROM member_parent_links ORDER BY child_member_id, parent_member_id');
+    foreach ($unions as &$union) {
+      $union['is_inconsistent'] = (bool)$union['is_inconsistent'];
+    }
+    foreach ($parentLinks as &$link) {
+      $link['is_primary_line'] = (bool)$link['is_primary_line'];
+      $link['is_inconsistent'] = (bool)$link['is_inconsistent'];
+    }
+    json_response(['members' => $members, 'unions' => $unions, 'parent_links' => $parentLinks]);
   }
 
   if ($method === 'POST' && $path === '/sienna-family-members') {
@@ -903,12 +950,61 @@ try {
         'updatedBy' => $user['id'],
       ]
     );
-    json_response(['ok' => true, 'member' => query_one('SELECT * FROM sienna_family_members WHERE id = :id LIMIT 1', ['id' => $id])], 201);
+    $parentId = $data['parent_id'] ?? null;
+    $isChild = in_array($relationshipToParent, ['hijo', 'hija'], true) || $relationshipToParent === null;
+    if ($isChild && $parentId) {
+      exec_sql('DELETE FROM member_parent_links WHERE child_member_id = :childId', ['childId' => $id]);
+      $filiation = is_array($data['filiation'] ?? null) ? $data['filiation'] : [];
+      $unionId = !empty($filiation['union_id']) ? $filiation['union_id'] : null;
+      $primaryRole = $relationshipToParent === 'hija' ? 'madre' : ($relationshipToParent === 'hijo' ? 'padre' : 'progenitor');
+      $primaryLinkId = 'link-' . $id . '-' . $parentId . ($unionId ? '-' . $unionId : '');
+      exec_sql(
+        'INSERT INTO member_parent_links (id, child_member_id, parent_member_id, parent_role, union_id, link_type, is_primary_line, migration_source, confidence, is_inconsistent)
+         VALUES (:id, :childId, :parentId, :parentRole, :unionId, \'biologico\', TRUE, \'form_sync\', \'alta\', FALSE)
+         ON DUPLICATE KEY UPDATE parent_role = VALUES(parent_role), union_id = VALUES(union_id), updated_at = CURRENT_TIMESTAMP',
+        ['id' => $primaryLinkId, 'childId' => $id, 'parentId' => $parentId, 'parentRole' => $primaryRole, 'unionId' => $unionId]
+      );
+      $secondParentId = $filiation['second_parent_id'] ?? null;
+      if (!empty($secondParentId) && $secondParentId !== $parentId) {
+        $secondLinkId = 'link-' . $id . '-' . $secondParentId . ($unionId ? '-' . $unionId : '');
+        exec_sql(
+          'INSERT INTO member_parent_links (id, child_member_id, parent_member_id, parent_role, union_id, link_type, is_primary_line, migration_source, confidence, is_inconsistent)
+           VALUES (:id, :childId, :parentId, \'progenitor\', :unionId, \'biologico\', FALSE, \'form_sync\', \'alta\', FALSE)
+           ON DUPLICATE KEY UPDATE union_id = VALUES(union_id), updated_at = CURRENT_TIMESTAMP',
+          ['id' => $secondLinkId, 'childId' => $id, 'parentId' => $secondParentId, 'unionId' => $unionId]
+        );
+      }
+    } else {
+      exec_sql('DELETE FROM member_parent_links WHERE child_member_id = :childId', ['childId' => $id]);
+    }
+
+    if (!empty($spouseMemberId)) {
+      $sorted = [$id, $spouseMemberId];
+      sort($sorted);
+      $unionId = 'union-' . $sorted[0] . '-' . $sorted[1];
+      exec_sql(
+        'INSERT INTO family_unions (id, partner_a_member_id, partner_b_member_id, union_type, migration_source, confidence, is_inconsistent)
+         VALUES (:id, :partnerA, :partnerB, \'matrimonio\', \'spouse_member_id\', \'alta\', FALSE)
+         ON DUPLICATE KEY UPDATE partner_b_member_id = VALUES(partner_b_member_id), updated_at = CURRENT_TIMESTAMP',
+        ['id' => $unionId, 'partnerA' => $sorted[0], 'partnerB' => $sorted[1]]
+      );
+    }
+
+    $unions = query_all('SELECT * FROM family_unions ORDER BY partner_a_member_id, partner_b_member_id');
+    $parentLinks = query_all('SELECT * FROM member_parent_links ORDER BY child_member_id, parent_member_id');
+    json_response([
+      'ok' => true,
+      'member' => query_one('SELECT * FROM sienna_family_members WHERE id = :id LIMIT 1', ['id' => $id]),
+      'unions' => $unions,
+      'parent_links' => $parentLinks,
+    ], 201);
   }
 
   if (preg_match('#^/sienna-family-members/([^/]+)$#', $path, $m) && $method === 'DELETE') {
     $user = require_user();
     require_admin($user);
+    exec_sql('DELETE FROM member_parent_links WHERE child_member_id = :id OR parent_member_id = :id', ['id' => $m[1]]);
+    exec_sql('DELETE FROM family_unions WHERE partner_a_member_id = :id OR partner_b_member_id = :id', ['id' => $m[1]]);
     exec_sql('UPDATE sienna_family_members SET parent_id = NULL WHERE parent_id = :id', ['id' => $m[1]]);
     exec_sql('UPDATE sienna_family_members SET spouse_member_id = NULL WHERE spouse_member_id = :id', ['id' => $m[1]]);
     exec_sql('DELETE FROM sienna_family_members WHERE id = :id', ['id' => $m[1]]);

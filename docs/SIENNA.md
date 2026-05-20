@@ -35,6 +35,26 @@ En las tres rutas Sienna hay un icono **?** (esquina superior derecha del encabe
 - Pestañas de explicación: `.sienna-tabs-scroll` — scroll horizontal en móvil, grid en `md+`.
 - Tabla de miembros: scroll horizontal; columna auditoría oculta en pantallas pequeñas.
 
+## Registro de miembros y filiación (flujo lógico)
+
+Al guardar un miembro el sistema actualiza tres capas:
+
+| Capa | Dónde se guarda | Para qué sirve |
+|------|-----------------|----------------|
+| Árbol visual | `parent_id` + `relationship_to_parent` | Dibujo del árbol (bajo quién cuelga el nodo) |
+| Unión de pareja | `family_unions` (+ `spouse_member_id` en el miembro) | Matrimonio o pareja entre dos miembros |
+| Filiación del hijo | `member_parent_links` (+ `filiation` al guardar) | De qué unión es hijo, o solo de un progenitor |
+
+**Orden operativo recomendado**
+
+1. Crear primero los progenitores adultos y enlazar cónyuges por ID (no solo nombre en texto).
+2. Registrar hijos del matrimonio: superior = uno de los padres, unión = pareja, segundo progenitor = el otro.
+3. Registrar hijos de otra relación: superior = ese progenitor, unión = *sin unión*, sin segundo progenitor incorrecto.
+
+**Al guardar (API)** persiste `sienna_family_members`, sincroniza `member_parent_links` para hijos/hijas y crea/actualiza `family_unions` si hay cónyuge enlazado.
+
+Ayuda en pantalla: icono **?** en Miembros del árbol (`sienna-miembros`, `sienna-miembros-agregar` en `src/data/screenHelp.ts`).
+
 ## Doble linaje y cruces
 
 - El árbol detecta herederos con concurrencia de ramas (`Vincenzo/Vicente` y `Paolo/Paulino`) y los marca con badge **Doble linaje**.
@@ -54,6 +74,7 @@ En las tres rutas Sienna hay un icono **?** (esquina superior derecha del encabe
 ## Librerías
 
 - `src/lib/dominicanInheritance.ts` — plan sucesoral y clasificación.
+- `src/lib/siennaGenealogy.ts` — uniones, vínculos parentales, hijos por filiación y descendientes para representación.
 - `src/lib/siennaHeirExplain.ts` — semáforo, timeline, glosario, PDF, textos «por qué heredo».
 
 ## Herramientas para reunión

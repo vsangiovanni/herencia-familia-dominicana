@@ -8,6 +8,7 @@ import {
   normalizeName,
 } from '@/lib/dominicanInheritance';
 import { formatPercent } from '@/lib/siennaHeirExplain';
+import { ChildFiliationGroup, groupChildrenForMember, SiennaGenealogyBundle } from '@/lib/siennaGenealogy';
 
 export type TreeRole =
   | 'causante'
@@ -30,6 +31,7 @@ export type MemberTreeContext = {
   routeLabel: string | null;
   directChildrenCount: number;
   hasLivingDescendants: boolean;
+  childFiliationGroups: ChildFiliationGroup[];
 };
 
 const RELATIONSHIP_LABELS: Record<string, string> = {
@@ -214,15 +216,19 @@ export const resolveInheritanceDisplay = (
 export const buildMemberTreeContext = (
   member: SiennaFamilyMember,
   members: SiennaFamilyMember[],
-  plan?: InheritancePlan
+  plan?: InheritancePlan,
+  genealogy?: SiennaGenealogyBundle
 ): MemberTreeContext => {
-  const inheritancePlan = plan || buildDominicanInheritancePlan(members);
+  const inheritancePlan = plan || buildDominicanInheritancePlan(members, genealogy);
   const ancestryPath = getAncestryPath(member.id, members);
   const treeRole = resolveTreeRole(member, inheritancePlan);
   const inheritance = resolveInheritanceDisplay(member, inheritancePlan);
-  const directChildren = members.filter(
-    (item) => item.parent_id === member.id && isChildRelationship(item)
-  );
+  const childFiliationGroups = genealogy
+    ? groupChildrenForMember(member.id, members, genealogy)
+    : [];
+  const directChildren = childFiliationGroups.length
+    ? childFiliationGroups.flatMap((group) => group.children)
+    : members.filter((item) => item.parent_id === member.id && isChildRelationship(item));
 
   return {
     ancestryPath,
@@ -234,6 +240,7 @@ export const buildMemberTreeContext = (
     treeRoleLabel: TREE_ROLE_LABELS[treeRole],
     directChildrenCount: directChildren.length,
     hasLivingDescendants: directChildren.some((child) => !child.death?.trim()),
+    childFiliationGroups,
     ...inheritance,
   };
 };

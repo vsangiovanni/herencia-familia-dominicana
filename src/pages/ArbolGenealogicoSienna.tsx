@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import BackButton from '@/components/BackButton';
 import DocumentHeader from '@/components/DocumentHeader';
 import SoftLoadingIndicator from '@/components/SoftLoadingIndicator';
-import { api, ConfirmedHeir, SiennaFamilyMember } from '@/lib/api';
+import { api, ConfirmedHeir, MemberParentLink, SiennaFamilyMember } from '@/lib/api';
+import { formatUnionLabel, getParentLinksForChild, SiennaGenealogyBundle } from '@/lib/siennaGenealogy';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -115,6 +116,7 @@ const ClassicNode = ({
   estateAmount,
   membersById,
   membersByName,
+  genealogy,
 }: {
   member: TreeMember;
   heirsByMemberId: Map<string, ConfirmedHeir>;
@@ -124,6 +126,7 @@ const ClassicNode = ({
   estateAmount: number;
   membersById: Map<string, SiennaFamilyMember>;
   membersByName: Map<string, SiennaFamilyMember>;
+  genealogy: SiennaGenealogyBundle;
 }) => {
   const heir = heirsByMemberId.get(member.id) || heirsByName.get(normalizeName(member.name));
   const inheritanceShare = inheritancePlan.sharesById.get(member.id);
@@ -143,6 +146,11 @@ const ClassicNode = ({
     member.spouse ||
     null;
   const hasDualLineage = (inheritanceShare?.sources.length || 0) > 1;
+  const childLinks = getParentLinksForChild(member.id, genealogy.parent_links);
+  const unionLink = childLinks.find((link: MemberParentLink) => link.union_id);
+  const filiationUnion = unionLink?.union_id
+    ? genealogy.unions.find((union) => union.id === unionLink.union_id) || null
+    : null;
 
   return (
     <li className="relative">
@@ -177,6 +185,13 @@ const ClassicNode = ({
             <div className="mt-1 text-xs">
               <span className="text-legal-gray">Cónyuge: </span>
               {spouseLabel}
+            </div>
+          )}
+
+          {filiationUnion && (
+            <div className="mt-1 text-xs text-legal-blue">
+              <span className="text-legal-gray">Filiación: </span>
+              {formatUnionLabel(filiationUnion, membersById)}
             </div>
           )}
 
@@ -277,6 +292,7 @@ const ClassicNode = ({
                 estateAmount={estateAmount}
                 membersById={membersById}
                 membersByName={membersByName}
+                genealogy={genealogy}
               />
             ))}
           </ul>
@@ -290,6 +306,7 @@ const ArbolGenealogicoSienna = () => {
   const { isAdmin } = useAuth();
   const [heirs, setHeirs] = useState<ConfirmedHeir[]>([]);
   const [members, setMembers] = useState<SiennaFamilyMember[]>([]);
+  const [genealogy, setGenealogy] = useState<SiennaGenealogyBundle>({ unions: [], parent_links: [] });
   const [estateAmount, setEstateAmount] = useState('');
   const [lawyerFeePercentage, setLawyerFeePercentage] = useState('0');
   const [snapshotNote, setSnapshotNote] = useState('');
@@ -357,6 +374,10 @@ const ArbolGenealogicoSienna = () => {
       }
       setLoadingMessage('Renderizando árbol genealógico...');
       setMembers(dbMembers);
+      setGenealogy({
+        unions: membersResponse.unions || [],
+        parent_links: membersResponse.parent_links || [],
+      });
     } catch (error) {
       toast({
         title: 'No se pudo cargar el árbol Sienna',
@@ -425,7 +446,7 @@ const ArbolGenealogicoSienna = () => {
     const ids = new Set(members.map((member) => member.id));
     return members.filter((member) => member.parent_id && !ids.has(member.parent_id));
   }, [members]);
-  const inheritancePlan = useMemo(() => buildDominicanInheritancePlan(members), [members]);
+  const inheritancePlan = useMemo(() => buildDominicanInheritancePlan(members, genealogy), [genealogy, members]);
   const dualLineageRows = useMemo(
     () =>
       inheritancePlan.activeHeirs
@@ -972,6 +993,7 @@ const ArbolGenealogicoSienna = () => {
                             estateAmount={distributableEstateAmount}
                             membersById={membersById}
                             membersByName={membersByName}
+                            genealogy={genealogy}
                           />
                         ))}
                       </ul>

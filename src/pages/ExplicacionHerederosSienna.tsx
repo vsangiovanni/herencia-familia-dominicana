@@ -33,6 +33,7 @@ import {
   routeSteps,
 } from '@/lib/siennaHeirExplain';
 import { buildCalculationPayload, buildMembersHash, parseCalculationPayload } from '@/lib/siennaCalculation';
+import { SiennaGenealogyBundle } from '@/lib/siennaGenealogy';
 import { useAuth } from '@/context/AuthContext';
 import {
   AlertTriangle,
@@ -72,6 +73,7 @@ const initials = (name: string) =>
 const ExplicacionHerederosSienna = () => {
   const { isAdmin } = useAuth();
   const [members, setMembers] = useState<SiennaFamilyMember[]>([]);
+  const [genealogy, setGenealogy] = useState<SiennaGenealogyBundle>({ unions: [], parent_links: [] });
   const [documents, setDocuments] = useState<EvidenceDocument[]>([]);
   const [heirs, setHeirs] = useState<ConfirmedHeir[]>([]);
   const [estateAmount, setEstateAmount] = useState('');
@@ -97,6 +99,10 @@ const ExplicacionHerederosSienna = () => {
         ]);
         setLoadingMessage('Aplicando configuración y preparando explicaciones...');
         setMembers(membersResponse.members);
+        setGenealogy({
+          unions: membersResponse.unions || [],
+          parent_links: membersResponse.parent_links || [],
+        });
         applySiennaCaseConfig(settingsResponse.settings.sienna_case_config);
         setDocuments(documentsResponse.documents);
         setHeirs(heirsResponse.heirs);
@@ -154,7 +160,7 @@ const ExplicacionHerederosSienna = () => {
   const feePercentage = Math.min(100, Math.max(0, Number(lawyerFeePercentage || 0)));
   const lawyerFee = grossAmount * (feePercentage / 100);
   const netAmount = Math.max(0, grossAmount - lawyerFee);
-  const plan = useMemo(() => buildDominicanInheritancePlan(members), [members]);
+  const plan = useMemo(() => buildDominicanInheritancePlan(members, genealogy), [genealogy, members]);
   const photosByName = useMemo(() => heirPhotoByName(heirs), [heirs]);
 
   const documentsByHeir = useMemo(() => {

@@ -42,13 +42,13 @@ Documentación: [docs/SIENNA.md](docs/SIENNA.md)
 | Ruta | Uso |
 |------|-----|
 | `/sienna/arbol-genealogico` | Árbol clásico, montos, doble linaje, pantalla completa y resumen «Por qué heredan» |
-| `/sienna/miembros-arbol` | CRUD de miembros y simulador antes de guardar |
+| `/sienna/miembros-arbol` | CRUD de miembros, uniones matrimoniales, filiación hijo/hija y simulador |
 | `/sienna/explicacion-herederos` | Reunión con herederos: pestañas, PDF, semáforo, timeline |
 | `/documentos-probatorios` | Evidencias vinculadas a miembros del árbol (titular + parentescos autoasistidos) |
 | `/hallazgos` | Hallazgos dinámicos calculados con data actual (miembros, herederos y documentos) |
 | `/admin/settings` | Configuración central del caso Sienna (solo administradores) |
 
-Lógica compartida: `src/lib/dominicanInheritance.ts`, `src/lib/siennaHeirExplain.ts`.
+Lógica compartida: `src/lib/dominicanInheritance.ts`, `src/lib/siennaGenealogy.ts`, `src/lib/siennaHeirExplain.ts`.
 
 ## Interfaz (ayuda y navegación)
 
@@ -64,7 +64,14 @@ Documentación: [docs/UI.md](docs/UI.md)
 - **Local:** Node.js + Express (`server/index.js`) → MySQL.
 - **Producción (Hostinger):** PHP `public/api.php` + `.htaccess` (copiados a `dist/` en el build).
 
-Tablas principales: `confirmed_heirs`, `sienna_family_members`.
+Tablas principales: `confirmed_heirs`, `sienna_family_members`, `family_unions`, `member_parent_links`.
+
+Migración inicial de filiación desde datos legacy:
+
+```sh
+npm run migrate:genealogy          # local (.env)
+npm run migrate:genealogy:prod     # producción (.env.prod.working)
+```
 
 ## Marca y créditos
 
@@ -81,6 +88,8 @@ Guía completa: [docs/DEPLOY.md](docs/DEPLOY.md)
 | `npm run deploy:api` | Solo `api.php` (cambios de backend) |
 | `npm run check:prod` | Verifica health y rutas Sienna en producción |
 | `npm run release` | Build + deploy + check (script bash) |
+| `npm run migrate:genealogy` | Poblar uniones y vínculos parentales (local) |
+| `npm run migrate:genealogy:prod` | Igual en MySQL de producción |
 
 Plantilla de variables en servidor: [`.env.production.example`](.env.production.example)
 
