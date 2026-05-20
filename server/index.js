@@ -80,6 +80,16 @@ async function requireAuth(req, res, next) {
     const payload = jwt.verify(token, jwtSecret);
     const profile = await getProfileById(payload.sub);
     if (!profile) return res.status(401).json({ message: 'Sesión inválida' });
+    const allowUnapprovedPaths = new Set([
+      '/api/auth/session',
+      '/api/auth/password',
+      '/api/profiles/me',
+    ]);
+    const isApproved = Boolean(profile.is_approved);
+    const isAdmin = profile.role === 'admin';
+    if (!isAdmin && !isApproved && !allowUnapprovedPaths.has(req.path)) {
+      return res.status(403).json({ message: 'Tu cuenta aún no ha sido aprobada por un administrador.' });
+    }
 
     req.user = publicProfile(profile);
     next();
@@ -122,6 +132,7 @@ async function ensureSchemaMigrations() {
   );
   const existing = new Set(columns.map((column) => column.COLUMN_NAME));
   const migrations = [
+    ['sienna_member_id', 'ALTER TABLE confirmed_heirs ADD COLUMN sienna_member_id VARCHAR(120) NULL UNIQUE AFTER id'],
     ['photo_file_name', 'ALTER TABLE confirmed_heirs ADD COLUMN photo_file_name VARCHAR(255) NULL AFTER notes'],
     ['photo_file_type', 'ALTER TABLE confirmed_heirs ADD COLUMN photo_file_type VARCHAR(120) NULL AFTER photo_file_name'],
     ['photo_data', 'ALTER TABLE confirmed_heirs ADD COLUMN photo_data LONGTEXT NULL AFTER photo_file_type'],
@@ -141,6 +152,21 @@ async function ensureSchemaMigrations() {
     { databaseName: dbConfig.database }
   );
   const existingEvidenceColumns = new Set(evidenceColumns.map((column) => column.COLUMN_NAME));
+  if (!existingEvidenceColumns.has('primary_member_id')) {
+    await query('ALTER TABLE evidence_documents ADD COLUMN primary_member_id VARCHAR(120) NULL AFTER document_type');
+  }
+  if (!existingEvidenceColumns.has('father_member_id')) {
+    await query('ALTER TABLE evidence_documents ADD COLUMN father_member_id VARCHAR(120) NULL AFTER event_place');
+  }
+  if (!existingEvidenceColumns.has('mother_member_id')) {
+    await query('ALTER TABLE evidence_documents ADD COLUMN mother_member_id VARCHAR(120) NULL AFTER father_name');
+  }
+  if (!existingEvidenceColumns.has('spouse_member_id')) {
+    await query('ALTER TABLE evidence_documents ADD COLUMN spouse_member_id VARCHAR(120) NULL AFTER mother_name');
+  }
+  if (!existingEvidenceColumns.has('related_member_id')) {
+    await query('ALTER TABLE evidence_documents ADD COLUMN related_member_id VARCHAR(120) NULL AFTER spouse_name');
+  }
   if (!existingEvidenceColumns.has('updated_by')) {
     await query('ALTER TABLE evidence_documents ADD COLUMN updated_by CHAR(36) NULL AFTER created_by');
   }
@@ -156,6 +182,12 @@ async function ensureSchemaMigrations() {
 
   await query(
     `INSERT INTO pages (id, name, path, description)
+     VALUES (:id, 'Settings', '/admin/settings', 'Configuración global del sistema')
+     ON DUPLICATE KEY UPDATE name = VALUES(name), description = VALUES(description)`,
+    { id: randomUUID() }
+  );
+  await query(
+    `INSERT INTO pages (id, name, path, description)
      VALUES (:id, 'Árbol Sienna', '/sienna/arbol-genealogico', 'Árbol genealógico con foto y monto heredado')
      ON DUPLICATE KEY UPDATE name = VALUES(name), description = VALUES(description)`,
     { id: randomUUID() }
@@ -163,6 +195,12 @@ async function ensureSchemaMigrations() {
   await query(
     `INSERT INTO pages (id, name, path, description)
      VALUES (:id, 'Miembros del Árbol Sienna', '/sienna/miembros-arbol', 'CRUD de miembros del árbol genealógico Sienna')
+     ON DUPLICATE KEY UPDATE name = VALUES(name), description = VALUES(description)`,
+    { id: randomUUID() }
+  );
+  await query(
+    `INSERT INTO pages (id, name, path, description)
+     VALUES (:id, 'Explicación de Herederos Sienna', '/sienna/explicacion-herederos', 'Explicación, simulación y auditoría de herederos Sienna')
      ON DUPLICATE KEY UPDATE name = VALUES(name), description = VALUES(description)`,
     { id: randomUUID() }
   );
@@ -180,6 +218,7 @@ async function ensureSchemaMigrations() {
        name VARCHAR(255) NOT NULL,
        birth VARCHAR(50) NULL,
        death VARCHAR(50) NULL,
+       spouse_member_id VARCHAR(120) NULL,
        spouse VARCHAR(255) NULL,
        spouse_birth VARCHAR(50) NULL,
        inheritance_status ENUM('posible_heredero', 'no_hereda', 'requiere_revision', 'confirmado') NOT NULL DEFAULT 'requiere_revision',
@@ -192,6 +231,19 @@ async function ensureSchemaMigrations() {
      )`
   );
 
+  await query(
+    `CREATE TABLE IF NOT EXISTS sienna_calculation_snapshots (
+       id CHAR(36) PRIMARY KEY,
+       estate_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+       lawyer_fee_percentage DECIMAL(6,2) NOT NULL DEFAULT 0,
+       distributable_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+       members_hash TEXT NULL,
+       payload_json LONGTEXT NULL,
+       created_by CHAR(36) NULL,
+       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+     )`
+  );
+
   const memberColumns = await query(
     `SELECT COLUMN_NAME
      FROM INFORMATION_SCHEMA.COLUMNS
@@ -201,6 +253,7 @@ async function ensureSchemaMigrations() {
   const existingMemberColumns = new Set(memberColumns.map((column) => column.COLUMN_NAME));
   const memberMigrations = [
     ['relationship_to_parent', "ALTER TABLE sienna_family_members ADD COLUMN relationship_to_parent ENUM('hijo', 'hija', 'conyuge', 'padre', 'madre', 'otro') NULL AFTER parent_id"],
+    ['spouse_member_id', 'ALTER TABLE sienna_family_members ADD COLUMN spouse_member_id VARCHAR(120) NULL AFTER death'],
     ['inheritance_status', "ALTER TABLE sienna_family_members ADD COLUMN inheritance_status ENUM('posible_heredero', 'no_hereda', 'requiere_revision', 'confirmado') NOT NULL DEFAULT 'requiere_revision' AFTER spouse_birth"],
     ['inheritance_reason', 'ALTER TABLE sienna_family_members ADD COLUMN inheritance_reason TEXT NULL AFTER inheritance_status'],
     ['created_by', 'ALTER TABLE sienna_family_members ADD COLUMN created_by CHAR(36) NULL AFTER sort_order'],
@@ -211,79 +264,59 @@ async function ensureSchemaMigrations() {
   }
 
   await query(
-    `UPDATE sienna_family_members
-     SET inheritance_status = 'posible_heredero',
-         inheritance_reason = 'Descendiente vivo registrado en una o más líneas sucesorales activas.'
-     WHERE id IN ('victor-manuel-martin', 'perla-rosa', 'bernardo-martin', 'jocelyn', 'mayra')
-       AND inheritance_status = 'requiere_revision'`
+    `UPDATE confirmed_heirs ch
+     JOIN sienna_family_members sfm ON LOWER(TRIM(ch.heir_name)) = LOWER(TRIM(sfm.name))
+     SET ch.sienna_member_id = sfm.id
+     WHERE ch.sienna_member_id IS NULL`
   );
 
-  const caseStatuses = [
-    ['alessandro', 'no_hereda', 'Es el causante del expediente; no se clasifica como heredero.'],
-    ['domenico', 'no_hereda', 'Tronco familiar común; sirve para ubicar ramas, no como heredero final.'],
-    ['maria-magdalena', 'no_hereda', 'Madre del causante Alessandro; rama del causante, no heredera final en este análisis.'],
-    ['vincenzo', 'no_hereda', 'Hermano de la madre del causante; abre una rama sucesoral activa por sus descendientes.'],
-    ['paolo', 'no_hereda', 'Hermano de la madre del causante; abre una rama sucesoral activa por sus descendientes.'],
-    ['maria-rosa', 'no_hereda', 'Intermedia fallecida en rama Vincenzo/Vicente y vínculo hacia la doble filiación.'],
-    ['pedro-pablo', 'no_hereda', 'Intermedio fallecido en rama Paolo/Paulino y vínculo hacia la doble filiación.'],
-    ['domingo-ramon', 'no_hereda', 'Intermedio fallecido en rama Vincenzo/Vicente; transmite representación a sus descendientes.'],
-    ['victor-manuel', 'no_hereda', 'Intermedio fallecido; conecta a Víctor Manuel Martín y a Rosa Julia/Perla.'],
-    ['rosa-julia', 'no_hereda', 'Intermedia fallecida; Perla Rosa entra por representación en su rama.'],
-    ['maria-amparo', 'no_hereda', 'Intermedia fallecida; Bernardo Martín entra por representación en su rama.'],
-    ['jose-vicente', 'no_hereda', 'Intermedio fallecido; Jocelyn y Mayra entran por representación en su rama.'],
-    ['victor-manuel-martin', 'posible_heredero', 'Heredero determinado por doble vocación sucesoral: línea Vincenzo/Vicente vía María Rosa y línea Paolo/Paulino vía Pedro Pablo.'],
-    ['perla-rosa', 'posible_heredero', 'Heredera determinada por representación en la rama de Rosa Julia, con doble línea familiar Vincenzo/Vicente y Paolo/Paulino.'],
-    ['bernardo-martin', 'posible_heredero', 'Heredero determinado por la rama Domingo Ramón -> María Amparo dentro de la línea Vincenzo/Vicente.'],
-    ['jocelyn', 'posible_heredero', 'Heredera determinada por la rama Domingo Ramón -> José Vicente dentro de la línea Vincenzo/Vicente.'],
-    ['mayra', 'posible_heredero', 'Heredera determinada por la rama Domingo Ramón -> José Vicente dentro de la línea Vincenzo/Vicente.'],
-  ];
-
-  for (const [id, status, reason] of caseStatuses) {
-    await query(
-      `UPDATE sienna_family_members
-       SET inheritance_status = :status, inheritance_reason = :reason
-       WHERE id = :id`,
-      { id, status, reason }
-    );
-  }
+  await query(
+    `UPDATE evidence_documents ed
+     JOIN sienna_family_members sfm ON LOWER(TRIM(ed.related_heir_name)) = LOWER(TRIM(sfm.name))
+     SET ed.related_member_id = sfm.id
+     WHERE ed.related_member_id IS NULL AND ed.related_heir_name IS NOT NULL`
+  );
 
   const existingMembers = await query('SELECT COUNT(*) AS count FROM sienna_family_members');
-  if (Number(existingMembers[0]?.count || 0) === 0) {
+  const existingHeirs = await query('SELECT COUNT(*) AS count FROM confirmed_heirs');
+  const seedCaseData = ['1', 'true', 'yes', 'on'].includes(String(process.env.SEED_CASE_DATA || 'false').toLowerCase());
+  if (seedCaseData && Number(existingMembers[0]?.count || 0) === 0 && Number(existingHeirs[0]?.count || 0) === 0) {
     const members = [
-      ['domenico', null, 'Domenico (Domingo) Sangiovanni', '17/12/1845', null, 'María Rosa Grisolia', '18/07/1852', false, 10],
-      ['maria-magdalena', 'domenico', 'María Magdalena Sangiovanni', '27/04/1874', '07/05/1935', 'Vincenzo de Paola', null, false, 10],
-      ['vincenzo', 'domenico', 'Vincenzo (Vicente) Sangiovanni', '13/08/1880', '07/02/1958', 'María Balbina Pérez Álvarez', null, false, 20],
-      ['paolo', 'domenico', 'Paolo (Paulino) Sangiovanni', '17/01/1885', '31/03/1936', 'Simona Simo', null, false, 30],
-      ['alessandro', 'maria-magdalena', 'Alessandro de Paola Sangiovanni', '18/10/1911', '14/01/1998', null, null, true, 10],
-      ['maria-rosa', 'vincenzo', 'María Rosa Sangiovanni Pérez', '18/02/1906', '07/08/1981', 'Pedro Pablo Sangiovanni Simo', null, false, 10],
-      ['domingo-ramon', 'vincenzo', 'Domingo Ramón Sangiovanni Pérez', '11/07/1907', '03/09/1981', 'María Francisca Gesualdo', null, false, 20],
-      ['pedro-pablo', 'paolo', 'Pedro Pablo Sangiovanni Simo', '29/10/1906', '04/10/1986', null, null, false, 10],
-      ['victor-manuel', 'maria-rosa', 'Víctor Manuel Sangiovanni Sangiovanni', '29/10/1932', '21/10/2007', 'Ana Julia Rodríguez', null, false, 10],
-      ['maria-amparo', 'domingo-ramon', 'María Amparo Sangiovanni Gesualdo', '30/10/1929', '15/01/2004', 'Bernardo Edmundo Lizardo Fernández', null, false, 10],
-      ['jose-vicente', 'domingo-ramon', 'José Vicente Sangiovanni Gesualdo', '19/04/1932', '24/04/1976', 'Ozema Báez', null, false, 20],
-      ['rosa-julia', 'victor-manuel', 'Rosa Julia Sangiovanni Rodríguez', '15/04/1963', '04/10/2024', 'Francisco Brea', null, false, 10],
-      ['victor-manuel-martin', 'victor-manuel', 'Víctor Manuel Martín Sangiovanni Rodríguez', '08/11/1966', null, null, null, false, 20],
-      ['bernardo-martin', 'maria-amparo', 'Bernardo Martín Lizardo Sangiovanni', '28/10/1966', null, null, null, false, 10],
-      ['jocelyn', 'jose-vicente', 'Jocelyn del Jesús Sangiovanni Báez', '06/10/1963', null, null, null, false, 10],
-      ['mayra', 'jose-vicente', 'Mayra Josefina Sangiovanni Báez', '20/11/1965', null, null, null, false, 20],
-      ['perla-rosa', 'rosa-julia', 'Perla Rosa Brea Sangiovanni', '30/04/1989', null, null, null, false, 10],
+      ['domenico', null, 'Domenico (Domingo) Sangiovanni', '17/12/1845', null, null, 'María Rosa Grisolia', '18/07/1852', false, 10],
+      ['maria-magdalena', 'domenico', 'María Magdalena Sangiovanni', '27/04/1874', '07/05/1935', null, 'Vincenzo de Paola', null, false, 10],
+      ['vincenzo', 'domenico', 'Vincenzo (Vicente) Sangiovanni', '13/08/1880', '07/02/1958', null, 'María Balbina Pérez Álvarez', null, false, 20],
+      ['paolo', 'domenico', 'Paolo (Paulino) Sangiovanni', '17/01/1885', '31/03/1936', null, 'Simona Simo', null, false, 30],
+      ['alessandro', 'maria-magdalena', 'Alessandro de Paola Sangiovanni', '18/10/1911', '14/01/1998', null, null, null, true, 10],
+      ['maria-rosa', 'vincenzo', 'María Rosa Sangiovanni Pérez', '18/02/1906', '07/08/1981', 'pedro-pablo', 'Pedro Pablo Sangiovanni Simo', null, false, 10],
+      ['domingo-ramon', 'vincenzo', 'Domingo Ramón Sangiovanni Pérez', '11/07/1907', '03/09/1981', null, 'María Francisca Gesualdo', null, false, 20],
+      ['pedro-pablo', 'paolo', 'Pedro Pablo Sangiovanni Simo', '29/10/1906', '04/10/1986', 'maria-rosa', null, null, false, 10],
+      ['victor-manuel', 'maria-rosa', 'Víctor Manuel Sangiovanni Sangiovanni', '29/10/1932', '21/10/2007', null, 'Ana Julia Rodríguez', null, false, 10],
+      ['maria-amparo', 'domingo-ramon', 'María Amparo Sangiovanni Gesualdo', '30/10/1929', '15/01/2004', null, 'Bernardo Edmundo Lizardo Fernández', null, false, 10],
+      ['jose-vicente', 'domingo-ramon', 'José Vicente Sangiovanni Gesualdo', '19/04/1932', '24/04/1976', null, 'Ozema Báez', null, false, 20],
+      ['rosa-julia', 'victor-manuel', 'Rosa Julia Sangiovanni Rodríguez', '15/04/1963', '04/10/2024', null, 'Francisco Brea', null, false, 10],
+      ['victor-manuel-martin', 'victor-manuel', 'Víctor Manuel Martín Sangiovanni Rodríguez', '08/11/1966', null, null, null, null, false, 20],
+      ['bernardo-martin', 'maria-amparo', 'Bernardo Martín Lizardo Sangiovanni', '28/10/1966', null, null, null, null, false, 10],
+      ['jocelyn', 'jose-vicente', 'Jocelyn del Jesús Sangiovanni Báez', '06/10/1963', null, null, null, null, false, 10],
+      ['mayra', 'jose-vicente', 'Mayra Josefina Sangiovanni Báez', '20/11/1965', null, null, null, null, false, 20],
+      ['perla-rosa', 'rosa-julia', 'Perla Rosa Brea Sangiovanni', '30/04/1989', null, null, null, null, false, 10],
     ];
 
     for (const member of members) {
       await query(
         `INSERT INTO sienna_family_members
-         (id, parent_id, name, birth, death, spouse, spouse_birth, is_highlighted_ancestor, sort_order)
-         VALUES (:id, :parentId, :name, :birth, :death, :spouse, :spouseBirth, :highlighted, :sortOrder)`,
+         (id, parent_id, name, birth, death, spouse_member_id, spouse, spouse_birth, is_highlighted_ancestor, sort_order)
+         VALUES (:id, :parentId, :name, :birth, :death, :spouseMemberId, :spouse, :spouseBirth, :highlighted, :sortOrder)`,
         {
           id: member[0],
           parentId: member[1],
           name: member[2],
           birth: member[3],
           death: member[4],
-          spouse: member[5],
-          spouseBirth: member[6],
-          highlighted: Boolean(member[7]),
-          sortOrder: member[8],
+          spouseMemberId: member[5],
+          spouse: member[6],
+          spouseBirth: member[7],
+          highlighted: Boolean(member[8]),
+          sortOrder: member[9],
         }
       );
     }
@@ -327,7 +360,8 @@ app.post('/api/auth/signup', async (req, res) => {
 });
 
 app.post('/api/auth/signin', async (req, res) => {
-  const { email, password } = req.body || {};
+  const { password } = req.body || {};
+  const email = String(req.body?.email || '').trim().toLowerCase();
   const rows = await query('SELECT * FROM profiles WHERE email = :email LIMIT 1', { email });
   const profile = rows[0];
   if (!profile || !(await bcrypt.compare(password || '', profile.password_hash))) {
@@ -371,22 +405,49 @@ app.get('/api/settings', requireAuth, async (_req, res) => {
   const rows = await query('SELECT setting_key, setting_value FROM app_settings');
   res.json({
     settings: rows.reduce((acc, row) => {
-      acc[row.setting_key] = row.setting_value;
+      if (row.setting_key === 'sienna_case_config' && row.setting_value) {
+        try {
+          acc[row.setting_key] = JSON.parse(row.setting_value);
+        } catch {
+          acc[row.setting_key] = null;
+        }
+      } else {
+        acc[row.setting_key] = row.setting_value;
+      }
       return acc;
     }, {}),
   });
 });
 
 app.put('/api/settings', requireAuth, requireAdmin, async (req, res) => {
-  const rawFee = Number(req.body?.lawyer_fee_percentage || 0);
-  const lawyerFeePercentage = Math.min(100, Math.max(0, rawFee));
-  await query(
-    `INSERT INTO app_settings (setting_key, setting_value, updated_by)
-     VALUES ('lawyer_fee_percentage', :value, :updatedBy)
-     ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_by = VALUES(updated_by)`,
-    { value: String(lawyerFeePercentage), updatedBy: req.user.id }
-  );
-  res.json({ ok: true, settings: { lawyer_fee_percentage: lawyerFeePercentage } });
+  const resultSettings = {};
+  if ('lawyer_fee_percentage' in (req.body || {})) {
+    const rawFee = Number(req.body?.lawyer_fee_percentage || 0);
+    const lawyerFeePercentage = Math.min(100, Math.max(0, rawFee));
+    await query(
+      `INSERT INTO app_settings (setting_key, setting_value, updated_by)
+       VALUES ('lawyer_fee_percentage', :value, :updatedBy)
+       ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_by = VALUES(updated_by)`,
+      { value: String(lawyerFeePercentage), updatedBy: req.user.id }
+    );
+    resultSettings.lawyer_fee_percentage = lawyerFeePercentage;
+  }
+  if ('sienna_case_config' in (req.body || {})) {
+    if (!req.body.sienna_case_config || typeof req.body.sienna_case_config !== 'object' || Array.isArray(req.body.sienna_case_config)) {
+      return res.status(400).json({ message: 'sienna_case_config debe ser un objeto JSON válido' });
+    }
+    await query(
+      `INSERT INTO app_settings (setting_key, setting_value, updated_by)
+       VALUES ('sienna_case_config', :value, :updatedBy)
+       ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_by = VALUES(updated_by)`,
+      { value: JSON.stringify(req.body.sienna_case_config), updatedBy: req.user.id }
+    );
+    resultSettings.sienna_case_config = req.body.sienna_case_config;
+  }
+  res.json({
+    ok: true,
+    settings: resultSettings,
+  });
 });
 
 app.get('/api/profiles/me', requireAuth, async (req, res) => {
@@ -514,14 +575,14 @@ app.get('/api/page-visits', requireAuth, requireAdmin, async (_req, res) => {
 
 app.get('/api/confirmed-heirs', requireAuth, async (_req, res) => {
   const heirs = await query(
-    `SELECT h.id, h.heir_name, h.relationship_summary, h.line_vincenzo, h.line_paolo,
+    `SELECT h.id, h.sienna_member_id, h.heir_name, h.relationship_summary, h.line_vincenzo, h.line_paolo,
             h.status, h.notes, h.photo_file_name, h.photo_file_type, h.photo_data,
             h.inheritance_amount, h.created_by, h.updated_by, h.created_at, h.updated_at,
             creator.email AS created_by_email, creator.full_name AS created_by_name,
             updater.email AS updated_by_email, updater.full_name AS updated_by_name,
             COUNT(ed.id) AS evidence_count
      FROM confirmed_heirs h
-     LEFT JOIN evidence_documents ed ON ed.related_heir_name = h.heir_name
+     LEFT JOIN evidence_documents ed ON ed.related_heir_name = h.heir_name OR ed.related_member_id = h.sienna_member_id
      LEFT JOIN profiles creator ON creator.id = h.created_by
      LEFT JOIN profiles updater ON updater.id = h.updated_by
      GROUP BY h.id
@@ -541,6 +602,8 @@ app.get('/api/confirmed-heirs', requireAuth, async (_req, res) => {
 
 app.put('/api/confirmed-heirs/:id', requireAuth, async (req, res) => {
   const {
+    sienna_member_id,
+    heir_name,
     relationship_summary,
     line_vincenzo,
     line_paolo,
@@ -552,9 +615,15 @@ app.put('/api/confirmed-heirs/:id', requireAuth, async (req, res) => {
     inheritance_amount,
   } = req.body || {};
 
+  if (!heir_name || !String(heir_name).trim()) {
+    return res.status(400).json({ message: 'El nombre del heredero es requerido' });
+  }
+
   await query(
     `UPDATE confirmed_heirs
-     SET relationship_summary = :relationshipSummary,
+     SET sienna_member_id = :siennaMemberId,
+         heir_name = :heirName,
+         relationship_summary = :relationshipSummary,
          line_vincenzo = :lineVincenzo,
          line_paolo = :linePaolo,
          status = :status,
@@ -567,6 +636,8 @@ app.put('/api/confirmed-heirs/:id', requireAuth, async (req, res) => {
      WHERE id = :id`,
     {
       id: req.params.id,
+      siennaMemberId: sienna_member_id || null,
+      heirName: String(heir_name).trim(),
       relationshipSummary: relationship_summary || null,
       lineVincenzo: Boolean(line_vincenzo),
       linePaolo: Boolean(line_paolo),
@@ -585,6 +656,7 @@ app.put('/api/confirmed-heirs/:id', requireAuth, async (req, res) => {
 
 app.post('/api/confirmed-heirs', requireAuth, async (req, res) => {
   const {
+    sienna_member_id,
     heir_name,
     relationship_summary,
     line_vincenzo,
@@ -601,14 +673,15 @@ app.post('/api/confirmed-heirs', requireAuth, async (req, res) => {
 
   await query(
     `INSERT INTO confirmed_heirs (
-       id, heir_name, relationship_summary, line_vincenzo, line_paolo, status, notes,
+       id, sienna_member_id, heir_name, relationship_summary, line_vincenzo, line_paolo, status, notes,
        photo_file_name, photo_file_type, photo_data, inheritance_amount, created_by, updated_by
      )
      VALUES (
-       :id, :heirName, :relationshipSummary, :lineVincenzo, :linePaolo, :status, :notes,
+       :id, :siennaMemberId, :heirName, :relationshipSummary, :lineVincenzo, :linePaolo, :status, :notes,
        :photoFileName, :photoFileType, :photoData, :inheritanceAmount, :createdBy, :updatedBy
      )
      ON DUPLICATE KEY UPDATE
+       sienna_member_id = VALUES(sienna_member_id),
        relationship_summary = VALUES(relationship_summary),
        line_vincenzo = VALUES(line_vincenzo),
        line_paolo = VALUES(line_paolo),
@@ -621,6 +694,7 @@ app.post('/api/confirmed-heirs', requireAuth, async (req, res) => {
        updated_by = VALUES(updated_by)`,
     {
       id: randomUUID(),
+      siennaMemberId: sienna_member_id || null,
       heirName: heir_name,
       relationshipSummary: relationship_summary || null,
       lineVincenzo: Boolean(line_vincenzo),
@@ -641,7 +715,7 @@ app.post('/api/confirmed-heirs', requireAuth, async (req, res) => {
 
 app.get('/api/sienna-family-members', requireAuth, async (_req, res) => {
   const members = await query(
-    `SELECT sfm.id, sfm.parent_id, sfm.relationship_to_parent, sfm.name, sfm.birth, sfm.death, sfm.spouse, sfm.spouse_birth,
+    `SELECT sfm.id, sfm.parent_id, sfm.relationship_to_parent, sfm.name, sfm.birth, sfm.death, sfm.spouse_member_id, sfm.spouse, sfm.spouse_birth,
             sfm.inheritance_status, sfm.inheritance_reason, sfm.is_highlighted_ancestor, sfm.sort_order,
             sfm.created_by, sfm.updated_by, sfm.created_at, sfm.updated_at,
             creator.email AS created_by_email, creator.full_name AS created_by_name,
@@ -669,6 +743,7 @@ app.post('/api/sienna-family-members', requireAuth, async (req, res) => {
     name,
     birth,
     death,
+    spouse_member_id,
     spouse,
     spouse_birth,
     inheritance_status,
@@ -680,13 +755,21 @@ app.post('/api/sienna-family-members', requireAuth, async (req, res) => {
   if (!name) return res.status(400).json({ message: 'El nombre del miembro es requerido' });
 
   const memberId = id || randomUUID();
+  let sanitizedSpouseMemberId = spouse_member_id || null;
+  if (sanitizedSpouseMemberId === memberId) sanitizedSpouseMemberId = null;
+  if (sanitizedSpouseMemberId) {
+    const spouseRows = await query('SELECT id FROM sienna_family_members WHERE id = :id LIMIT 1', {
+      id: sanitizedSpouseMemberId,
+    });
+    if (!spouseRows.length) sanitizedSpouseMemberId = null;
+  }
   await query(
     `INSERT INTO sienna_family_members (
-       id, parent_id, relationship_to_parent, name, birth, death, spouse, spouse_birth,
+       id, parent_id, relationship_to_parent, name, birth, death, spouse_member_id, spouse, spouse_birth,
        inheritance_status, inheritance_reason, is_highlighted_ancestor, sort_order, created_by, updated_by
      )
      VALUES (
-       :id, :parentId, :relationshipToParent, :name, :birth, :death, :spouse, :spouseBirth,
+       :id, :parentId, :relationshipToParent, :name, :birth, :death, :spouseMemberId, :spouse, :spouseBirth,
        :inheritanceStatus, :inheritanceReason, :highlighted, :sortOrder, :createdBy, :updatedBy
      )
      ON DUPLICATE KEY UPDATE
@@ -695,6 +778,7 @@ app.post('/api/sienna-family-members', requireAuth, async (req, res) => {
        name = VALUES(name),
        birth = VALUES(birth),
        death = VALUES(death),
+      spouse_member_id = VALUES(spouse_member_id),
        spouse = VALUES(spouse),
        spouse_birth = VALUES(spouse_birth),
        inheritance_status = VALUES(inheritance_status),
@@ -709,6 +793,7 @@ app.post('/api/sienna-family-members', requireAuth, async (req, res) => {
       name,
       birth: birth || null,
       death: death || null,
+      spouseMemberId: sanitizedSpouseMemberId,
       spouse: spouse || null,
       spouseBirth: spouse_birth || null,
       inheritanceStatus: ['posible_heredero', 'no_hereda', 'requiere_revision', 'confirmado'].includes(inheritance_status) ? inheritance_status : 'requiere_revision',
@@ -720,19 +805,22 @@ app.post('/api/sienna-family-members', requireAuth, async (req, res) => {
     }
   );
 
-  res.status(201).json({ ok: true, member: { id: memberId, ...req.body } });
+  const rows = await query('SELECT * FROM sienna_family_members WHERE id = :id LIMIT 1', { id: memberId });
+  res.status(201).json({ ok: true, member: rows[0] || null });
 });
 
-app.delete('/api/sienna-family-members/:id', requireAuth, async (req, res) => {
+app.delete('/api/sienna-family-members/:id', requireAuth, requireAdmin, async (req, res) => {
   await query('UPDATE sienna_family_members SET parent_id = NULL WHERE parent_id = :id', { id: req.params.id });
+  await query('UPDATE sienna_family_members SET spouse_member_id = NULL WHERE spouse_member_id = :id', { id: req.params.id });
   await query('DELETE FROM sienna_family_members WHERE id = :id', { id: req.params.id });
   res.json({ ok: true });
 });
 
 app.get('/api/evidence-documents', requireAuth, async (_req, res) => {
   const documents = await query(
-    `SELECT id, title, document_type, primary_person, event_date, event_place,
-            father_name, mother_name, spouse_name, related_heir_name, confirms_heir,
+    `SELECT id, title, document_type, primary_member_id, primary_person, event_date, event_place,
+            father_member_id, father_name, mother_member_id, mother_name, spouse_member_id, spouse_name,
+            related_member_id, related_heir_name, confirms_heir,
             people_involved, extracted_text, notes, file_name, file_type, file_data,
             created_by, created_at, updated_at
      FROM evidence_documents
@@ -743,6 +831,15 @@ app.get('/api/evidence-documents', requireAuth, async (_req, res) => {
     documents: documents.map((document) => ({
       ...document,
       confirms_heir: Boolean(document.confirms_heir),
+      people_involved: (() => {
+        if (!document.people_involved) return [];
+        try {
+          const parsed = JSON.parse(document.people_involved);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [];
+        }
+      })(),
     })),
   });
 });
@@ -751,12 +848,17 @@ app.post('/api/evidence-documents', requireAuth, async (req, res) => {
   const {
     title,
     document_type,
+    primary_member_id,
     primary_person,
     event_date,
     event_place,
+    father_member_id,
     father_name,
+    mother_member_id,
     mother_name,
+    spouse_member_id,
     spouse_name,
+    related_member_id,
     related_heir_name,
     confirms_heir,
     people_involved,
@@ -773,25 +875,30 @@ app.post('/api/evidence-documents', requireAuth, async (req, res) => {
 
   await query(
     `INSERT INTO evidence_documents (
-       id, title, document_type, primary_person, event_date, event_place,
-       father_name, mother_name, spouse_name, related_heir_name, confirms_heir,
+       id, title, document_type, primary_member_id, primary_person, event_date, event_place,
+       father_member_id, father_name, mother_member_id, mother_name, spouse_member_id, spouse_name, related_member_id, related_heir_name, confirms_heir,
        people_involved, extracted_text, notes, file_name, file_type, file_data, created_by, updated_by
      )
      VALUES (
-       :id, :title, :documentType, :primaryPerson, :eventDate, :eventPlace,
-       :fatherName, :motherName, :spouseName, :relatedHeirName, :confirmsHeir,
+       :id, :title, :documentType, :primaryMemberId, :primaryPerson, :eventDate, :eventPlace,
+       :fatherMemberId, :fatherName, :motherMemberId, :motherName, :spouseMemberId, :spouseName, :relatedMemberId, :relatedHeirName, :confirmsHeir,
        :peopleInvolved, :extractedText, :notes, :fileName, :fileType, :fileData, :createdBy, :updatedBy
      )`,
     {
       id: randomUUID(),
       title,
       documentType: document_type,
+      primaryMemberId: primary_member_id || null,
       primaryPerson: primary_person || null,
       eventDate: event_date || null,
       eventPlace: event_place || null,
+      fatherMemberId: father_member_id || null,
       fatherName: father_name || null,
+      motherMemberId: mother_member_id || null,
       motherName: mother_name || null,
+      spouseMemberId: spouse_member_id || null,
       spouseName: spouse_name || null,
+      relatedMemberId: related_member_id || null,
       relatedHeirName: related_heir_name || null,
       confirmsHeir: Boolean(confirms_heir),
       peopleInvolved: JSON.stringify(Array.isArray(people_involved) ? people_involved : []),
@@ -805,12 +912,12 @@ app.post('/api/evidence-documents', requireAuth, async (req, res) => {
     }
   );
 
-  if (related_heir_name && confirms_heir) {
+  if ((related_heir_name || related_member_id) && confirms_heir) {
     await query(
       `UPDATE confirmed_heirs
        SET status = 'confirmado', updated_by = :updatedBy
-       WHERE heir_name = :heirName`,
-      { heirName: related_heir_name, updatedBy: req.user.id }
+       WHERE heir_name = :heirName OR sienna_member_id = :memberId`,
+      { heirName: related_heir_name || '', memberId: related_member_id || '', updatedBy: req.user.id }
     );
   }
 
@@ -820,6 +927,49 @@ app.post('/api/evidence-documents', requireAuth, async (req, res) => {
 app.delete('/api/evidence-documents/:id', requireAuth, async (req, res) => {
   await query('DELETE FROM evidence_documents WHERE id = :id', { id: req.params.id });
   res.json({ ok: true });
+});
+
+app.get('/api/sienna-calculation-snapshots', requireAuth, async (_req, res) => {
+  const snapshots = await query(
+    `SELECT id, estate_amount, lawyer_fee_percentage, distributable_amount, members_hash, payload_json, created_by, created_at
+     FROM sienna_calculation_snapshots
+     ORDER BY created_at DESC
+     LIMIT 50`
+  );
+  res.json({ snapshots });
+});
+
+app.get('/api/sienna-calculation-snapshots/latest', requireAuth, async (_req, res) => {
+  const rows = await query(
+    `SELECT id, estate_amount, lawyer_fee_percentage, distributable_amount, members_hash, payload_json, created_by, created_at
+     FROM sienna_calculation_snapshots
+     ORDER BY created_at DESC
+     LIMIT 1`
+  );
+  res.json({ snapshot: rows[0] || null });
+});
+
+app.post('/api/sienna-calculation-snapshots', requireAuth, async (req, res) => {
+  const { estate_amount, lawyer_fee_percentage, distributable_amount, members_hash, payload_json } = req.body || {};
+  const snapshotId = randomUUID();
+  await query(
+    `INSERT INTO sienna_calculation_snapshots (
+       id, estate_amount, lawyer_fee_percentage, distributable_amount, members_hash, payload_json, created_by
+     )
+     VALUES (
+       :id, :estateAmount, :lawyerFeePercentage, :distributableAmount, :membersHash, :payloadJson, :createdBy
+     )`,
+    {
+      id: snapshotId,
+      estateAmount: Number(estate_amount || 0),
+      lawyerFeePercentage: Number(lawyer_fee_percentage || 0),
+      distributableAmount: Number(distributable_amount || 0),
+      membersHash: members_hash || null,
+      payloadJson: payload_json || null,
+      createdBy: req.user.id,
+    }
+  );
+  res.status(201).json({ ok: true, snapshot_id: snapshotId });
 });
 
 if (fs.existsSync(distPath)) {

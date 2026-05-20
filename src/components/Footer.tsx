@@ -6,7 +6,7 @@ const Footer = () => {
 
   return (
     <footer className="mt-12 bg-legal-blue py-6 text-white">
-      <div className="container mx-auto px-4">
+      <div className="app-shell">
         <div className="flex flex-col items-center justify-between gap-4 md:flex-row md:items-start">
           <div className="text-center md:text-left">
             <h3 className="font-serif text-xl font-bold">HerenciaRD</h3>

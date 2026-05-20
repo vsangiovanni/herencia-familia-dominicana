@@ -204,28 +204,31 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
   },
   'documentos-probatorios': {
     title: 'Documentos probatorios',
+    intro: 'Guía simple: 1) elige persona, 2) sube acta, 3) guarda. Si no estás seguro, no inventes datos.',
     sections: [
       {
-        title: 'Registro',
+        title: 'Paso a paso (sin fallar)',
         items: [
-          'Flujo: cargue documento, seleccione tipo y vincule al miembro titular del árbol.',
-          'Miembro titular y miembro relacionado son el mismo nodo para evitar duplicidades.',
-          'Marque si el documento confirma al heredero vinculado para el semáforo Sienna.',
+          'Paso 1: seleccione el miembro titular (la persona principal del acta).',
+          'Paso 2: cargue el archivo y complete tipo de documento.',
+          'Paso 3: guarde. Luego revise si quedó vinculado al miembro correcto.',
+          'Regla de oro: NO cree otra persona con nombre parecido. Use el miembro que ya existe.',
         ],
       },
       {
-        title: 'Parentescos del acta',
+        title: 'Padre / madre / cónyuge (muy importante)',
         items: [
-          'Padre, madre y cónyuge se seleccionan desde miembros existentes, no por texto libre.',
-          'Así toda la evidencia queda trazable y conectada al árbol sin crear personas duplicadas.',
-          'Use Recalcular parentescos automáticos cuando cambie el titular o se actualice el árbol.',
+          'Siempre elija padre, madre y cónyuge desde la lista; no los escriba a mano si ya existen.',
+          'Si cambia el titular, use Recalcular parentescos automáticos.',
+          'Si un parentesco no existe en el árbol, primero créelo en Miembros del Árbol y después vuelva aquí.',
         ],
       },
       {
-        title: 'OCR / texto',
+        title: 'OCR (lectura automática)',
         items: [
-          'La interpretación OCR sugiere datos, pero siempre valide antes de guardar.',
-          'El texto transcrito sirve como soporte, no reemplaza la vinculación por miembros.',
+          'El OCR ayuda, pero se equivoca. Revise todo antes de guardar.',
+          'Nunca confíe ciegamente en el OCR para nombres o fechas.',
+          'El texto OCR es apoyo; la verdad del sistema es la vinculación al miembro del árbol.',
         ],
       },
     ],
@@ -256,33 +259,91 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
   },
   'sienna-miembros': {
     title: 'Miembros del árbol',
-    intro: 'Registro de personas y vínculos. El sistema calcula si heredan y el % al guardar.',
+    intro: 'Guía anti-errores: aquí se crean y conectan personas. Si conectas mal un nodo, todo el reparto sale mal.',
     sections: [
       {
-        title: 'Conectar al árbol',
+        title: 'Agregar miembro (campo por campo)',
         items: [
-          'Nombre: obligatorio.',
-          'Conectar debajo de: el ascendiente directo en el árbol (o raíz si no tiene superior).',
-          'Parentesco con el superior: hijo, hija, cónyuge, etc.',
-          'Fechas y cónyuge: necesarios para representación y doble filiación.',
+          'Nombre: nombre completo de la persona. Es obligatorio.',
+          'Conectar debajo de: quién es su superior directo en el árbol. Si no tiene superior, usa Raíz.',
+          'Parentesco con el superior: relación con ese superior (hijo, hija, cónyuge, padre, madre u otro).',
+          'Nacimiento: fecha de nacimiento (si se conoce). Ayuda a validar coherencia del árbol.',
+          'Defunción: fecha de fallecimiento (si aplica). Impacta la representación sucesoral.',
+          'Cónyuge: nombre del cónyuge de esa persona (si aplica) para entender cruces de línea.',
+          'Nacimiento del cónyuge: dato opcional del cónyuge para contexto documental.',
+          'Orden entre hermanos: número para ordenar visualmente entre personas del mismo nivel.',
+          'Estado hereditario: clasificación operativa (requiere revisión, posible heredero, no hereda o confirmado).',
+          'Razón / explicación: por qué esa clasificación aplica en ese miembro.',
+          'Resaltar nodo: solo resalta visualmente ese miembro en el árbol para ubicarlo rápido; no cambia porcentajes, montos ni quién hereda.',
         ],
       },
       {
-        title: 'Estado hereditario (desplegable)',
+        title: 'Paso a paso para crear/editar',
         items: [
-          'Etiqueta administrativa. Al guardar, prevalece la Evaluación sugerida automática.',
-          'Requiere revisión: el motor no pudo clasificar (faltan datos).',
-          'Posible heredero: tiene cuota en el reparto (%).',
-          'No hereda: causante, enlace o intermedio que transmite a descendientes.',
-          'Confirmado: único valor que fuerza manualmente “sí hereda” aunque el motor diga otra cosa.',
+          'Paso 1: escribe el nombre (obligatorio).',
+          'Paso 2: en Conectar debajo de, elige su superior correcto (padre/madre o raíz).',
+          'Paso 3: define parentesco con el superior (hijo, hija, cónyuge, etc.).',
+          'Paso 4: guarda y valida en la tabla que quedó en la rama correcta.',
         ],
       },
       {
-        title: 'Tabla y búsqueda',
+        title: 'Estado hereditario (en español simple)',
         items: [
-          'Línea parental: ruta completa desde la raíz.',
-          '¿Hereda?: resultado con % si aplica.',
-          'El simulador muestra cómo cambian los % antes de guardar; el monto en RD$ se define en Árbol Sienna.',
+          'Requiere revisión: faltan datos, no está claro.',
+          'Posible heredero: sí tiene pinta de heredar.',
+          'No hereda: es enlace/intermedio o no aplica.',
+          'Confirmado: se fuerza manualmente. Úsalo solo si estás seguro.',
+          'Si dudas, deja Requiere revisión y corrige datos primero.',
+        ],
+      },
+      {
+        title: 'Chequeo rápido antes de seguir',
+        items: [
+          'Busca la persona en la tabla y revisa Línea parental: debe verse lógica.',
+          'Revisa ¿Hereda? y Notas para detectar errores de conexión.',
+          'Usa el simulador para ver impacto en %. El monto en dinero se calcula en Árbol Sienna.',
+          'Si algo se ve raro, no sigas: corrige el nodo antes de cargar más datos.',
+        ],
+      },
+    ],
+  },
+  'sienna-miembros-agregar': {
+    title: 'Ayuda: Agregar Miembro',
+    intro: 'Esta ayuda es solo para crear o editar miembros correctamente.',
+    sections: [
+      {
+        title: 'Que llenar en orden',
+        items: [
+          'Nombre: obligatorio. Escriba el nombre completo de la persona.',
+          'Conectar debajo de: seleccione su superior directo en el árbol. Si no tiene, use Raíz.',
+          'Parentesco con el superior: relación exacta con ese superior (hijo, hija, cónyuge, etc.).',
+          'Fechas (nacimiento/defunción): si las conoce, colóquelas para evitar errores de representación.',
+          'Cónyuge y nacimiento del cónyuge: úselo cuando ese vínculo ayude a explicar cruces de línea.',
+          'Orden entre hermanos: número para ordenar visualmente miembros del mismo nivel.',
+        ],
+      },
+      {
+        title: 'Estado y explicación',
+        items: [
+          'Estado hereditario: úselo con cuidado. Si no está seguro, deje Requiere revisión.',
+          'Razón / explicación: escriba el motivo de la clasificación para dejar trazabilidad.',
+          'Evaluación sugerida: el sistema le muestra una guía automática antes de guardar.',
+        ],
+      },
+      {
+        title: 'Que significa Resaltar nodo',
+        items: [
+          'Resaltar nodo solo pinta ese miembro para ubicarlo rápido en el árbol.',
+          'No cambia quién hereda, ni porcentajes, ni montos.',
+          'Es una ayuda visual, no una regla legal ni de cálculo.',
+        ],
+      },
+      {
+        title: 'Chequeo antes de guardar',
+        items: [
+          'Verifique que quedó debajo del familiar correcto.',
+          'Revise que el parentesco corresponda al superior seleccionado.',
+          'Si tiene dudas, no fuerce Confirmado: guarde como Requiere revisión y valide luego.',
         ],
       },
     ],

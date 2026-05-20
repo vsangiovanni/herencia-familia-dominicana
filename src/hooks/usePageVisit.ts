@@ -15,9 +15,16 @@ const pageNames: PageConfig = {
   '/arbol-genealogico-clasico': 'Árbol Genealógico Clásico',
   '/lineas-familiares': 'Líneas Familiares',
   '/determinacion-herederos': 'Determinación de Herederos',
+  '/calculo-herencias': 'Cálculo de Herencias',
+  '/calculo-filiacion': 'Cálculo por Filiación',
+  '/hallazgos': 'Hallazgos',
+  '/documentos-probatorios': 'Documentos Probatorios',
+  '/sienna/arbol-genealogico': 'Árbol Sienna',
+  '/sienna/miembros-arbol': 'Miembros Árbol Sienna',
   '/sienna/explicacion-herederos': 'Explicación Sienna para Herederos',
   '/perfil': 'Perfil de Usuario',
-  '/admin/usuarios': 'Administración de Usuarios',
+  '/admin-users': 'Panel Administrativo',
+  '/legal': 'Información Legal',
   '/auth': 'Autenticación'
 };
 
@@ -30,17 +37,15 @@ export const usePageVisit = () => {
       if (!user) return;
 
       try {
-        const pageName = pageNames[location.pathname] || 'Página Desconocida';
+        const pageName = pageNames[location.pathname] || location.pathname;
         
         await api.recordPageVisit({
           page_path: location.pathname,
           page_name: pageName,
           user_agent: navigator.userAgent
         });
-
-        console.log('Visita de página registrada:', location.pathname);
       } catch (error) {
-        console.error('Error registrando visita de página:', error);
+        // Evita ruido de consola en producción; no interrumpe la UX.
       }
     };
 

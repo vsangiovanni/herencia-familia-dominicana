@@ -17,4 +17,23 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return;
+
+          if (id.includes("react-router-dom")) return "router";
+          if (id.includes("@tanstack/react-query")) return "query";
+          if (id.includes("@supabase/supabase-js")) return "supabase";
+          if (id.includes("tesseract.js")) return "ocr";
+          if (id.includes("html2canvas")) return "html2canvas";
+          if (id.includes("jspdf")) return "jspdf";
+          if (id.includes("recharts")) return "charts";
+          if (id.includes("@radix-ui") || id.includes("lucide-react")) return "ui-kit";
+          if (id.includes("react") || id.includes("react-dom")) return "react-vendor";
+        },
+      },
+    },
+  },
 });

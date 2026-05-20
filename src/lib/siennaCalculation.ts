@@ -12,9 +12,10 @@ export type SiennaHeirCalculationRow = {
 };
 
 export type SiennaCalculationSnapshotPayload = {
-  version: 1;
+  version: 2;
   heirs: SiennaHeirCalculationRow[];
   notes?: string | null;
+  excluded_heir_ids?: string[];
 };
 
 const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
@@ -37,11 +38,13 @@ export const buildHeirCalculationRows = (
 export const buildCalculationPayload = (
   plan: InheritancePlan,
   distributableAmount: number,
-  notes?: string | null
+  notes?: string | null,
+  excludedHeirIds: string[] = []
 ): SiennaCalculationSnapshotPayload => ({
-  version: 1,
+  version: 2,
   heirs: buildHeirCalculationRows(plan, distributableAmount),
   notes: notes || null,
+  excluded_heir_ids: excludedHeirIds,
 });
 
 export const buildMembersHash = (memberIds: string[]) =>
@@ -49,3 +52,25 @@ export const buildMembersHash = (memberIds: string[]) =>
     .slice()
     .sort((a, b) => a.localeCompare(b))
     .join('|');
+
+export const parseCalculationPayload = (payloadJson?: string | null): SiennaCalculationSnapshotPayload | null => {
+  if (!payloadJson) return null;
+  try {
+    const parsed = JSON.parse(payloadJson);
+    if (!parsed || typeof parsed !== 'object') return null;
+    if (!Array.isArray(parsed.heirs)) return null;
+
+    const excludedHeirs = Array.isArray(parsed.excluded_heir_ids)
+      ? parsed.excluded_heir_ids.filter((id: unknown): id is string => typeof id === 'string')
+      : [];
+
+    return {
+      version: 2,
+      heirs: parsed.heirs as SiennaHeirCalculationRow[],
+      notes: typeof parsed.notes === 'string' ? parsed.notes : null,
+      excluded_heir_ids: excludedHeirs,
+    };
+  } catch {
+    return null;
+  }
+};

@@ -11,7 +11,7 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      <div className="container mx-auto px-4 py-8">
+      <div className="app-shell py-8">
         <div className="relative mb-8 pr-12">
           <div className="absolute right-0 top-0">
             <PageHelp helpKey="dashboard" />

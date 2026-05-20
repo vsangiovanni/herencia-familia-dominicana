@@ -7,7 +7,7 @@ import BackButton from '@/components/BackButton';
 
 const ArbolGenealogicoClasico = () => {
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="app-shell py-8">
       <BackButton />
       
       <DocumentHeader
@@ -16,7 +16,7 @@ const ArbolGenealogicoClasico = () => {
         helpKey="arbol-genealogico-clasico"
       />
       
-      <div className="max-w-[95%] mx-auto">
+      <div className="mx-auto">
         <Card className="mt-6">
           <CardContent className="p-6">
             <div className="bg-white p-4 rounded-md shadow mb-6">

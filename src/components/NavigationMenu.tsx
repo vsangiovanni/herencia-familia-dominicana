@@ -96,6 +96,12 @@ const NavigationMenu = () => {
           >
             Admin Usuarios
           </Link>
+          <Link
+            to="/admin/settings"
+            className="text-gray-900 hover:text-legal-blue px-3 py-2 text-sm font-medium transition-colors"
+          >
+            Settings
+          </Link>
         </>
       )}
     </div>

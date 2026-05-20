@@ -18,6 +18,7 @@ export interface UserPage {
 
 export interface ConfirmedHeir {
   id: string;
+  sienna_member_id?: string | null;
   heir_name: string;
   relationship_summary?: string | null;
   line_vincenzo: boolean;
@@ -35,13 +36,18 @@ export interface EvidenceDocument {
   id?: string;
   title: string;
   document_type: string;
+  primary_member_id?: string | null;
   primary_person?: string | null;
   event_date?: string | null;
   event_place?: string | null;
+  father_member_id?: string | null;
   father_name?: string | null;
+  mother_member_id?: string | null;
   mother_name?: string | null;
+  spouse_member_id?: string | null;
   spouse_name?: string | null;
   related_heir_name?: string | null;
+  related_member_id?: string | null;
   confirms_heir?: boolean;
   people_involved?: string[];
   extracted_text?: string | null;
@@ -53,6 +59,17 @@ export interface EvidenceDocument {
   updated_at?: string | null;
 }
 
+export interface SiennaCalculationSnapshot {
+  id: string;
+  estate_amount: number;
+  lawyer_fee_percentage: number;
+  distributable_amount: number;
+  members_hash?: string | null;
+  payload_json?: string | null;
+  created_by?: string | null;
+  created_at?: string | null;
+}
+
 export interface SiennaFamilyMember {
   id: string;
   parent_id?: string | null;
@@ -60,6 +77,7 @@ export interface SiennaFamilyMember {
   name: string;
   birth?: string | null;
   death?: string | null;
+  spouse_member_id?: string | null;
   spouse?: string | null;
   spouse_birth?: string | null;
   inheritance_status?: "posible_heredero" | "no_hereda" | "requiere_revision" | "confirmado" | null;
@@ -74,6 +92,14 @@ export interface SiennaFamilyMember {
   updated_by_name?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
+}
+
+export interface SiennaCaseConfig {
+  causante_name: string;
+  family_trunk_name: string;
+  legal_criterion_text: string;
+  active_collateral_roots: Array<{ name: string; label: string }>;
+  known_intermediates: Array<{ name: string; reason: string }>;
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -145,9 +171,9 @@ export const api = {
   listPageVisits: () =>
     request<{ visits: any[] }>("/api/page-visits"),
   getSettings: () =>
-    request<{ settings: Record<string, string | number | null> }>("/api/settings"),
-  updateSettings: (data: { lawyer_fee_percentage?: number }) =>
-    request<{ ok: boolean; settings: Record<string, string | number | null> }>("/api/settings", {
+    request<{ settings: Record<string, string | number | boolean | SiennaCaseConfig | null> }>("/api/settings"),
+  updateSettings: (data: { lawyer_fee_percentage?: number; sienna_case_config?: SiennaCaseConfig }) =>
+    request<{ ok: boolean; settings: Record<string, string | number | boolean | SiennaCaseConfig | null> }>("/api/settings", {
       method: "PUT",
       body: JSON.stringify(data),
     }),
@@ -181,4 +207,19 @@ export const api = {
     }),
   deleteSiennaFamilyMember: (id: string) =>
     request<{ ok: boolean }>(`/api/sienna-family-members/${id}`, { method: "DELETE" }),
+  listSiennaCalculationSnapshots: () =>
+    request<{ snapshots: SiennaCalculationSnapshot[] }>("/api/sienna-calculation-snapshots"),
+  getLatestSiennaCalculationSnapshot: () =>
+    request<{ snapshot: SiennaCalculationSnapshot | null }>("/api/sienna-calculation-snapshots/latest"),
+  saveSiennaCalculationSnapshot: (data: {
+    estate_amount: number;
+    lawyer_fee_percentage: number;
+    distributable_amount: number;
+    members_hash?: string;
+    payload_json?: string;
+  }) =>
+    request<{ ok: boolean; snapshot_id: string }>("/api/sienna-calculation-snapshots", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 };

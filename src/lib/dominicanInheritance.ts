@@ -23,7 +23,40 @@ export type InheritancePlan = {
   activeHeirs: InheritanceShare[];
 };
 
-export const caseCausanteName = 'Alessandro de Paola Sangiovanni';
+export type SiennaCaseConfig = {
+  causante_name: string;
+  family_trunk_name: string;
+  legal_criterion_text: string;
+  active_collateral_roots: Array<{ name: string; label: string }>;
+  known_intermediates: Array<{ name: string; reason: string }>;
+};
+
+const defaultCaseConfig: SiennaCaseConfig = {
+  causante_name: 'Alessandro de Paola Sangiovanni',
+  family_trunk_name: 'Domenico (Domingo) Sangiovanni',
+  legal_criterion_text:
+    'Criterio sucesoral dominicano aplicado: primero heredan los descendientes directos del causante; si no existen, se evalúan las ramas colaterales documentadas y los descendientes ocupan el lugar de su ascendiente fallecido por representación. En este expediente, al no existir descendencia directa registrada de Alessandro, la distribución activa se calcula por las ramas Vincenzo/Vicente y Paolo/Paulino, dividiendo cada rama por estirpes y recalculando cuando se agregan nuevos descendientes.',
+  active_collateral_roots: [
+    { name: 'Vincenzo (Vicente) Sangiovanni', label: 'Vincenzo/Vicente' },
+    { name: 'Paolo (Paulino) Sangiovanni', label: 'Paolo/Paulino' },
+  ],
+  known_intermediates: [
+    { name: 'Domenico (Domingo) Sangiovanni', reason: 'Tronco familiar común; sirve para ubicar ramas, no como heredero final.' },
+    { name: 'María Magdalena Sangiovanni', reason: 'Madre del causante Alessandro; rama del causante, no heredera final en este análisis.' },
+    { name: 'Vincenzo (Vicente) Sangiovanni', reason: 'Hermano de la madre del causante; abre una rama sucesoral activa por sus descendientes.' },
+    { name: 'Paolo (Paulino) Sangiovanni', reason: 'Hermano de la madre del causante; abre una rama sucesoral activa por sus descendientes.' },
+    { name: 'María Rosa Sangiovanni Pérez', reason: 'Intermedia fallecida en rama Vincenzo/Vicente y vínculo hacia la doble filiación.' },
+    { name: 'Pedro Pablo Sangiovanni Simo', reason: 'Intermedio fallecido en rama Paolo/Paulino y vínculo hacia la doble filiación.' },
+    { name: 'Domingo Ramón Sangiovanni Pérez', reason: 'Intermedio fallecido en rama Vincenzo/Vicente; transmite representación a sus descendientes.' },
+    { name: 'Víctor Manuel Sangiovanni Sangiovanni', reason: 'Intermedio fallecido; conecta a Víctor Manuel Martín y a Rosa Julia/Perla.' },
+    { name: 'Rosa Julia Sangiovanni Rodríguez', reason: 'Intermedia fallecida; Perla Rosa entra por representación en su rama.' },
+    { name: 'María Amparo Sangiovanni Gesualdo', reason: 'Intermedia fallecida; Bernardo Martín entra por representación en su rama.' },
+    { name: 'José Vicente Sangiovanni Gesualdo', reason: 'Intermedio fallecido; Jocelyn y Mayra entran por representación a sus descendientes.' },
+  ],
+};
+
+let currentCaseConfig: SiennaCaseConfig = defaultCaseConfig;
+export let caseCausanteName = defaultCaseConfig.causante_name;
 
 export const normalizeName = (value: string) =>
   value
@@ -34,30 +67,69 @@ export const normalizeName = (value: string) =>
     .replace(/\s+/g, ' ')
     .trim();
 
-export const activeCollateralRoots = [
-  {
-    name: 'Vincenzo (Vicente) Sangiovanni',
-    label: 'Vincenzo/Vicente',
-  },
-  {
-    name: 'Paolo (Paulino) Sangiovanni',
-    label: 'Paolo/Paulino',
-  },
-];
+export let activeCollateralRoots = defaultCaseConfig.active_collateral_roots;
+export let legalCriterionText = defaultCaseConfig.legal_criterion_text;
+let knownIntermediates = new Map<string, string>();
 
-const knownIntermediates = new Map([
-  [normalizeName('Domenico (Domingo) Sangiovanni'), 'Tronco familiar común; sirve para ubicar ramas, no como heredero final.'],
-  [normalizeName('María Magdalena Sangiovanni'), 'Madre del causante Alessandro; rama del causante, no heredera final en este análisis.'],
-  [normalizeName('Vincenzo (Vicente) Sangiovanni'), 'Hermano de la madre del causante; abre una rama sucesoral activa por sus descendientes.'],
-  [normalizeName('Paolo (Paulino) Sangiovanni'), 'Hermano de la madre del causante; abre una rama sucesoral activa por sus descendientes.'],
-  [normalizeName('María Rosa Sangiovanni Pérez'), 'Intermedia fallecida en rama Vincenzo/Vicente y vínculo hacia la doble filiación.'],
-  [normalizeName('Pedro Pablo Sangiovanni Simo'), 'Intermedio fallecido en rama Paolo/Paulino y vínculo hacia la doble filiación.'],
-  [normalizeName('Domingo Ramón Sangiovanni Pérez'), 'Intermedio fallecido en rama Vincenzo/Vicente; transmite representación a sus descendientes.'],
-  [normalizeName('Víctor Manuel Sangiovanni Sangiovanni'), 'Intermedio fallecido; conecta a Víctor Manuel Martín y a Rosa Julia/Perla.'],
-  [normalizeName('Rosa Julia Sangiovanni Rodríguez'), 'Intermedia fallecida; Perla Rosa entra por representación en su rama.'],
-  [normalizeName('María Amparo Sangiovanni Gesualdo'), 'Intermedia fallecida; Bernardo Martín entra por representación en su rama.'],
-  [normalizeName('José Vicente Sangiovanni Gesualdo'), 'Intermedio fallecido; Jocelyn y Mayra entran por representación en su rama.'],
-]);
+const parseCaseConfig = (raw: unknown): Partial<SiennaCaseConfig> => {
+  if (!raw || typeof raw !== 'object') return {};
+  const data = raw as Record<string, unknown>;
+
+  const parsedRoots = Array.isArray(data.active_collateral_roots)
+    ? data.active_collateral_roots
+        .filter((item): item is { name: string; label: string } => {
+          if (!item || typeof item !== 'object') return false;
+          const candidate = item as Record<string, unknown>;
+          return typeof candidate.name === 'string' && typeof candidate.label === 'string';
+        })
+        .map((item) => ({ name: item.name.trim(), label: item.label.trim() }))
+        .filter((item) => item.name && item.label)
+    : undefined;
+
+  const parsedIntermediates = Array.isArray(data.known_intermediates)
+    ? data.known_intermediates
+        .filter((item): item is { name: string; reason: string } => {
+          if (!item || typeof item !== 'object') return false;
+          const candidate = item as Record<string, unknown>;
+          return typeof candidate.name === 'string' && typeof candidate.reason === 'string';
+        })
+        .map((item) => ({ name: item.name.trim(), reason: item.reason.trim() }))
+        .filter((item) => item.name && item.reason)
+    : undefined;
+
+  return {
+    causante_name: typeof data.causante_name === 'string' && data.causante_name.trim() ? data.causante_name.trim() : undefined,
+    family_trunk_name: typeof data.family_trunk_name === 'string' && data.family_trunk_name.trim() ? data.family_trunk_name.trim() : undefined,
+    legal_criterion_text:
+      typeof data.legal_criterion_text === 'string' && data.legal_criterion_text.trim()
+        ? data.legal_criterion_text.trim()
+        : undefined,
+    active_collateral_roots: parsedRoots && parsedRoots.length > 0 ? parsedRoots : undefined,
+    known_intermediates: parsedIntermediates && parsedIntermediates.length > 0 ? parsedIntermediates : undefined,
+  };
+};
+
+const rebuildDerivedConfig = () => {
+  caseCausanteName = currentCaseConfig.causante_name;
+  activeCollateralRoots = currentCaseConfig.active_collateral_roots;
+  legalCriterionText = currentCaseConfig.legal_criterion_text;
+  knownIntermediates = new Map(
+    currentCaseConfig.known_intermediates.map((item) => [normalizeName(item.name), item.reason])
+  );
+};
+
+export const applySiennaCaseConfig = (raw: unknown) => {
+  const parsed = parseCaseConfig(raw);
+  currentCaseConfig = {
+    ...currentCaseConfig,
+    ...parsed,
+  };
+  rebuildDerivedConfig();
+};
+
+export const getSiennaCaseConfig = (): SiennaCaseConfig => currentCaseConfig;
+
+rebuildDerivedConfig();
 
 const normalizedMemberId = (value: string | null | undefined) => (value || '').trim();
 
@@ -76,17 +148,30 @@ const compactShare = (value: number) => Math.round(value * 1000000) / 1000000;
 
 const byNameKey = (members: SiennaFamilyMember[]) =>
   new Map(members.map((member) => [normalizeName(member.name), member]));
+const byIdKey = (members: SiennaFamilyMember[]) =>
+  new Map(members.map((member) => [normalizedMemberId(member.id), member]));
 
 const directChildrenOf = (members: SiennaFamilyMember[], parentId: string) =>
   members.filter((member) => normalizedMemberId(member.parent_id) === normalizedMemberId(parentId) && isDescendantRelationship(member));
 
-const findSpousePartner = (member: SiennaFamilyMember, membersByName: Map<string, SiennaFamilyMember>) => {
+const findSpousePartner = (
+  member: SiennaFamilyMember,
+  membersByName: Map<string, SiennaFamilyMember>,
+  membersById: Map<string, SiennaFamilyMember>
+) => {
   const memberNameKey = normalizeName(member.name);
+  const spouseByMemberId = member.spouse_member_id
+    ? membersById.get(normalizedMemberId(member.spouse_member_id)) || null
+    : null;
+  if (spouseByMemberId) return spouseByMemberId;
   const spouseByOwnReference = member.spouse ? membersByName.get(normalizeName(member.spouse)) || null : null;
   if (spouseByOwnReference) return spouseByOwnReference;
 
-  for (const candidate of membersByName.values()) {
+  for (const candidate of membersById.values()) {
     if (normalizeName(candidate.name) === memberNameKey) continue;
+    if (normalizedMemberId(candidate.spouse_member_id) === normalizedMemberId(member.id)) {
+      return candidate;
+    }
     if (candidate.spouse && normalizeName(candidate.spouse) === memberNameKey) {
       return candidate;
     }
@@ -150,10 +235,11 @@ const addShare = (
 const descendantsForRepresentation = (
   member: SiennaFamilyMember,
   members: SiennaFamilyMember[],
-  membersByName: Map<string, SiennaFamilyMember>
+  membersByName: Map<string, SiennaFamilyMember>,
+  membersById: Map<string, SiennaFamilyMember>
 ) => {
   const ownChildren = directChildrenOf(members, member.id);
-  const spousePartner = findSpousePartner(member, membersByName);
+  const spousePartner = findSpousePartner(member, membersByName, membersById);
   const spouseChildren = spousePartner ? directChildrenOf(members, spousePartner.id) : [];
 
   return uniqueMembers([...ownChildren, ...spouseChildren]);
@@ -163,6 +249,7 @@ const distributeByRepresentation = (
   member: SiennaFamilyMember,
   members: SiennaFamilyMember[],
   membersByName: Map<string, SiennaFamilyMember>,
+  membersById: Map<string, SiennaFamilyMember>,
   shares: Map<string, InheritanceShare>,
   share: number,
   source: string,
@@ -178,7 +265,7 @@ const distributeByRepresentation = (
     return;
   }
 
-  const descendants = descendantsForRepresentation(member, members, membersByName);
+  const descendants = descendantsForRepresentation(member, members, membersByName, membersById);
   if (!descendants.length) return;
 
   const childShare = share / descendants.length;
@@ -187,6 +274,7 @@ const distributeByRepresentation = (
       child,
       members,
       membersByName,
+      membersById,
       shares,
       childShare,
       source,
@@ -198,6 +286,7 @@ const distributeByRepresentation = (
 
 export const buildDominicanInheritancePlan = (members: SiennaFamilyMember[]): InheritancePlan => {
   const membersByName = byNameKey(members);
+  const membersById = byIdKey(members);
   const causante = membersByName.get(normalizeName(caseCausanteName));
   const sharesById = new Map<string, InheritanceShare>();
 
@@ -210,6 +299,7 @@ export const buildDominicanInheritancePlan = (members: SiennaFamilyMember[]): In
           child,
           members,
           membersByName,
+          membersById,
           sharesById,
           share,
           'Descendencia directa',
@@ -236,6 +326,7 @@ export const buildDominicanInheritancePlan = (members: SiennaFamilyMember[]): In
       root.member,
       members,
       membersByName,
+      membersById,
       sharesById,
       rootShare,
       root.label,
@@ -282,7 +373,7 @@ export const classifyMemberByDominicanLaw = (
     };
   }
 
-  if (isDeceased(member) && descendantsForRepresentation(member, members, byNameKey(members)).length) {
+  if (isDeceased(member) && descendantsForRepresentation(member, members, byNameKey(members), byIdKey(members)).length) {
     return {
       inheritance_status: 'no_hereda',
       inheritance_reason: 'Nodo intermedio fallecido; su cuota se transmite por representación a sus descendientes vivos documentados.',
@@ -295,5 +386,3 @@ export const classifyMemberByDominicanLaw = (
   };
 };
 
-export const legalCriterionText =
-  'Criterio sucesoral dominicano aplicado: primero heredan los descendientes directos del causante; si no existen, se evalúan las ramas colaterales documentadas y los descendientes ocupan el lugar de su ascendiente fallecido por representación. En este expediente, al no existir descendencia directa registrada de Alessandro, la distribución activa se calcula por las ramas Vincenzo/Vicente y Paolo/Paulino, dividiendo cada rama por estirpes y recalculando cuando se agregan nuevos descendientes.';

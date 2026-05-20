@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 
 const Index = () => {
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="app-shell py-8">
       <DocumentHeader 
         title="Árbol Genealógico y Determinación de Herederos" 
         subtitle="Caso Alessandro de Paola Sangiovanni" 

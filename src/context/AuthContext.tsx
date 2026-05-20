@@ -107,7 +107,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (!navigationBlocker.current) {
         navigationBlocker.current = true;
-        navigate("/");
+        navigate("/dashboard");
         setTimeout(() => {
           navigationBlocker.current = false;
         }, 500);
@@ -155,10 +155,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const hasAccess = useCallback((path: string) => {
-    if (path === "/auth" || path === "/perfil") return true;
+    const normalizedPath = (path || "/").split("?")[0].replace(/\/+$/, "") || "/";
+    if (normalizedPath === "/auth" || normalizedPath === "/perfil") return true;
     if (isAdmin) return true;
     if (!isApproved) return false;
-    return true;
+
+    const publicApprovedPaths = new Set(["/", "/dashboard"]);
+    if (publicApprovedPaths.has(normalizedPath)) return true;
+
+    if (userPages.length === 0) return false;
+    return userPages.some((page) => {
+      const normalizedPagePath = (page.path || "/").replace(/\/+$/, "") || "/";
+      return normalizedPagePath === normalizedPath;
+    });
   }, [isAdmin, isApproved, userPages]);
 
   return (

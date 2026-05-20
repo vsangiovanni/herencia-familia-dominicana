@@ -137,14 +137,14 @@ const DeterminacionHerederos = () => {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="app-shell py-8">
       <DocumentHeader
         title="Determinación de Herederos"
         subtitle="Alessandro de Paola Sangiovanni"
         helpKey="determinacion-herederos"
       />
       
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-5xl mx-auto">
         <Card className="mb-8">
           <CardContent className="p-6" ref={contentRef}>
             <div className="mb-6">

@@ -49,6 +49,7 @@ type MemberForm = {
   name: string;
   birth: string;
   death: string;
+  spouse_member_id: string;
   spouse: string;
   spouse_birth: string;
   inheritance_status: 'posible_heredero' | 'no_hereda' | 'requiere_revision' | 'confirmado';
@@ -64,6 +65,7 @@ const emptyForm: MemberForm = {
   name: '',
   birth: '',
   death: '',
+  spouse_member_id: '',
   spouse: '',
   spouse_birth: '',
   inheritance_status: 'requiere_revision',
@@ -77,6 +79,18 @@ const makeId = (name: string) =>
     .replace(/\s+/g, '-')
     .replace(/^-|-$/g, '')
     .slice(0, 70) || 'miembro'}-${Date.now()}`;
+
+const resolveSpouseName = (
+  spouseMemberId: string,
+  members: SiennaFamilyMember[],
+  fallbackName: string
+) => {
+  if (spouseMemberId) {
+    const spouseMember = members.find((member) => member.id === spouseMemberId);
+    if (spouseMember?.name) return spouseMember.name;
+  }
+  return fallbackName;
+};
 
 const determineInheritance = (form: MemberForm, members: SiennaFamilyMember[]) => {
   if (form.inheritance_status !== 'requiere_revision') {
@@ -94,7 +108,8 @@ const determineInheritance = (form: MemberForm, members: SiennaFamilyMember[]) =
     name: form.name.trim() || 'Miembro sin nombre',
     birth: form.birth || null,
     death: form.death || null,
-    spouse: form.spouse || null,
+    spouse_member_id: form.spouse_member_id || null,
+    spouse: resolveSpouseName(form.spouse_member_id, members, form.spouse) || null,
     spouse_birth: form.spouse_birth || null,
     inheritance_status: form.inheritance_status,
     inheritance_reason: form.inheritance_reason || null,
@@ -115,6 +130,7 @@ const toForm = (member: SiennaFamilyMember): MemberForm => ({
   name: member.name || '',
   birth: member.birth || '',
   death: member.death || '',
+  spouse_member_id: member.spouse_member_id || '',
   spouse: member.spouse || '',
   spouse_birth: member.spouse_birth || '',
   inheritance_status: (member.inheritance_status as MemberForm['inheritance_status']) || 'requiere_revision',
@@ -173,17 +189,27 @@ const MiembrosArbolSienna = () => {
   const evaluation = useMemo(() => determineInheritance(form, members), [form, members]);
   const resolvedInheritanceStatus =
     form.inheritance_status === 'requiere_revision' ? evaluation.inheritance_status : form.inheritance_status;
-  const resolvedInheritanceReason =
-    form.inheritance_reason ||
-    (form.inheritance_status === 'requiere_revision'
-      ? evaluation.inheritance_reason
-      : 'Estado definido manualmente en la administración del árbol.');
+  const manualInheritanceOverride = form.inheritance_status !== 'requiere_revision';
+  const resolvedInheritanceReason = manualInheritanceOverride
+    ? form.inheritance_reason || 'Estado definido manualmente en la administración del árbol.'
+    : evaluation.inheritance_reason;
 
   const inheritancePlan = useMemo(() => buildDominicanInheritancePlan(members), [members]);
 
   const sortedMembers = useMemo(
     () => sortMembersByTree(members, inheritancePlan),
     [inheritancePlan, members]
+  );
+  const membersById = useMemo(
+    () => new Map(members.map((member) => [member.id, member])),
+    [members]
+  );
+  const spouseOptions = useMemo(
+    () =>
+      members
+        .filter((member) => member.id !== form.id)
+        .sort((left, right) => left.name.localeCompare(right.name, 'es')),
+    [form.id, members]
   );
 
   const memberContexts = useMemo(
@@ -200,6 +226,7 @@ const MiembrosArbolSienna = () => {
       const haystack = [
         member.name,
         member.id,
+        member.spouse_member_id,
         member.spouse,
         context?.parentalLine,
         context?.collateralLine,
@@ -225,7 +252,8 @@ const MiembrosArbolSienna = () => {
       name: form.name.trim() || 'Miembro sin nombre',
       birth: form.birth || null,
       death: form.death || null,
-      spouse: form.spouse || null,
+      spouse_member_id: form.spouse_member_id || null,
+      spouse: resolveSpouseName(form.spouse_member_id, members, form.spouse) || null,
       spouse_birth: form.spouse_birth || null,
       inheritance_status: resolvedInheritanceStatus,
       inheritance_reason: resolvedInheritanceReason,
@@ -246,7 +274,8 @@ const MiembrosArbolSienna = () => {
       name: form.name.trim() || 'Borrador',
       birth: form.birth || null,
       death: form.death || null,
-      spouse: form.spouse || null,
+      spouse_member_id: form.spouse_member_id || null,
+      spouse: resolveSpouseName(form.spouse_member_id, members, form.spouse) || null,
       spouse_birth: form.spouse_birth || null,
       inheritance_status: resolvedInheritanceStatus,
       inheritance_reason: resolvedInheritanceReason,
@@ -293,7 +322,8 @@ const MiembrosArbolSienna = () => {
         name: form.name.trim(),
         birth: form.birth || null,
         death: form.death || null,
-        spouse: form.spouse || null,
+        spouse_member_id: form.spouse_member_id || null,
+        spouse: resolveSpouseName(form.spouse_member_id, members, form.spouse) || null,
         spouse_birth: form.spouse_birth || null,
         inheritance_status: resolvedInheritanceStatus,
         inheritance_reason: resolvedInheritanceReason,
@@ -485,7 +515,34 @@ const MiembrosArbolSienna = () => {
             </div>
             <div>
               <Label>Cónyuge (doble filiación / representación)</Label>
-              <Input value={form.spouse} onChange={(event) => updateForm('spouse', event.target.value)} />
+              <Select
+                value={form.spouse_member_id || '__none__'}
+                onValueChange={(value) => {
+                  if (value === '__none__') {
+                    updateForm('spouse_member_id', '');
+                    updateForm('spouse', '');
+                    updateForm('spouse_birth', '');
+                    return;
+                  }
+                  const spouseMember = membersById.get(value);
+                  updateForm('spouse_member_id', value);
+                  updateForm('spouse', spouseMember?.name || '');
+                  updateForm('spouse_birth', spouseMember?.birth || '');
+                }}
+              >
+                <SelectTrigger><SelectValue placeholder="Seleccione un cónyuge del árbol" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Sin cónyuge enlazado</SelectItem>
+                  {spouseOptions.map((member) => (
+                    <SelectItem key={member.id} value={member.id}>
+                      {member.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="mt-1 text-xs text-legal-gray">
+                Para doble filiación, vincule el cónyuge desde un miembro ya existente en el árbol.
+              </p>
             </div>
             <div>
               <Label>Nacimiento del cónyuge</Label>
@@ -501,15 +558,39 @@ const MiembrosArbolSienna = () => {
             </div>
             <div>
               <Label>Estado hereditario</Label>
-              <Select value={form.inheritance_status} onValueChange={(value) => updateForm('inheritance_status', value)}>
+              <Select
+                value={form.inheritance_status}
+                onValueChange={(value) => updateForm('inheritance_status', value)}
+                disabled={!manualInheritanceOverride}
+              >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="requiere_revision">Requiere revisión</SelectItem>
+                  <SelectItem value="requiere_revision">Autodetectar (recomendado)</SelectItem>
                   <SelectItem value="posible_heredero">Posible heredero</SelectItem>
                   <SelectItem value="confirmado">Confirmado</SelectItem>
                   <SelectItem value="no_hereda">No hereda</SelectItem>
                 </SelectContent>
               </Select>
+              <p className="mt-1 text-xs text-legal-gray">
+                En modo autodetectar, el sistema clasifica usando parentesco, linea, defuncion y representacion.
+              </p>
+              <div className="mt-2 flex items-center gap-2">
+                <Checkbox
+                  id="manualInheritanceOverride"
+                  checked={manualInheritanceOverride}
+                  onCheckedChange={(checked) => {
+                    const enabled = Boolean(checked);
+                    if (!enabled) {
+                      updateForm('inheritance_status', 'requiere_revision');
+                      return;
+                    }
+                    if (form.inheritance_status === 'requiere_revision') {
+                      updateForm('inheritance_status', evaluation.inheritance_status);
+                    }
+                  }}
+                />
+                <Label htmlFor="manualInheritanceOverride">Forzar estado manual</Label>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <Checkbox
@@ -522,9 +603,10 @@ const MiembrosArbolSienna = () => {
             <div className="md:col-span-4">
               <Label>Razón / explicación</Label>
               <Textarea
-                value={form.inheritance_reason || evaluation.inheritance_reason || ''}
+                value={manualInheritanceOverride ? form.inheritance_reason || '' : evaluation.inheritance_reason || ''}
                 onChange={(event) => updateForm('inheritance_reason', event.target.value)}
                 rows={3}
+                disabled={!manualInheritanceOverride}
               />
             </div>
             <div className="rounded-md border border-legal-blue/20 bg-legal-blue/5 p-4 md:col-span-2">
@@ -663,6 +745,10 @@ const MiembrosArbolSienna = () => {
                       : context.treeRoleLabel;
                     const displayInherits = context.inherits || isConfirmedByEvidence;
                     const memberDocuments = documentsByMemberId.get(member.id) || [];
+                    const spouseLabel =
+                      (member.spouse_member_id ? membersById.get(member.spouse_member_id.trim())?.name : null) ||
+                      member.spouse ||
+                      null;
 
                     return (
                       <TableRow key={member.id}>
@@ -693,8 +779,8 @@ const MiembrosArbolSienna = () => {
                         <TableCell className="whitespace-nowrap text-sm">
                           {member.birth || '—'}
                           {member.death ? ` / † ${member.death}` : ''}
-                          {member.spouse ? (
-                            <p className="mt-1 text-xs text-legal-gray">Cónyuge: {member.spouse}</p>
+                          {spouseLabel ? (
+                            <p className="mt-1 text-xs text-legal-gray">Cónyuge: {spouseLabel}</p>
                           ) : null}
                         </TableCell>
                         <TableCell className="min-w-[110px]">

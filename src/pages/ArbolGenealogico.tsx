@@ -10,7 +10,7 @@ const ArbolGenealogico = () => {
   const [highlightedPerson, setHighlightedPerson] = useState<string>("alessandro");
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="app-shell py-8">
       <BackButton />
       
       <DocumentHeader
@@ -19,7 +19,7 @@ const ArbolGenealogico = () => {
         helpKey="arbol-genealogico"
       />
       
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-5xl mx-auto">
         <Tabs defaultValue="arbol" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="arbol">Árbol Completo</TabsTrigger>

@@ -10,7 +10,7 @@ const LineasFamiliares = () => {
   const [activeTab, setActiveTab] = useState("primera-generacion");
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="app-shell py-8">
       <BackButton />
       
       <DocumentHeader
@@ -19,7 +19,7 @@ const LineasFamiliares = () => {
         helpKey="lineas-familiares"
       />
       
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-5xl mx-auto">
         <Tabs 
           value={activeTab} 
           onValueChange={setActiveTab}

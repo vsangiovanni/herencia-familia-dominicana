@@ -6,8 +6,8 @@ import PageHelp from '@/components/PageHelp';
 
 const Legal = () => {
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="relative max-w-4xl mx-auto">
+    <div className="app-shell py-8">
+      <div className="relative max-w-5xl mx-auto">
         <div className="absolute right-0 top-0">
           <PageHelp helpKey="legal" />
         </div>

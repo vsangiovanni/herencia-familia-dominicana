@@ -81,15 +81,23 @@ const normalizedMemberId = (value: string | null | undefined) => (value || '').t
 
 const findSpousePartner = (
   member: SiennaFamilyMember,
-  membersByName: Map<string, SiennaFamilyMember>
+  membersByName: Map<string, SiennaFamilyMember>,
+  membersById: Map<string, SiennaFamilyMember>
 ) => {
+  if (member.spouse_member_id) {
+    const byId = membersById.get(normalizedMemberId(member.spouse_member_id));
+    if (byId) return byId;
+  }
   if (member.spouse) {
     const direct = membersByName.get(normalizeName(member.spouse));
     if (direct) return direct;
   }
 
-  for (const candidate of membersByName.values()) {
+  for (const candidate of membersById.values()) {
     if (candidate.id === member.id) continue;
+    if (candidate.spouse_member_id && normalizedMemberId(candidate.spouse_member_id) === normalizedMemberId(member.id)) {
+      return candidate;
+    }
     if (candidate.spouse && normalizeName(candidate.spouse) === normalizeName(member.name)) {
       return candidate;
     }
@@ -129,7 +137,11 @@ const ClassicNode = ({
   const referenceTotal = estateAmount > 0 ? estateAmount : total;
   const share = inheritanceShare?.share || (referenceTotal > 0 && amount > 0 ? (amount / referenceTotal) * 100 : 0);
   const parent = member.parent_id ? membersById.get(normalizedMemberId(member.parent_id)) || null : null;
-  const otherParent = parent ? findSpousePartner(parent, membersByName) : null;
+  const otherParent = parent ? findSpousePartner(parent, membersByName, membersById) : null;
+  const spouseLabel =
+    (member.spouse_member_id ? membersById.get(normalizedMemberId(member.spouse_member_id))?.name : null) ||
+    member.spouse ||
+    null;
   const hasDualLineage = (inheritanceShare?.sources.length || 0) > 1;
 
   return (
@@ -161,10 +173,10 @@ const ClassicNode = ({
             {member.death && <span>m. {member.death}</span>}
           </div>
 
-          {member.spouse && (
+          {spouseLabel && (
             <div className="mt-1 text-xs">
               <span className="text-legal-gray">Cónyuge: </span>
-              {member.spouse}
+              {spouseLabel}
             </div>
           )}
 
@@ -422,7 +434,7 @@ const ArbolGenealogicoSienna = () => {
           const baseParent = share.member.parent_id
             ? membersById.get(normalizedMemberId(share.member.parent_id)) || null
             : null;
-          const linkedParent = baseParent ? findSpousePartner(baseParent, membersByName) : null;
+          const linkedParent = baseParent ? findSpousePartner(baseParent, membersByName, membersById) : null;
           return {
             memberId: share.member.id,
             memberName: share.member.name,

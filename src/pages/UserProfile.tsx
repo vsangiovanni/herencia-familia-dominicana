@@ -114,7 +114,7 @@ const UserProfile = () => {
 
   if (!user || !userProfile) {
     return (
-      <div className="container mx-auto px-4 py-8">
+      <div className="app-shell py-8">
         <Card>
           <CardContent className="p-6">
             <div className="flex justify-center">
@@ -129,7 +129,7 @@ const UserProfile = () => {
   // Mostrar pantalla especial para usuarios pendientes de aprobación
   if (!userProfile.is_approved) {
     return (
-      <div className="container mx-auto px-4 py-8">
+      <div className="app-shell py-8">
         <DocumentHeader 
           title="Perfil de Usuario" 
           subtitle="Cuenta pendiente de aprobación"
@@ -215,7 +215,7 @@ const UserProfile = () => {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="app-shell py-8">
       <DocumentHeader 
         title="Perfil de Usuario" 
         subtitle="Administra tu información personal"

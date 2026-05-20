@@ -3,6 +3,7 @@ import {
   activeCollateralRoots,
   buildDominicanInheritancePlan,
   caseCausanteName,
+  getSiennaCaseConfig,
   InheritancePlan,
   normalizeName,
 } from '@/lib/dominicanInheritance';
@@ -87,13 +88,14 @@ export const detectCollateralLine = (
   member: SiennaFamilyMember,
   members: SiennaFamilyMember[]
 ): string => {
+  const { family_trunk_name } = getSiennaCaseConfig();
   const path = getAncestryPath(member.id, members);
   const pathNames = new Set(path.map((item) => normalizeName(item.name)));
   const memberKey = normalizeName(member.name);
   const causanteKey = normalizeName(caseCausanteName);
 
   if (memberKey === causanteKey) {
-    return 'Causante — Alessandro';
+    return `Causante — ${caseCausanteName}`;
   }
 
   if (pathNames.has(causanteKey)) {
@@ -106,8 +108,8 @@ export const detectCollateralLine = (
     }
   }
 
-  if (pathNames.has(normalizeName('Domenico (Domingo) Sangiovanni'))) {
-    return 'Tronco familiar — Domenico/Domingo';
+  if (pathNames.has(normalizeName(family_trunk_name))) {
+    return `Tronco familiar — ${family_trunk_name}`;
   }
 
   if (path.length <= 1) {

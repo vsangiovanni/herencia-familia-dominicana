@@ -8,18 +8,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Edit, Key, LogOut } from 'lucide-react';
+import { CalendarDays, Edit, Key, LogOut, Mail, Shield, UserRound } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import { api } from '@/lib/api';
 import BackButton from '@/components/BackButton';
-import PageHelp from '@/components/PageHelp';
+import DocumentHeader from '@/components/DocumentHeader';
 
 const Profile = () => {
   const { user, userProfile, refreshUserProfile, isAdmin, signOut } = useAuth();
   const [isEditingName, setIsEditingName] = useState(false);
   const [fullName, setFullName] = useState(userProfile?.full_name || '');
   const [isChangingPassword, setIsChangingPassword] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -103,130 +102,119 @@ const Profile = () => {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="app-shell py-8">
       <BackButton />
-      
-      <div className="relative max-w-2xl mx-auto">
-        <div className="absolute right-0 top-0">
-          <PageHelp helpKey="perfil" />
-        </div>
-        <h1 className="pr-12 text-2xl md:text-3xl font-bold text-gray-900 mb-6 md:mb-8">Mi Perfil</h1>
-        
-        <Card>
-          <CardHeader className="text-center pb-6">
-            <Avatar className="mx-auto h-20 w-20 md:h-24 md:w-24 mb-4">
-              <AvatarImage 
-                src={`https://avatar.vercel.sh/${user?.email}.png`} 
-                alt={user?.email} 
-              />
-              <AvatarFallback className="text-lg md:text-2xl">
-                {userProfile?.full_name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-            <CardTitle className="text-lg md:text-xl mb-2">
-              {userProfile?.full_name || 'Usuario'}
-            </CardTitle>
-            <CardDescription className="text-sm md:text-base break-all px-2">
-              {user?.email}
-            </CardDescription>
-            {isAdmin && (
-              <Badge variant="secondary" className="mt-3 text-xs md:text-sm">
-                Administrador
-              </Badge>
-            )}
-          </CardHeader>
-          
-          <CardContent className="space-y-6">
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-xs md:text-sm font-medium text-gray-500 block">
-                  Email
-                </label>
-                <p className="text-sm md:text-base text-gray-900 break-all">
-                  {user?.email}
-                </p>
-              </div>
-              
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs md:text-sm font-medium text-gray-500 block">
-                    Nombre Completo
-                  </label>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setFullName(userProfile?.full_name || '');
-                      setIsEditingName(true);
-                    }}
-                    className="h-8 px-2"
-                  >
-                    <Edit className="h-3 w-3" />
-                  </Button>
-                </div>
-                {isEditingName ? (
-                  <div className="space-y-2">
-                    <Input
-                      value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
-                      placeholder="Ingresa tu nombre completo"
-                      className="text-sm"
-                    />
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        onClick={handleUpdateName}
-                        disabled={loading}
-                        className="text-xs"
-                      >
-                        {loading ? 'Guardando...' : 'Guardar'}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setIsEditingName(false)}
-                        className="text-xs"
-                      >
-                        Cancelar
-                      </Button>
-                    </div>
+      <div className="mx-auto max-w-4xl">
+        <DocumentHeader
+          title="Mi Perfil"
+          subtitle="Gestiona tu identidad de usuario y la seguridad de tu cuenta"
+          helpKey="perfil"
+        />
+
+        <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
+          <Card className="border border-legal-gold/20 shadow-sm">
+            <CardHeader className="border-b bg-gradient-to-r from-legal-blue/5 via-white to-legal-gold/10">
+              <div className="flex items-start gap-4">
+                <Avatar className="h-20 w-20 border-2 border-legal-gold/30 shadow-sm md:h-24 md:w-24">
+                  <AvatarImage src={`https://avatar.vercel.sh/${user?.email}.png`} alt={user?.email} />
+                  <AvatarFallback className="text-lg md:text-2xl">
+                    {userProfile?.full_name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="min-w-0 flex-1">
+                  <CardTitle className="text-xl text-legal-blue md:text-2xl">{userProfile?.full_name || 'Usuario'}</CardTitle>
+                  <CardDescription className="mt-1 break-all text-sm md:text-base">{user?.email}</CardDescription>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Badge variant="secondary" className="text-xs md:text-sm">
+                      {isAdmin ? 'Administrador' : 'Usuario'}
+                    </Badge>
                   </div>
-                ) : (
-                  <p className="text-sm md:text-base text-gray-900">
-                    {userProfile?.full_name || 'No especificado'}
+                </div>
+              </div>
+            </CardHeader>
+
+            <CardContent className="space-y-6 pt-6">
+              <div className="space-y-4">
+                <div className="rounded-md border bg-white p-4">
+                  <p className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-500">
+                    <Mail className="h-3.5 w-3.5" />
+                    Email
                   </p>
-                )}
+                  <p className="break-all text-sm text-gray-900 md:text-base">{user?.email}</p>
+                </div>
+
+                <div className="rounded-md border bg-white p-4">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-500">
+                      <UserRound className="h-3.5 w-3.5" />
+                      Nombre completo
+                    </p>
+                    {!isEditingName && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setFullName(userProfile?.full_name || '');
+                          setIsEditingName(true);
+                        }}
+                        className="h-8 px-2"
+                      >
+                        <Edit className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+
+                  {isEditingName ? (
+                    <div className="space-y-2">
+                      <Input
+                        value={fullName}
+                        onChange={(e) => setFullName(e.target.value)}
+                        placeholder="Ingresa tu nombre completo"
+                        className="text-sm"
+                      />
+                      <div className="flex gap-2">
+                        <Button size="sm" onClick={handleUpdateName} disabled={loading} className="text-xs">
+                          {loading ? 'Guardando...' : 'Guardar'}
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => setIsEditingName(false)} className="text-xs">
+                          Cancelar
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-900 md:text-base">{userProfile?.full_name || 'No especificado'}</p>
+                  )}
+                </div>
               </div>
-              
-              <div className="space-y-2">
-                <label className="text-xs md:text-sm font-medium text-gray-500 block">
-                  Tipo de Usuario
-                </label>
-                <p className="text-sm md:text-base text-gray-900">
-                  {isAdmin ? 'Administrador' : 'Usuario'}
+            </CardContent>
+          </Card>
+
+          <Card className="border border-legal-gold/20 shadow-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-legal-blue">
+                <Shield className="h-5 w-5" />
+                Seguridad y sesión
+              </CardTitle>
+              <CardDescription>Protege tu cuenta y gestiona el acceso</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="rounded-md border bg-white p-4">
+                <p className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-500">
+                  <CalendarDays className="h-3.5 w-3.5" />
+                  Fecha de registro
                 </p>
-              </div>
-              
-              <div className="space-y-2">
-                <label className="text-xs md:text-sm font-medium text-gray-500 block">
-                  Fecha de Registro
-                </label>
-                <p className="text-sm md:text-base text-gray-900">
+                <p className="text-sm text-gray-900 md:text-base">
                   {user?.created_at ? new Date(user.created_at).toLocaleDateString('es-ES') : 'No disponible'}
                 </p>
               </div>
-            </div>
 
-            <Separator />
+              <Separator />
 
-            <div className="space-y-4">
-              <h3 className="text-sm md:text-base font-semibold text-gray-900">Seguridad</h3>
-              
               <Dialog open={isChangingPassword} onOpenChange={setIsChangingPassword}>
                 <DialogTrigger asChild>
                   <Button variant="outline" className="w-full justify-start text-sm">
                     <Key className="mr-2 h-4 w-4" />
-                    Cambiar Contraseña
+                    Cambiar contraseña
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-md">
@@ -269,27 +257,20 @@ const Profile = () => {
                     >
                       Cancelar
                     </Button>
-                    <Button
-                      onClick={handleChangePassword}
-                      disabled={loading || !newPassword || !confirmPassword}
-                    >
+                    <Button onClick={handleChangePassword} disabled={loading || !newPassword || !confirmPassword}>
                       {loading ? 'Cambiando...' : 'Cambiar Contraseña'}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
 
-              <Button 
-                variant="destructive" 
-                className="w-full justify-start text-sm"
-                onClick={handleSignOut}
-              >
+              <Button variant="destructive" className="w-full justify-start text-sm" onClick={handleSignOut}>
                 <LogOut className="mr-2 h-4 w-4" />
-                Cerrar Sesión
+                Cerrar sesión
               </Button>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );

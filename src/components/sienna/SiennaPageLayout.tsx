@@ -6,7 +6,7 @@ type SiennaPageLayoutProps = {
 };
 
 const SiennaPageLayout = ({ children, className = '' }: SiennaPageLayoutProps) => (
-  <div className={`mx-auto w-full max-w-[1600px] px-3 py-4 sm:px-4 sm:py-6 md:px-6 lg:py-8 ${className}`.trim()}>
+  <div className={`app-shell py-4 sm:py-6 lg:py-8 ${className}`.trim()}>
     {children}
   </div>
 );
