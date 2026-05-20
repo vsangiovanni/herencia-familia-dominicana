@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Tesseract from 'tesseract.js';
 import BackButton from '@/components/BackButton';
 import DocumentHeader from '@/components/DocumentHeader';
-import { api, ConfirmedHeir, EvidenceDocument } from '@/lib/api';
+import { api, ConfirmedHeir, EvidenceDocument, SiennaFamilyMember } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -26,19 +26,25 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from '@/components/ui/use-toast';
-import { Archive, FileImage, FileSearch, Image, Save, Trash2, UserCheck } from 'lucide-react';
+import { Archive, Eye, FileImage, FileSearch, Image, RefreshCcw, Save, Trash2, UserCheck } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 type DocumentForm = Omit<EvidenceDocument, 'id' | 'created_at' | 'updated_at'>;
 
 const emptyForm: DocumentForm = {
   title: '',
   document_type: 'Acta no clasificada',
+  primary_member_id: '',
   primary_person: '',
   event_date: '',
   event_place: '',
+  father_member_id: '',
   father_name: '',
+  mother_member_id: '',
   mother_name: '',
+  spouse_member_id: '',
   spouse_name: '',
+  related_member_id: '',
   related_heir_name: '',
   confirms_heir: false,
   people_involved: [],
@@ -56,24 +62,6 @@ const documentTypes = [
   'Documento de identidad',
   'Sentencia o acto legal',
   'Acta no clasificada',
-];
-
-const knownPeople = [
-  'Víctor Manuel Martín Sangiovanni Rodríguez',
-  'Perla Rosa Brea Sangiovanni',
-  'Bernardo Martín Lizardo Sangiovanni',
-  'Jocelyn del Jesús Sangiovanni Báez',
-  'Mayra Josefina Sangiovanni Báez',
-  'Vincenzo Sangiovanni',
-  'Vicente Sangiovanni',
-  'Paolo Sangiovanni',
-  'Paulino Sangiovanni',
-  'María Rosa Sangiovanni Pérez',
-  'Pedro Pablo Sangiovanni Simo',
-  'Domingo Ramón Sangiovanni Pérez',
-  'Domenico Sangiovanni',
-  'Domingo Sangiovanni',
-  'María Rosa Grisolia',
 ];
 
 const normalizeText = (value: string) =>
@@ -100,7 +88,7 @@ const detectDocumentType = (text: string) => {
   return 'Acta no clasificada';
 };
 
-const parseDocument = (text: string): Partial<DocumentForm> => {
+const parseDocument = (text: string, knownPeople: string[]): Partial<DocumentForm> => {
   const normalized = normalizeText(text);
   const detectedPeople = knownPeople.filter((person) => normalized.includes(normalizeText(person)));
   const documentType = detectDocumentType(text);
@@ -146,15 +134,6 @@ const readFileAsDataUrl = (file: File) =>
     reader.readAsDataURL(file);
   });
 
-const parsePeopleList = (value: string | string[] | undefined) => {
-  if (Array.isArray(value)) return value;
-  if (!value) return [];
-  return String(value)
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean);
-};
-
 const formatMoney = (amount: number | string | null | undefined) =>
   new Intl.NumberFormat('es-DO', {
     style: 'currency',
@@ -162,27 +141,104 @@ const formatMoney = (amount: number | string | null | undefined) =>
     minimumFractionDigits: 2,
   }).format(Number(amount || 0));
 
+const normalizeName = (value: string) =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const memberNameById = (
+  memberId: string | null | undefined,
+  membersById: Map<string, SiennaFamilyMember>
+) => (memberId ? membersById.get(memberId)?.name || '' : '');
+
+const findSpousePartner = (
+  member: SiennaFamilyMember,
+  membersByName: Map<string, SiennaFamilyMember>
+) => {
+  if (member.spouse) {
+    const direct = membersByName.get(normalizeName(member.spouse));
+    if (direct) return direct;
+  }
+
+  for (const candidate of membersByName.values()) {
+    if (candidate.id === member.id) continue;
+    if (candidate.spouse && normalizeName(candidate.spouse) === normalizeName(member.name)) {
+      return candidate;
+    }
+  }
+
+  return null;
+};
+
 const DocumentosProbatorios = () => {
   const [form, setForm] = useState<DocumentForm>(emptyForm);
   const [documents, setDocuments] = useState<EvidenceDocument[]>([]);
   const [heirs, setHeirs] = useState<ConfirmedHeir[]>([]);
+  const [members, setMembers] = useState<SiennaFamilyMember[]>([]);
   const [ocrBusy, setOcrBusy] = useState(false);
   const [saveBusy, setSaveBusy] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
   const [heirDrafts, setHeirDrafts] = useState<Record<string, Partial<ConfirmedHeir>>>({});
+  const [viewerDocumentId, setViewerDocumentId] = useState<string | null>(null);
 
   const selectedHeir = useMemo(
     () => heirs.find((heir) => heir.heir_name === form.related_heir_name),
     [heirs, form.related_heir_name]
   );
+  const membersById = useMemo(
+    () => new Map(members.map((member) => [member.id, member])),
+    [members]
+  );
+  const membersByName = useMemo(
+    () => new Map(members.map((member) => [normalizeName(member.name), member])),
+    [members]
+  );
+  const knownPeople = useMemo(() => members.map((member) => member.name), [members]);
+  const getAutoLinkedRelatives = (memberId: string) => {
+    const primary = membersById.get(memberId);
+    if (!primary) {
+      return {
+        primary_member_id: '',
+        primary_person: '',
+        father_member_id: '',
+        father_name: '',
+        mother_member_id: '',
+        mother_name: '',
+        spouse_member_id: '',
+        spouse_name: '',
+      };
+    }
+
+    const parentId = primary.parent_id ? String(primary.parent_id).trim() : '';
+    const parent = parentId ? membersById.get(parentId) || null : null;
+    const parentPartner = parent ? findSpousePartner(parent, membersByName) : null;
+    const spousePartner = findSpousePartner(primary, membersByName);
+
+    return {
+      primary_member_id: primary.id,
+      primary_person: primary.name,
+      father_member_id: parent?.id || '',
+      father_name: parent?.name || '',
+      mother_member_id: parentPartner?.id || '',
+      mother_name: parentPartner?.name || '',
+      spouse_member_id: spousePartner?.id || '',
+      spouse_name: spousePartner?.name || '',
+    };
+  };
 
   const loadData = async () => {
-    const [documentsResponse, heirsResponse] = await Promise.all([
+    const [documentsResponse, heirsResponse, membersResponse] = await Promise.all([
       api.listEvidenceDocuments(),
       api.listConfirmedHeirs(),
+      api.listSiennaFamilyMembers(),
     ]);
     setDocuments(documentsResponse.documents);
     setHeirs(heirsResponse.heirs);
+    setMembers(membersResponse.members);
   };
 
   useEffect(() => {
@@ -235,17 +291,38 @@ const DocumentosProbatorios = () => {
           if (message.status === 'recognizing text') setOcrProgress(Math.round(message.progress * 100));
         },
       });
-      const parsed = parseDocument(result.data.text);
-      setForm((current) => ({
-        ...current,
-        ...parsed,
-        file_data: current.file_data,
-        file_name: current.file_name,
-        file_type: current.file_type,
-        notes: current.notes,
-        related_heir_name: current.related_heir_name,
-        confirms_heir: current.confirms_heir,
-      }));
+      const parsed = parseDocument(result.data.text, knownPeople);
+      const findMemberId = (name?: string | null) => {
+        if (!name) return '';
+        return membersByName.get(normalizeName(name))?.id || '';
+      };
+      const primaryMemberId = findMemberId(parsed.primary_person);
+      const fatherMemberId = findMemberId(parsed.father_name);
+      const motherMemberId = findMemberId(parsed.mother_name);
+      const spouseMemberId = findMemberId(parsed.spouse_name);
+      setForm((current) => {
+        const detectedPrimaryMemberId = primaryMemberId || current.related_member_id || '';
+        const autoRelatives = detectedPrimaryMemberId ? getAutoLinkedRelatives(detectedPrimaryMemberId) : null;
+        return {
+          ...current,
+          ...parsed,
+          primary_member_id: autoRelatives?.primary_member_id || primaryMemberId || current.primary_member_id,
+          related_member_id: current.related_member_id || primaryMemberId || '',
+          primary_person: autoRelatives?.primary_person || parsed.primary_person || current.primary_person,
+          father_member_id: autoRelatives?.father_member_id || fatherMemberId || current.father_member_id,
+          father_name: autoRelatives?.father_name || parsed.father_name || current.father_name,
+          mother_member_id: autoRelatives?.mother_member_id || motherMemberId || current.mother_member_id,
+          mother_name: autoRelatives?.mother_name || parsed.mother_name || current.mother_name,
+          spouse_member_id: autoRelatives?.spouse_member_id || spouseMemberId || current.spouse_member_id,
+          spouse_name: autoRelatives?.spouse_name || parsed.spouse_name || current.spouse_name,
+          file_data: current.file_data,
+          file_name: current.file_name,
+          file_type: current.file_type,
+          notes: current.notes,
+          related_heir_name: current.related_heir_name,
+          confirms_heir: current.confirms_heir,
+        };
+      });
       toast({ title: 'Documento interpretado', description: 'Revisa y ajusta los datos antes de guardar.' });
     } catch (error) {
       toast({
@@ -259,16 +336,50 @@ const DocumentosProbatorios = () => {
   };
 
   const saveDocument = async () => {
-    if (!form.title || !form.document_type) {
-      toast({ title: 'Faltan datos', description: 'El título y el tipo de documento son obligatorios.' });
+    if (!form.document_type || !form.related_member_id) {
+      toast({ title: 'Faltan datos', description: 'Tipo de documento y miembro relacionado son obligatorios.' });
       return;
     }
 
     setSaveBusy(true);
     try {
+      const selectedHeirByMember = heirs.find((heir) => heir.sienna_member_id === form.related_member_id);
+      const selectedHeirByName = heirs.find((heir) => heir.heir_name === form.related_heir_name);
+      const relatedHeirName = form.related_heir_name || selectedHeirByMember?.heir_name || '';
+      const relatedMemberId = form.related_member_id || selectedHeirByName?.sienna_member_id || '';
+      const primaryMemberId = relatedMemberId || form.primary_member_id || '';
+      const primaryPersonName = memberNameById(primaryMemberId, membersById) || '';
+      const fatherName = memberNameById(form.father_member_id, membersById) || '';
+      const motherName = memberNameById(form.mother_member_id, membersById) || '';
+      const spouseName = memberNameById(form.spouse_member_id, membersById) || '';
+      const peopleInvolved = Array.from(
+        new Set(
+          [
+            primaryPersonName,
+            fatherName,
+            motherName,
+            spouseName,
+            memberNameById(relatedMemberId, membersById),
+          ].filter(Boolean)
+        )
+      );
+      const title =
+        form.title ||
+        `${form.document_type}${primaryPersonName ? `: ${primaryPersonName}` : ''}`;
       await api.saveEvidenceDocument({
         ...form,
-        people_involved: parsePeopleList(form.people_involved),
+        title,
+        primary_member_id: primaryMemberId || null,
+        primary_person: primaryPersonName || null,
+        father_member_id: form.father_member_id || null,
+        father_name: fatherName || null,
+        mother_member_id: form.mother_member_id || null,
+        mother_name: motherName || null,
+        spouse_member_id: form.spouse_member_id || null,
+        spouse_name: spouseName || null,
+        related_member_id: relatedMemberId || null,
+        related_heir_name: relatedHeirName || null,
+        people_involved: peopleInvolved,
       });
       await loadData();
       setForm(emptyForm);
@@ -282,6 +393,26 @@ const DocumentosProbatorios = () => {
     } finally {
       setSaveBusy(false);
     }
+  };
+
+  const applyAutoRelativeLinks = () => {
+    if (!form.related_member_id) {
+      toast({
+        title: 'Selecciona miembro titular',
+        description: 'Primero elige el miembro titular para autocompletar parentescos.',
+      });
+      return;
+    }
+
+    const autoRelatives = getAutoLinkedRelatives(form.related_member_id);
+    setForm((current) => ({
+      ...current,
+      ...autoRelatives,
+    }));
+    toast({
+      title: 'Parentescos recalculados',
+      description: 'Padre, madre y conyuge se actualizaron segun la estructura actual del arbol.',
+    });
   };
 
   const deleteDocument = async (id?: string) => {
@@ -314,6 +445,7 @@ const DocumentosProbatorios = () => {
     const draft = heirDrafts[heir.id] || {};
     try {
       await api.updateConfirmedHeir(heir.id, {
+        sienna_member_id: heir.sienna_member_id || null,
         heir_name: heir.heir_name,
         relationship_summary: heir.relationship_summary,
         line_vincenzo: heir.line_vincenzo,
@@ -338,23 +470,29 @@ const DocumentosProbatorios = () => {
 
   const evidenceByHeir = useMemo(() => {
     return documents.reduce<Record<string, number>>((acc, document) => {
-      if (!document.related_heir_name) return acc;
-      acc[document.related_heir_name] = (acc[document.related_heir_name] || 0) + 1;
+      const key = document.related_member_id || document.related_heir_name || '';
+      if (!key) return acc;
+      acc[key] = (acc[key] || 0) + 1;
       return acc;
     }, {});
   }, [documents]);
 
+  const viewerDocument = useMemo(
+    () => documents.find((document) => document.id === viewerDocumentId) || null,
+    [documents, viewerDocumentId]
+  );
+
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="app-shell py-8">
       <BackButton />
 
       <DocumentHeader
         title="Documentos Probatorios"
-        subtitle="Registro de actas, personas documentadas y herederos confirmados para sustentar el cálculo"
+        subtitle="Carga de actas y documentos para vincular evidencia directamente con miembros del arbol"
         helpKey="documentos-probatorios"
       />
 
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="max-w-[1500px] mx-auto space-y-6">
         <Card className="border border-legal-gold/20 shadow-md">
           <CardHeader className="bg-legal-blue/5 border-b">
             <CardTitle className="flex items-center gap-2 text-legal-blue">
@@ -419,11 +557,6 @@ const DocumentosProbatorios = () => {
                 </div>
 
                 <div>
-                  <Label htmlFor="primaryPerson">Persona principal</Label>
-                  <Input id="primaryPerson" value={form.primary_person || ''} onChange={(event) => updateForm('primary_person', event.target.value)} />
-                </div>
-
-                <div>
                   <Label htmlFor="eventDate">Fecha del acto</Label>
                   <Input id="eventDate" value={form.event_date || ''} onChange={(event) => updateForm('event_date', event.target.value)} placeholder="dd/mm/aaaa" />
                 </div>
@@ -434,36 +567,118 @@ const DocumentosProbatorios = () => {
                 </div>
 
                 <div>
-                  <Label htmlFor="father">Padre declarado</Label>
-                  <Input id="father" value={form.father_name || ''} onChange={(event) => updateForm('father_name', event.target.value)} />
-                </div>
-
-                <div>
-                  <Label htmlFor="mother">Madre declarada</Label>
-                  <Input id="mother" value={form.mother_name || ''} onChange={(event) => updateForm('mother_name', event.target.value)} />
-                </div>
-
-                <div>
-                  <Label htmlFor="spouse">Cónyuge declarado</Label>
-                  <Input id="spouse" value={form.spouse_name || ''} onChange={(event) => updateForm('spouse_name', event.target.value)} />
-                </div>
-
-                <div>
-                  <Label>Heredero relacionado</Label>
+                  <Label>Padre declarado (miembro)</Label>
                   <Select
-                    value={form.related_heir_name || 'none'}
-                    onValueChange={(value) => updateForm('related_heir_name', value === 'none' ? '' : value)}
+                    value={form.father_member_id || 'none'}
+                    onValueChange={(value) => {
+                      const memberId = value === 'none' ? '' : value;
+                      updateForm('father_member_id', memberId);
+                      updateForm('father_name', memberNameById(memberId, membersById));
+                    }}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Opcional" />
+                      <SelectValue placeholder="Selecciona padre" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">Sin heredero directo</SelectItem>
-                      {heirs.map((heir) => (
-                        <SelectItem key={heir.id} value={heir.heir_name}>{heir.heir_name}</SelectItem>
+                      <SelectItem value="none">Sin declarar</SelectItem>
+                      {members.map((member) => (
+                        <SelectItem key={member.id} value={member.id}>{member.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+
+                <div>
+                  <Label>Madre declarada (miembro)</Label>
+                  <Select
+                    value={form.mother_member_id || 'none'}
+                    onValueChange={(value) => {
+                      const memberId = value === 'none' ? '' : value;
+                      updateForm('mother_member_id', memberId);
+                      updateForm('mother_name', memberNameById(memberId, membersById));
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecciona madre" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sin declarar</SelectItem>
+                      {members.map((member) => (
+                        <SelectItem key={member.id} value={member.id}>{member.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label>Cónyuge declarado (miembro)</Label>
+                  <Select
+                    value={form.spouse_member_id || 'none'}
+                    onValueChange={(value) => {
+                      const memberId = value === 'none' ? '' : value;
+                      updateForm('spouse_member_id', memberId);
+                      updateForm('spouse_name', memberNameById(memberId, membersById));
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecciona conyuge" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sin declarar</SelectItem>
+                      {members.map((member) => (
+                        <SelectItem key={member.id} value={member.id}>{member.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label>Miembro titular (árbol) *</Label>
+                  <Select
+                    value={form.related_member_id || 'none'}
+                    onValueChange={(value) => {
+                      const memberId = value === 'none' ? '' : value;
+                      const autoRelatives = memberId ? getAutoLinkedRelatives(memberId) : null;
+                      const linkedHeir = heirs.find((heir) => heir.sienna_member_id === memberId);
+                      updateForm('related_member_id', memberId);
+                      updateForm('primary_member_id', autoRelatives?.primary_member_id || memberId);
+                      updateForm('primary_person', autoRelatives?.primary_person || memberNameById(memberId, membersById));
+                      updateForm('father_member_id', autoRelatives?.father_member_id || '');
+                      updateForm('father_name', autoRelatives?.father_name || '');
+                      updateForm('mother_member_id', autoRelatives?.mother_member_id || '');
+                      updateForm('mother_name', autoRelatives?.mother_name || '');
+                      updateForm('spouse_member_id', autoRelatives?.spouse_member_id || '');
+                      updateForm('spouse_name', autoRelatives?.spouse_name || '');
+                      if (linkedHeir?.heir_name) {
+                        updateForm('related_heir_name', linkedHeir.heir_name);
+                      } else {
+                        updateForm('related_heir_name', '');
+                      }
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccion obligatoria" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Seleccionar miembro</SelectItem>
+                      {members.map((member) => (
+                        <SelectItem key={member.id} value={member.id}>{member.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="md:col-span-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-start"
+                    onClick={applyAutoRelativeLinks}
+                    disabled={!form.related_member_id}
+                  >
+                    <RefreshCcw className="mr-2 h-4 w-4" />
+                    Recalcular parentescos automáticos
+                  </Button>
                 </div>
 
                 <div className="flex items-center gap-2 pt-6">
@@ -473,16 +688,6 @@ const DocumentosProbatorios = () => {
                     onCheckedChange={(checked) => updateForm('confirms_heir', Boolean(checked))}
                   />
                   <Label htmlFor="confirmsHeir">Esta acta confirma al heredero seleccionado</Label>
-                </div>
-
-                <div className="md:col-span-2">
-                  <Label htmlFor="people">Personas involucradas</Label>
-                  <Input
-                    id="people"
-                    value={parsePeopleList(form.people_involved).join(', ')}
-                    onChange={(event) => updateForm('people_involved', parsePeopleList(event.target.value))}
-                    placeholder="Separadas por coma"
-                  />
                 </div>
 
                 <div className="md:col-span-2">
@@ -505,7 +710,7 @@ const DocumentosProbatorios = () => {
 
             <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
               <p className="text-sm text-legal-gray">
-                Los herederos ya mencionados pueden usarse en el cálculo sin acta cargada; las actas agregan soporte documental y cambian su estado a confirmado cuando lo marques.
+                Flujo recomendado: seleccionar archivo, clasificar tipo de documento y vincularlo al miembro titular. Los parentescos declarados (padre, madre, conyuge) se eligen desde la tabla de miembros para mantener trazabilidad.
               </p>
               <Button onClick={saveDocument} disabled={saveBusy} className="bg-legal-gold hover:bg-legal-gold/90 text-white">
                 <Save className="h-4 w-4 mr-2" />
@@ -554,7 +759,9 @@ const DocumentosProbatorios = () => {
                         {heir.status}
                       </Badge>
                     </TableCell>
-                    <TableCell>{evidenceByHeir[heir.heir_name] || heir.evidence_count || 0}</TableCell>
+                    <TableCell>
+                      {evidenceByHeir[String(heir.sienna_member_id || '')] || evidenceByHeir[heir.heir_name] || heir.evidence_count || 0}
+                    </TableCell>
                     <TableCell className="min-w-[220px]">
                       <div className="flex items-center gap-3">
                         <div className="h-12 w-12 overflow-hidden rounded-full border bg-legal-blue/5 flex items-center justify-center">
@@ -615,7 +822,7 @@ const DocumentosProbatorios = () => {
                 <TableRow>
                   <TableHead>Documento</TableHead>
                   <TableHead>Tipo</TableHead>
-                  <TableHead>Persona</TableHead>
+                  <TableHead>Miembro titular</TableHead>
                   <TableHead>Fecha</TableHead>
                   <TableHead>Heredero vinculado</TableHead>
                   <TableHead>Soporte</TableHead>
@@ -634,22 +841,40 @@ const DocumentosProbatorios = () => {
                   <TableRow key={document.id}>
                     <TableCell className="font-medium text-legal-blue">{document.title}</TableCell>
                     <TableCell>{document.document_type}</TableCell>
-                    <TableCell>{document.primary_person || '—'}</TableCell>
+                    <TableCell>
+                      {document.primary_member_id && membersById.get(document.primary_member_id)
+                        ? membersById.get(document.primary_member_id)?.name
+                        : document.primary_person || '—'}
+                    </TableCell>
                     <TableCell>{document.event_date || '—'}</TableCell>
                     <TableCell>
                       {document.related_heir_name || '—'}
+                      {document.related_member_id && membersById.get(document.related_member_id) && (
+                        <p className="text-xs text-legal-gray">Árbol: {membersById.get(document.related_member_id)?.name}</p>
+                      )}
                       {document.confirms_heir && <Badge className="ml-2">confirma</Badge>}
                     </TableCell>
                     <TableCell>{document.file_name || 'Transcripción manual'}</TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => deleteDocument(document.id)}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setViewerDocumentId(document.id || null)}
+                          disabled={!document.file_data}
+                        >
+                          <Eye className="mr-1 h-4 w-4" />
+                          Ver
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => deleteDocument(document.id)}
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -657,6 +882,36 @@ const DocumentosProbatorios = () => {
             </Table>
           </CardContent>
         </Card>
+
+        <Dialog open={Boolean(viewerDocumentId)} onOpenChange={(open) => !open && setViewerDocumentId(null)}>
+          <DialogContent className="max-h-[85vh] max-w-4xl overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>{viewerDocument?.title || 'Documento'}</DialogTitle>
+            </DialogHeader>
+            {!viewerDocument?.file_data ? (
+              <p className="text-sm text-legal-gray">Este registro no contiene archivo adjunto para vista previa.</p>
+            ) : viewerDocument.file_type?.startsWith('image/') ? (
+              <img
+                src={viewerDocument.file_data}
+                alt={viewerDocument.title || 'Documento'}
+                className="max-h-[70vh] w-full rounded border object-contain"
+              />
+            ) : viewerDocument.file_type === 'application/pdf' ? (
+              <iframe
+                src={viewerDocument.file_data}
+                title={viewerDocument.title || 'Documento PDF'}
+                className="h-[70vh] w-full rounded border"
+              />
+            ) : (
+              <div className="space-y-3 rounded border bg-muted/30 p-3">
+                <p className="text-sm font-medium text-legal-blue">Vista resumida del documento</p>
+                <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                  {(viewerDocument.extracted_text || viewerDocument.notes || 'Sin texto disponible para vista previa.').slice(0, 3000)}
+                </p>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
 
         {selectedHeir && (
           <Card className="border border-legal-gold/20 shadow-md">

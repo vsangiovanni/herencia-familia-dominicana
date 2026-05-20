@@ -35,8 +35,9 @@ import {
 } from '@/lib/siennaFamilyTree';
 import { formatPercent } from '@/lib/siennaHeirExplain';
 import MemberTreeContextPanel from '@/components/sienna/MemberTreeContextPanel';
+import PageHelp from '@/components/PageHelp';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Edit, Eye, FileText, GitBranch, Image as ImageIcon, Save, Search, SlidersHorizontal, Trash2, UserPlus, Users } from 'lucide-react';
+import { Edit, Eye, FileText, GitBranch, Image as ImageIcon, Loader2, Save, Search, SlidersHorizontal, Trash2, UserPlus, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Progress } from '@/components/ui/progress';
 import { useAuth } from '@/context/AuthContext';
@@ -78,10 +79,10 @@ const makeId = (name: string) =>
     .slice(0, 70) || 'miembro'}-${Date.now()}`;
 
 const determineInheritance = (form: MemberForm, members: SiennaFamilyMember[]) => {
-  if (form.inheritance_status === 'confirmado') {
+  if (form.inheritance_status !== 'requiere_revision') {
     return {
       inheritance_status: form.inheritance_status,
-      inheritance_reason: form.inheritance_reason || 'Confirmado manualmente en la administración del árbol.',
+      inheritance_reason: form.inheritance_reason || 'Estado definido manualmente en la administración del árbol.',
     };
   }
 
@@ -129,6 +130,7 @@ const MiembrosArbolSienna = () => {
   const [heirs, setHeirs] = useState<ConfirmedHeir[]>([]);
   const [form, setForm] = useState<MemberForm>(emptyForm);
   const [loading, setLoading] = useState(true);
+  const [loadingMessage, setLoadingMessage] = useState('Cargando miembros y contexto del árbol...');
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
   const [viewerMemberId, setViewerMemberId] = useState<string | null>(null);
@@ -136,12 +138,14 @@ const MiembrosArbolSienna = () => {
 
   const loadMembers = async () => {
     setLoading(true);
+    setLoadingMessage('Consultando miembros del árbol...');
     try {
       const [membersResponse, documentsResponse, heirsResponse] = await Promise.all([
         api.listSiennaFamilyMembers(),
         api.listEvidenceDocuments(),
         api.listConfirmedHeirs(),
       ]);
+      setLoadingMessage('Vinculando documentos y herederos al árbol...');
       setMembers(membersResponse.members);
       setDocuments(documentsResponse.documents);
       setHeirs(heirsResponse.heirs);
@@ -167,6 +171,13 @@ const MiembrosArbolSienna = () => {
   const resetForm = () => setForm(emptyForm);
 
   const evaluation = useMemo(() => determineInheritance(form, members), [form, members]);
+  const resolvedInheritanceStatus =
+    form.inheritance_status === 'requiere_revision' ? evaluation.inheritance_status : form.inheritance_status;
+  const resolvedInheritanceReason =
+    form.inheritance_reason ||
+    (form.inheritance_status === 'requiere_revision'
+      ? evaluation.inheritance_reason
+      : 'Estado definido manualmente en la administración del árbol.');
 
   const inheritancePlan = useMemo(() => buildDominicanInheritancePlan(members), [members]);
 
@@ -216,15 +227,15 @@ const MiembrosArbolSienna = () => {
       death: form.death || null,
       spouse: form.spouse || null,
       spouse_birth: form.spouse_birth || null,
-      inheritance_status: evaluation.inheritance_status,
-      inheritance_reason: form.inheritance_reason || evaluation.inheritance_reason,
+      inheritance_status: resolvedInheritanceStatus,
+      inheritance_reason: resolvedInheritanceReason,
       is_highlighted_ancestor: form.is_highlighted_ancestor,
       sort_order: Number(form.sort_order || 0),
     };
     return members.some((member) => member.id === memberId)
       ? members.map((member) => (member.id === memberId ? draftMember : member))
       : [...members, draftMember];
-  }, [evaluation.inheritance_reason, evaluation.inheritance_status, form, members]);
+  }, [form, members, resolvedInheritanceReason, resolvedInheritanceStatus]);
 
   const formContext = useMemo(() => {
     const memberId = form.id || '__draft_member__';
@@ -237,14 +248,14 @@ const MiembrosArbolSienna = () => {
       death: form.death || null,
       spouse: form.spouse || null,
       spouse_birth: form.spouse_birth || null,
-      inheritance_status: evaluation.inheritance_status,
-      inheritance_reason: form.inheritance_reason || evaluation.inheritance_reason,
+      inheritance_status: resolvedInheritanceStatus,
+      inheritance_reason: resolvedInheritanceReason,
       is_highlighted_ancestor: form.is_highlighted_ancestor,
       sort_order: Number(form.sort_order || 0),
     };
 
     return buildMemberTreeContext(draftMember, draftMembers, inheritancePlan);
-  }, [draftMembers, evaluation, form, inheritancePlan]);
+  }, [draftMembers, form, inheritancePlan, resolvedInheritanceReason, resolvedInheritanceStatus]);
 
   const simulation = useMemo(() => {
     const current = buildDominicanInheritancePlan(members);
@@ -284,8 +295,8 @@ const MiembrosArbolSienna = () => {
         death: form.death || null,
         spouse: form.spouse || null,
         spouse_birth: form.spouse_birth || null,
-        inheritance_status: evaluation.inheritance_status,
-        inheritance_reason: form.inheritance_reason || evaluation.inheritance_reason,
+        inheritance_status: resolvedInheritanceStatus,
+        inheritance_reason: resolvedInheritanceReason,
         is_highlighted_ancestor: form.is_highlighted_ancestor,
         sort_order: Number(form.sort_order || 0),
       });
@@ -388,9 +399,25 @@ const MiembrosArbolSienna = () => {
         <Button variant="outline" size="sm" asChild>
           <Link to="/sienna/explicacion-herederos">Explicación para herederos</Link>
         </Button>
+        {isAdmin && (
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/admin/settings">Settings</Link>
+          </Button>
+        )}
       </div>
 
       <div className="w-full space-y-6">
+        {loading && (
+          <Card className="border border-legal-blue/20 bg-legal-blue/5">
+            <CardContent className="p-4">
+              <p className="inline-flex items-center gap-2 text-sm text-legal-blue">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {loadingMessage}
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Card><CardContent className="p-5"><p className="text-sm text-legal-gray">Miembros</p><p className="text-2xl font-bold text-legal-blue">{stats.total}</p></CardContent></Card>
           <Card><CardContent className="p-5"><p className="text-sm text-legal-gray">Herederos</p><p className="text-2xl font-bold text-legal-blue">{stats.heirs}</p></CardContent></Card>
@@ -400,10 +427,13 @@ const MiembrosArbolSienna = () => {
 
         <Card className="border border-legal-gold/20">
           <CardHeader className="bg-legal-blue/5 border-b">
-            <CardTitle className="flex items-center gap-2 text-legal-blue">
-              <UserPlus className="h-5 w-5" />
-              {form.id ? 'Editar Miembro' : 'Agregar Miembro'}
-            </CardTitle>
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle className="flex items-center gap-2 text-legal-blue">
+                <UserPlus className="h-5 w-5" />
+                {form.id ? 'Editar Miembro' : 'Agregar Miembro'}
+              </CardTitle>
+              <PageHelp helpKey="sienna-miembros-agregar" />
+            </div>
           </CardHeader>
           <CardContent className="grid grid-cols-1 gap-4 p-4 sm:p-6 md:grid-cols-2 lg:grid-cols-4">
             <div className="md:col-span-2">
@@ -605,7 +635,10 @@ const MiembrosArbolSienna = () => {
                 {loading && (
                   <TableRow>
                     <TableCell colSpan={11} className="py-8 text-center text-legal-gray">
-                      Cargando miembros...
+                      <span className="inline-flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin text-legal-blue" />
+                        {loadingMessage}
+                      </span>
                     </TableCell>
                   </TableRow>
                 )}

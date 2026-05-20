@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import BackButton from '@/components/BackButton';
 import DocumentHeader from '@/components/DocumentHeader';
+import SoftLoadingIndicator from '@/components/SoftLoadingIndicator';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -31,15 +32,19 @@ const Hallazgos = () => {
   const [documents, setDocuments] = useState<EvidenceDocument[]>([]);
   const [heirs, setHeirs] = useState<ConfirmedHeir[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMessage, setLoadingMessage] = useState('Analizando hallazgos actuales...');
 
   useEffect(() => {
     const loadData = async () => {
+      setLoading(true);
+      setLoadingMessage('Consultando miembros, herederos y documentos...');
       try {
         const [membersResponse, documentsResponse, heirsResponse] = await Promise.all([
           api.listSiennaFamilyMembers(),
           api.listEvidenceDocuments(),
           api.listConfirmedHeirs(),
         ]);
+        setLoadingMessage('Calculando inconsistencias y riesgos...');
         setMembers(membersResponse.members);
         setDocuments(documentsResponse.documents);
         setHeirs(heirsResponse.heirs);
@@ -208,6 +213,7 @@ const Hallazgos = () => {
         subtitle="Inconsistencias, riesgos y sugerencias de revisión"
         helpKey="hallazgos"
       />
+      <SoftLoadingIndicator active={loading} message={loadingMessage} />
 
       <div className="max-w-6xl mx-auto space-y-6">
         <Card className="border border-legal-gold/20 shadow-md">

@@ -15,6 +15,7 @@ import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/components/ui/use-toast';
 import {
+  applySiennaCaseConfig,
   buildDominicanInheritancePlan,
   InheritanceShare,
   legalCriterionText,
@@ -31,6 +32,8 @@ import {
   heirPhotoByName,
   routeSteps,
 } from '@/lib/siennaHeirExplain';
+import { buildCalculationPayload, buildMembersHash, parseCalculationPayload } from '@/lib/siennaCalculation';
+import { useAuth } from '@/context/AuthContext';
 import {
   AlertTriangle,
   BookOpen,
@@ -39,6 +42,7 @@ import {
   FileText,
   GitBranch,
   Landmark,
+  Loader2,
   Printer,
   Route,
   Scale,
@@ -66,17 +70,24 @@ const initials = (name: string) =>
     .toUpperCase();
 
 const ExplicacionHerederosSienna = () => {
+  const { isAdmin } = useAuth();
   const [members, setMembers] = useState<SiennaFamilyMember[]>([]);
   const [documents, setDocuments] = useState<EvidenceDocument[]>([]);
   const [heirs, setHeirs] = useState<ConfirmedHeir[]>([]);
   const [estateAmount, setEstateAmount] = useState('');
   const [lawyerFeePercentage, setLawyerFeePercentage] = useState('0');
+  const [snapshotNote, setSnapshotNote] = useState('');
   const [excludedHeirs, setExcludedHeirs] = useState<string[]>([]);
+  const [snapshotSaving, setSnapshotSaving] = useState(false);
+  const [lastSnapshotAt, setLastSnapshotAt] = useState<string | null>(null);
+  const [isPresentationMode, setIsPresentationMode] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadingMessage, setLoadingMessage] = useState('Cargando datos y cálculos de explicación...');
 
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
+      setLoadingMessage('Consultando miembros, documentos, herederos y settings...');
       try {
         const [membersResponse, documentsResponse, settingsResponse, heirsResponse] = await Promise.all([
           api.listSiennaFamilyMembers(),
@@ -84,10 +95,47 @@ const ExplicacionHerederosSienna = () => {
           api.getSettings(),
           api.listConfirmedHeirs(),
         ]);
+        setLoadingMessage('Aplicando configuración y preparando explicaciones...');
         setMembers(membersResponse.members);
+        applySiennaCaseConfig(settingsResponse.settings.sienna_case_config);
         setDocuments(documentsResponse.documents);
         setHeirs(heirsResponse.heirs);
         setLawyerFeePercentage(String(settingsResponse.settings.lawyer_fee_percentage ?? 0));
+        try {
+          setLoadingMessage('Validando snapshot y simulación previa...');
+          const latestSnapshotResponse = await api.getLatestSiennaCalculationSnapshot();
+          if (latestSnapshotResponse.snapshot) {
+            const currentMembersHash = buildMembersHash(membersResponse.members.map((member) => member.id));
+            if (
+              latestSnapshotResponse.snapshot.members_hash &&
+              latestSnapshotResponse.snapshot.members_hash !== currentMembersHash
+            ) {
+              toast({
+                title: 'Snapshot desactualizado',
+                description: 'El último snapshot no coincide con los miembros actuales. Ajusta y guarda uno nuevo.',
+                variant: 'destructive',
+              });
+            }
+            const parsedPayload = parseCalculationPayload(latestSnapshotResponse.snapshot.payload_json);
+            if (parsedPayload?.excluded_heir_ids?.length) {
+              setExcludedHeirs(parsedPayload.excluded_heir_ids);
+            } else {
+              setExcludedHeirs([]);
+            }
+            if (parsedPayload?.notes) {
+              setSnapshotNote(parsedPayload.notes);
+            }
+            setEstateAmount(String(latestSnapshotResponse.snapshot.estate_amount ?? 0));
+            setLawyerFeePercentage(String(latestSnapshotResponse.snapshot.lawyer_fee_percentage ?? 0));
+            setLastSnapshotAt(latestSnapshotResponse.snapshot.created_at || null);
+          } else {
+            setLastSnapshotAt(null);
+          }
+        } catch {
+          // Snapshot endpoint puede no existir temporalmente en backend local viejo.
+          setLastSnapshotAt(null);
+        }
+        setLoadingMessage('Renderizando panel de explicación...');
       } catch (error) {
         toast({
           title: 'No se pudo cargar la explicación Sienna',
@@ -112,8 +160,12 @@ const ExplicacionHerederosSienna = () => {
   const documentsByHeir = useMemo(() => {
     const grouped = new Map<string, EvidenceDocument[]>();
     documents.forEach((document) => {
-      if (!document.related_heir_name) return;
-      const key = normalizeName(document.related_heir_name);
+      const key = document.related_member_id
+        ? `member:${document.related_member_id}`
+        : document.related_heir_name
+          ? `name:${normalizeName(document.related_heir_name)}`
+          : null;
+      if (!key) return;
       grouped.set(key, [...(grouped.get(key) || []), document]);
     });
     return grouped;
@@ -128,7 +180,10 @@ const ExplicacionHerederosSienna = () => {
       plan.activeHeirs.map((share) => {
         const excluded = excludedHeirs.includes(share.member.id);
         const simulatedShare = excluded || includedTotal <= 0 ? 0 : (share.share / includedTotal) * 100;
-        const heirDocs = documentsByHeir.get(normalizeName(share.member.name)) || [];
+        const heirDocs =
+          documentsByHeir.get(`member:${share.member.id}`) ||
+          documentsByHeir.get(`name:${normalizeName(share.member.name)}`) ||
+          [];
         return {
           share,
           documents: heirDocs,
@@ -156,16 +211,53 @@ const ExplicacionHerederosSienna = () => {
     );
   };
 
+  const saveSnapshot = async () => {
+    setSnapshotSaving(true);
+    try {
+      if (isAdmin) {
+        await api.updateSettings({ lawyer_fee_percentage: feePercentage });
+      }
+      await api.saveSiennaCalculationSnapshot({
+        estate_amount: grossAmount,
+        lawyer_fee_percentage: feePercentage,
+        distributable_amount: netAmount,
+        members_hash: buildMembersHash(members.map((member) => member.id)),
+        payload_json: JSON.stringify(
+          buildCalculationPayload(
+            plan,
+            netAmount,
+            snapshotNote || `Snapshot guardado desde Explicación Sienna. Excluidos: ${excludedHeirs.join(', ') || 'ninguno'}.`,
+            excludedHeirs
+          )
+        ),
+      });
+      const latest = await api.getLatestSiennaCalculationSnapshot();
+      setLastSnapshotAt(latest.snapshot?.created_at || null);
+      toast({ title: 'Snapshot guardado', description: 'La explicación y el reparto quedaron auditables para futuras reuniones.' });
+    } catch (error) {
+      toast({
+        title: 'No se pudo guardar el snapshot',
+        description: error instanceof Error ? error.message : 'Error desconocido',
+        variant: 'destructive',
+      });
+    } finally {
+      setSnapshotSaving(false);
+    }
+  };
+
   const glossary = useMemo(
     () => buildCaseGlossary(briefs.map((brief) => brief.share.member.name)),
     [briefs]
   );
 
   return (
-    <SiennaPageLayout className="print:py-2">
+    <SiennaPageLayout className={`print:py-2 ${isPresentationMode ? 'max-w-none' : ''}`}>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 print:hidden">
         <BackButton wrapperClassName="" />
         <div className="flex flex-wrap gap-2">
+          <Button variant={isPresentationMode ? 'default' : 'outline'} size="sm" onClick={() => setIsPresentationMode((current) => !current)}>
+            {isPresentationMode ? 'Salir modo exposición' : 'Modo exposición'}
+          </Button>
           <Button variant="outline" size="sm" asChild>
             <Link to="/sienna/arbol-genealogico">Ver árbol Sienna</Link>
           </Button>
@@ -183,6 +275,17 @@ const ExplicacionHerederosSienna = () => {
       />
 
       <div className="w-full space-y-6">
+        {loading && (
+          <Card className="border border-legal-blue/20 bg-legal-blue/5">
+            <CardContent className="p-4">
+              <p className="inline-flex items-center gap-2 text-sm text-legal-blue">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {loadingMessage}
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Card className="border border-legal-gold/20">
             <CardContent className="flex items-center gap-3 p-5">
@@ -259,7 +362,21 @@ const ExplicacionHerederosSienna = () => {
                 <p className="font-bold text-legal-blue">{formatMoney(netAmount)}</p>
                 <p className="text-xs text-legal-gray">Firma: {formatMoney(lawyerFee)}</p>
               </div>
+              <Button variant="outline" onClick={saveSnapshot} disabled={snapshotSaving}>
+                {snapshotSaving ? 'Guardando...' : 'Guardar snapshot Sienna'}
+              </Button>
             </div>
+            <div>
+              <Label>Nota del snapshot (auditoría de reunión)</Label>
+              <Input
+                value={snapshotNote}
+                onChange={(event) => setSnapshotNote(event.target.value)}
+                placeholder="Ej: Escenario presentado a primos con exclusión temporal."
+              />
+            </div>
+            <p className="text-xs text-legal-gray">
+              Último snapshot: {lastSnapshotAt ? new Date(lastSnapshotAt).toLocaleString('es-DO') : 'sin registro'}
+            </p>
 
             <div className="overflow-x-auto rounded-md border border-legal-blue/15">
               <table className="w-full min-w-[640px] text-sm">
@@ -269,6 +386,7 @@ const ExplicacionHerederosSienna = () => {
                     <th className="p-3">%</th>
                     <th className="p-3">Monto</th>
                     <th className="p-3">Ramas</th>
+                    <th className="p-3">Cadena de pago</th>
                     <th className="p-3">Soporte</th>
                   </tr>
                 </thead>
@@ -279,6 +397,7 @@ const ExplicacionHerederosSienna = () => {
                       <td className="p-3">{formatPercent(brief.simulatedShare)}</td>
                       <td className="p-3">{formatMoney(brief.simulatedAmount)}</td>
                       <td className="p-3 text-xs text-legal-gray">{brief.share.sources.join(', ') || '-'}</td>
+                      <td className="p-3 text-xs text-legal-gray">{routeSteps(brief.share).join(' -> ')}</td>
                       <td className="p-3">
                         <Badge className={brief.traffic.className}>{brief.traffic.label}</Badge>
                       </td>
@@ -315,7 +434,12 @@ const ExplicacionHerederosSienna = () => {
           <TabsContent value="por-que" className="space-y-4">
             {loading && (
               <Card>
-                <CardContent className="p-8 text-center text-legal-gray">Cargando explicación...</CardContent>
+                <CardContent className="p-8 text-center text-legal-gray">
+                  <span className="inline-flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin text-legal-blue" />
+                    {loadingMessage}
+                  </span>
+                </CardContent>
               </Card>
             )}
             {!loading &&

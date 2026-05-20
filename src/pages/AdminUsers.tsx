@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
 import DocumentHeader from '@/components/DocumentHeader';
+import SoftLoadingIndicator from '@/components/SoftLoadingIndicator';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -91,6 +92,7 @@ const AdminUsers = () => {
   const [visits, setVisits] = useState<PageVisit[]>([]);
   const [pages, setPages] = useState<PageData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMessage, setLoadingMessage] = useState('Cargando usuarios, permisos y auditoría...');
   const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
   const [permissionsDialogOpen, setPermissionsDialogOpen] = useState(false);
   const [savingPermissions, setSavingPermissions] = useState(false);
@@ -126,7 +128,9 @@ const AdminUsers = () => {
   const refreshAll = async () => {
     try {
       setLoading(true);
+      setLoadingMessage('Consultando usuarios, páginas y visitas...');
       await Promise.all([fetchUsers(), fetchPages(), fetchVisits()]);
+      setLoadingMessage('Procesando indicadores del panel...');
     } catch (error) {
       toast({
         variant: 'destructive',
@@ -430,6 +434,7 @@ const AdminUsers = () => {
         subtitle="Control de cuentas, permisos, actividad por usuario y uso operativo de la aplicación"
         helpKey="admin-users"
       />
+      <SoftLoadingIndicator active={loading} message={loadingMessage} />
 
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">

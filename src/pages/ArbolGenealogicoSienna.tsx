@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import BackButton from '@/components/BackButton';
 import DocumentHeader from '@/components/DocumentHeader';
+import SoftLoadingIndicator from '@/components/SoftLoadingIndicator';
 import { api, ConfirmedHeir, SiennaFamilyMember } from '@/lib/api';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -11,17 +12,17 @@ import { Label } from '@/components/ui/label';
 import { toast } from '@/components/ui/use-toast';
 import { useAuth } from '@/context/AuthContext';
 import {
+  applySiennaCaseConfig,
   buildDominicanInheritancePlan,
-  classifyMemberByDominicanLaw,
   InheritancePlan,
   legalCriterionText,
   normalizeName,
 } from '@/lib/dominicanInheritance';
 import { cn } from '@/lib/utils';
-import { Calculator, ClipboardCheck, FileText, GitBranch, GitMerge, Landmark, Maximize2, Minimize2, Route, Save, Users } from 'lucide-react';
+import { Calculator, ClipboardCheck, FileText, GitBranch, GitMerge, Landmark, Maximize2, Minimize2, Printer, RotateCcw, Route, Save, Users, ZoomIn, ZoomOut } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { buildWhyIInheritText, formatMoney as formatMoneyExplain, formatPercent as formatPercentExplain } from '@/lib/siennaHeirExplain';
-import { buildCalculationPayload, buildMembersHash } from '@/lib/siennaCalculation';
+import { buildCalculationPayload, buildMembersHash, parseCalculationPayload } from '@/lib/siennaCalculation';
 
 type TreeMember = SiennaFamilyMember & { children: TreeMember[] };
 
@@ -282,25 +283,56 @@ const ArbolGenealogicoSienna = () => {
   const [snapshotNote, setSnapshotNote] = useState('');
   const [isPresentationMode, setIsPresentationMode] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [isPanningTree, setIsPanningTree] = useState(false);
   const [lastSnapshotAt, setLastSnapshotAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMessage, setLoadingMessage] = useState('Cargando árbol y cálculos sucesorales...');
   const [paymentSaving, setPaymentSaving] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const treeScreenRef = useRef<HTMLDivElement | null>(null);
+  const treeViewportRef = useRef<HTMLDivElement | null>(null);
+  const treePanRef = useRef({
+    dragging: false,
+    startX: 0,
+    startY: 0,
+    scrollLeft: 0,
+    scrollTop: 0,
+  });
 
   const loadData = async () => {
     setLoading(true);
+    setLoadingMessage('Consultando miembros, herederos y configuración...');
     try {
       const [heirsResponse, membersResponse, settingsResponse] = await Promise.all([
         api.listConfirmedHeirs(),
         api.listSiennaFamilyMembers(),
         api.getSettings(),
       ]);
+      setLoadingMessage('Aplicando configuración del caso y preparando cálculo...');
+      const dbMembers = membersResponse.members;
+      applySiennaCaseConfig(settingsResponse.settings.sienna_case_config);
       setHeirs(heirsResponse.heirs);
       setLawyerFeePercentage(String(settingsResponse.settings.lawyer_fee_percentage ?? 0));
       try {
+        setLoadingMessage('Validando snapshot más reciente...');
         const latestSnapshotResponse = await api.getLatestSiennaCalculationSnapshot();
         if (latestSnapshotResponse.snapshot) {
+          const currentMembersHash = buildMembersHash(dbMembers.map((member) => member.id));
+          if (
+            latestSnapshotResponse.snapshot.members_hash &&
+            latestSnapshotResponse.snapshot.members_hash !== currentMembersHash
+          ) {
+            toast({
+              title: 'Snapshot desactualizado',
+              description: 'El último snapshot no coincide con los miembros actuales de la DB. Revise y regenere el cálculo.',
+              variant: 'destructive',
+            });
+          }
+          const parsedPayload = parseCalculationPayload(latestSnapshotResponse.snapshot.payload_json);
+          if (parsedPayload?.notes) {
+            setSnapshotNote(parsedPayload.notes);
+          }
           setEstateAmount(String(latestSnapshotResponse.snapshot.estate_amount ?? 0));
           setLawyerFeePercentage(String(latestSnapshotResponse.snapshot.lawyer_fee_percentage ?? 0));
           setLastSnapshotAt(latestSnapshotResponse.snapshot.created_at || null);
@@ -311,17 +343,8 @@ const ArbolGenealogicoSienna = () => {
         // Snapshot endpoint puede no existir temporalmente en backend local viejo.
         setLastSnapshotAt(null);
       }
-      const plan = buildDominicanInheritancePlan(membersResponse.members);
-      setMembers(
-        membersResponse.members.map((member) => {
-          const classification = classifyMemberByDominicanLaw(member, membersResponse.members);
-          return {
-            ...member,
-            ...classification,
-            inheritance_reason: plan.sharesById.get(member.id)?.reason || classification.inheritance_reason,
-          };
-        })
-      );
+      setLoadingMessage('Renderizando árbol genealógico...');
+      setMembers(dbMembers);
     } catch (error) {
       toast({
         title: 'No se pudo cargar el árbol Sienna',
@@ -345,6 +368,17 @@ const ArbolGenealogicoSienna = () => {
     document.addEventListener('fullscreenchange', onFullscreenChange);
     return () => {
       document.removeEventListener('fullscreenchange', onFullscreenChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    const stopTreePan = () => {
+      treePanRef.current.dragging = false;
+      setIsPanningTree(false);
+    };
+    window.addEventListener('mouseup', stopTreePan);
+    return () => {
+      window.removeEventListener('mouseup', stopTreePan);
     };
   }, []);
 
@@ -410,18 +444,14 @@ const ArbolGenealogicoSienna = () => {
       };
     });
   }, [distributableEstateAmount, heirsByMemberId, heirsByName, inheritancePlan]);
-  const presentationStats = useMemo(() => {
-    const classifiedMembers = members.map((member) => ({
-      ...member,
-      ...classifyMemberByDominicanLaw(member, members),
-    }));
-
-    return {
-      finalHeirs: classifiedMembers.filter((member) => member.inheritance_status === 'posible_heredero' || member.inheritance_status === 'confirmado').length,
-      connectors: classifiedMembers.filter((member) => member.inheritance_status === 'no_hereda').length,
-      pending: classifiedMembers.filter((member) => member.inheritance_status === 'requiere_revision').length,
-    };
-  }, [members]);
+  const presentationStats = useMemo(
+    () => ({
+      finalHeirs: members.filter((member) => member.inheritance_status === 'posible_heredero' || member.inheritance_status === 'confirmado').length,
+      connectors: members.filter((member) => member.inheritance_status === 'no_hereda').length,
+      pending: members.filter((member) => member.inheritance_status === 'requiere_revision').length,
+    }),
+    [members]
+  );
 
   const applyEstateCalculation = async () => {
     const totalEstate = distributableEstateAmount;
@@ -522,6 +552,84 @@ const ArbolGenealogicoSienna = () => {
     }
   };
 
+  const onTreeMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || !treeViewportRef.current) return;
+    treePanRef.current = {
+      dragging: true,
+      startX: event.clientX,
+      startY: event.clientY,
+      scrollLeft: treeViewportRef.current.scrollLeft,
+      scrollTop: treeViewportRef.current.scrollTop,
+    };
+    setIsPanningTree(true);
+  };
+
+  const onTreeMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!treePanRef.current.dragging || !treeViewportRef.current) return;
+    event.preventDefault();
+    const deltaX = event.clientX - treePanRef.current.startX;
+    const deltaY = event.clientY - treePanRef.current.startY;
+    treeViewportRef.current.scrollLeft = treePanRef.current.scrollLeft - deltaX;
+    treeViewportRef.current.scrollTop = treePanRef.current.scrollTop - deltaY;
+  };
+
+  const stopTreePan = () => {
+    treePanRef.current.dragging = false;
+    setIsPanningTree(false);
+  };
+
+  const printTree = () => {
+    const treeVisual = treeViewportRef.current?.querySelector('.classic-family-tree');
+    if (!treeVisual) {
+      toast({
+        title: 'No se pudo preparar impresión',
+        description: 'No se encontró el área visual del árbol.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const printWindow = window.open('', '_blank', 'width=1200,height=900');
+    if (!printWindow) {
+      toast({
+        title: 'No se pudo abrir impresión',
+        description: 'Permite ventanas emergentes para imprimir el árbol.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const styles = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
+      .map((node) => node.outerHTML)
+      .join('\n');
+
+    printWindow.document.write(`
+      <!doctype html>
+      <html lang="es">
+        <head>
+          <meta charset="utf-8" />
+          <title>Árbol Sienna</title>
+          ${styles}
+          <style>
+            body { margin: 16px; background: #fff; }
+            .classic-family-tree { overflow: visible !important; }
+          </style>
+        </head>
+        <body>
+          <h2 style="margin:0 0 12px 0;color:#173f73;">Árbol Sienna</h2>
+          ${treeVisual.outerHTML}
+          <script>
+            window.onload = () => {
+              window.print();
+              window.close();
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
   return (
     <div
       ref={treeScreenRef}
@@ -534,6 +642,7 @@ const ArbolGenealogicoSienna = () => {
         subtitle="Visualización clásica dinámica con herederos, foto y monto heredado"
         helpKey="sienna-arbol"
       />
+      <SoftLoadingIndicator active={loading} message={loadingMessage} />
 
       <div className="mb-4 flex flex-wrap justify-end gap-2">
         <Button variant={isFullscreen ? 'default' : 'outline'} size="sm" onClick={toggleFullscreen}>
@@ -764,7 +873,47 @@ const ArbolGenealogicoSienna = () => {
         <Card>
           <CardContent className="p-6">
             <div className="mb-6 rounded-md bg-white p-4 shadow">
-              <h3 className="mb-2 text-lg font-medium text-legal-blue">Vista clásica dinámica</h3>
+              <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
+                <h3 className="text-lg font-medium text-legal-blue">Vista clásica dinámica</h3>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1 rounded-md border border-legal-blue/20 bg-white px-2 py-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2"
+                    onClick={() => setZoomLevel((current) => Math.max(0.4, Number((current - 0.1).toFixed(2))))}
+                  >
+                    <ZoomOut className="h-4 w-4" />
+                  </Button>
+                  <span className="min-w-[52px] text-center text-xs font-semibold text-legal-blue">
+                    {Math.round(zoomLevel * 100)}%
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2"
+                    onClick={() => setZoomLevel((current) => Math.min(1.8, Number((current + 0.1).toFixed(2))))}
+                  >
+                    <ZoomIn className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2"
+                    onClick={() => setZoomLevel(1)}
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                  </Button>
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={printTree}>
+                  <Printer className="mr-2 h-4 w-4" />
+                  Imprimir árbol
+                </Button>
+                </div>
+              </div>
               <p className="mb-2 text-gray-700">
                 El árbol se arma desde los miembros guardados en base de datos. Al agregar una persona y seleccionar su nodo superior, la rama se reacomoda automáticamente.
               </p>
@@ -773,32 +922,48 @@ const ArbolGenealogicoSienna = () => {
               </p>
             </div>
 
-            <div className="w-full overflow-x-auto rounded-md bg-legal-beige/20 p-4">
+            <div
+              ref={treeViewportRef}
+              className={`w-full overflow-auto rounded-md bg-legal-beige/20 p-4 select-none ${isPanningTree ? 'cursor-grabbing' : 'cursor-grab'}`}
+              onMouseDown={onTreeMouseDown}
+              onMouseMove={onTreeMouseMove}
+              onMouseUp={stopTreePan}
+              onMouseLeave={stopTreePan}
+            >
               <div className="min-w-max">
                 {loading ? (
                   <div className="p-8 text-center text-legal-gray">Cargando árbol...</div>
                 ) : (
                   <div className="classic-family-tree overflow-auto p-8">
-                    {forest.length > 1 && (
-                      <p className="mb-3 text-xs text-amber-700">
-                        Hay {forest.length} raíces en el árbol. Revise vínculos parentales en Miembros del Árbol si espera una sola raíz.
-                      </p>
-                    )}
-                    <ul className="classic-tree-root">
-                      {forest.map((root) => (
-                        <ClassicNode
-                          key={root.id}
-                          member={root}
-                          heirsByMemberId={heirsByMemberId}
-                          heirsByName={heirsByName}
-                          inheritancePlan={inheritancePlan}
-                          total={total}
-                          estateAmount={distributableEstateAmount}
-                          membersById={membersById}
-                          membersByName={membersByName}
-                        />
-                      ))}
-                    </ul>
+                    <div
+                      style={{
+                        zoom: zoomLevel,
+                        transformOrigin: 'top left',
+                        width: 'fit-content',
+                        margin: '0',
+                      }}
+                    >
+                      {forest.length > 1 && (
+                        <p className="mb-3 text-xs text-amber-700">
+                          Hay {forest.length} raíces en el árbol. Revise vínculos parentales en Miembros del Árbol si espera una sola raíz.
+                        </p>
+                      )}
+                      <ul className="classic-tree-root">
+                        {forest.map((root) => (
+                          <ClassicNode
+                            key={root.id}
+                            member={root}
+                            heirsByMemberId={heirsByMemberId}
+                            heirsByName={heirsByName}
+                            inheritancePlan={inheritancePlan}
+                            total={total}
+                            estateAmount={distributableEstateAmount}
+                            membersById={membersById}
+                            membersByName={membersByName}
+                          />
+                        ))}
+                      </ul>
+                    </div>
                   </div>
                 )}
               </div>

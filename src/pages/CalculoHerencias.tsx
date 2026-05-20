@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
 import DocumentHeader from '@/components/DocumentHeader';
+import SoftLoadingIndicator from '@/components/SoftLoadingIndicator';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -57,6 +58,7 @@ const CalculoHerencias = () => {
   const { isAdmin } = useAuth();
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMessage, setLoadingMessage] = useState('Cargando datos para cálculos...');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<UserData | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -72,8 +74,10 @@ const CalculoHerencias = () => {
   const fetchUsers = async () => {
     try {
       setLoading(true);
+      setLoadingMessage('Consultando usuarios y permisos...');
       const { users } = await api.listUsers();
       setUsers(users as UserData[]);
+      setLoadingMessage('Preparando calculadora de herencias...');
     } catch (error) {
       console.error('Error al obtener usuarios:', error);
       toast({
@@ -205,7 +209,7 @@ const CalculoHerencias = () => {
 
   if (!isAdmin) {
     return (
-      <div className="container mx-auto px-4 py-8">
+      <div className="app-shell py-8">
         <Card>
           <CardContent className="p-6">
             <h2 className="text-2xl font-serif font-bold text-legal-blue mb-4">
@@ -219,14 +223,15 @@ const CalculoHerencias = () => {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="app-shell py-8">
       <DocumentHeader
         title="Cálculo de Herencias"
         subtitle="Herramientas administrativas para el cálculo de herencias y gestión de usuarios"
         helpKey="calculo-herencias"
       />
+      <SoftLoadingIndicator active={loading} message={loadingMessage} />
 
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         <Tabs defaultValue="calculator" className="space-y-6">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="calculator" className="flex items-center gap-2">
