@@ -55,6 +55,7 @@ Lógica compartida: `src/lib/dominicanInheritance.ts`, `src/lib/siennaGenealogy.
 Documentación: [docs/UI.md](docs/UI.md)
 
 - **Ayuda (?):** popover no invasivo en cada pantalla; textos en `src/data/screenHelp.ts`.
+- **Guía de registro (libro):** panel lateral en Miembros del árbol con diagramas, orden de captura y ejemplo Víctor Manuel (`MemberRegistrationGuide.tsx`).
 - **Atrás:** visible solo fuera de inicio, login y panel; con historial vuelve atrás, si no va al dashboard.
 - **Perfil:** vista renovada con tarjetas de identidad/seguridad y mejor jerarquía visual.
 - **Navegación móvil:** la sección Sienna se muestra en lista directa para evitar submenús recortados.
@@ -89,7 +90,8 @@ Guía completa: [docs/DEPLOY.md](docs/DEPLOY.md)
 | `npm run check:prod` | Verifica health y rutas Sienna en producción |
 | `npm run release` | Build + deploy + check (script bash) |
 | `npm run migrate:genealogy` | Poblar uniones y vínculos parentales (local) |
-| `npm run migrate:genealogy:prod` | Igual en MySQL de producción |
+| `npm run deploy:env` | Sube `.env.prod.working` al servidor (FTP) |
+| `npm run deploy:zip` | Genera `herenciard_deploy_full.zip` para deploy MCP |
 
 Plantilla de variables en servidor: [`.env.production.example`](.env.production.example)
 

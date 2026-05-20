@@ -587,6 +587,12 @@ try {
     respond_health();
   }
 
+  if (!is_file(__DIR__ . '/.env')) {
+    json_response([
+      'message' => 'Falta el archivo .env en el servidor. Suba credenciales con npm run deploy:env o el administrador del hosting.',
+    ], 503);
+  }
+
   ensure_schema();
 
   if ($method === 'POST' && $path === '/auth/signup') {

@@ -25,7 +25,25 @@ Pantallas especializadas del expediente familiar (caso Alessandro y derivados).
 
 ## Ayuda en pantalla
 
-En las tres rutas Sienna hay un icono **?** (esquina superior derecha del encabezado) con guía de uso: montos del caudal, estado hereditario en miembros, pestañas de explicación, etc. Ver [docs/UI.md](UI.md).
+En las rutas Sienna hay iconos en la esquina superior derecha del encabezado:
+
+| Icono | Componente | Uso |
+|-------|------------|-----|
+| **?** | `PageHelp` | Popover breve por pantalla (`src/data/screenHelp.ts`) |
+| **Libro** | `MemberRegistrationGuide` | Guía visual + texto para crear/editar miembros (solo en Miembros del árbol) |
+
+La **Guía de registro** (`src/components/sienna/MemberRegistrationGuide.tsx`) abre un panel lateral con:
+
+- Flujo de captura (adultos → matrimonios → hijos → validar)
+- Diagrama de las 3 capas con conectores (árbol, bloque azul, bloque dorado)
+- Orden recomendado de quién entrar primero
+- Ejemplo paso a paso (Víctor Manuel, hijo de María Rosa y Pedro Pablo)
+- Ejemplo de hijo de otra relación y preguntas frecuentes
+- Layout responsive: matrimonios apilados en móvil, pipeline vertical en pantallas pequeñas
+
+Acceso: botón libro junto al **?** en el encabezado de la página y en la tarjeta «Agregar/Editar Miembro».
+
+Ver también [docs/UI.md](UI.md).
 
 ## Layout responsivo
 
@@ -53,7 +71,7 @@ Al guardar un miembro el sistema actualiza tres capas:
 
 **Al guardar (API)** persiste `sienna_family_members`, sincroniza `member_parent_links` para hijos/hijas y crea/actualiza `family_unions` si hay cónyuge enlazado.
 
-Ayuda en pantalla: icono **?** en Miembros del árbol (`sienna-miembros`, `sienna-miembros-agregar` en `src/data/screenHelp.ts`).
+Ayuda en pantalla: icono **?** (`sienna-miembros`, `sienna-miembros-agregar`) e icono **libro** (Guía de registro interactiva) en `MiembrosArbolSienna.tsx`.
 
 ## Doble linaje y cruces
 

@@ -17,6 +17,8 @@
     "check:prod": "bash scripts/post-deploy-check.sh",
     "migrate:genealogy": "node scripts/migrate-sienna-genealogy.cjs",
     "migrate:genealogy:prod": "ENV_FILE=.env.prod.working node scripts/migrate-sienna-genealogy.cjs",
+    "deploy:env": "python3 scripts/upload-prod-env.py",
+    "deploy:zip": "python3 scripts/build-prod-deploy-zip.py",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview"

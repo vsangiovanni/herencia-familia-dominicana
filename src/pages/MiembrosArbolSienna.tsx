@@ -40,6 +40,7 @@ import {
 } from '@/lib/siennaGenealogy';
 import { formatPercent } from '@/lib/siennaHeirExplain';
 import MemberTreeContextPanel from '@/components/sienna/MemberTreeContextPanel';
+import MemberRegistrationGuide from '@/components/sienna/MemberRegistrationGuide';
 import PageHelp from '@/components/PageHelp';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import {
@@ -451,6 +452,8 @@ const MiembrosArbolSienna = () => {
     form.parent_id !== 'root' &&
     (form.relationship_to_parent === 'hijo' || form.relationship_to_parent === 'hija');
   const selectedParent = form.parent_id !== 'root' ? membersById.get(form.parent_id) : null;
+  const editingPersonLabel = form.name.trim() || (form.id ? 'este miembro' : 'la persona del formulario');
+  const superiorLabel = selectedParent?.name || 'el superior elegido';
 
   const heirsByMemberId = useMemo(
     () => new Map(heirs.filter((heir) => heir.sienna_member_id).map((heir) => [String(heir.sienna_member_id), heir])),
@@ -507,6 +510,7 @@ const MiembrosArbolSienna = () => {
         title="Miembros del Árbol Sienna"
         subtitle="Registro operativo: línea parental, rama sucesoral, conexión al árbol y si el miembro hereda o actúa solo como enlace"
         helpKey="sienna-miembros"
+        helpToolbar={<MemberRegistrationGuide variant="icon" />}
       />
 
       <div className="mb-4 flex flex-wrap justify-end gap-2">
@@ -596,7 +600,10 @@ const MiembrosArbolSienna = () => {
                 <UserPlus className="h-5 w-5" />
                 {form.id ? 'Editar Miembro' : 'Agregar Miembro'}
               </CardTitle>
-              <PageHelp helpKey="sienna-miembros-agregar" />
+              <div className="flex items-center gap-1">
+                <MemberRegistrationGuide variant="icon" />
+                <PageHelp helpKey="sienna-miembros-agregar" />
+              </div>
             </div>
           </CardHeader>
           <CardContent className="grid grid-cols-1 gap-4 p-4 sm:p-6 md:grid-cols-2 lg:grid-cols-4">
@@ -641,18 +648,18 @@ const MiembrosArbolSienna = () => {
             </div>
             <div className="md:col-span-4 space-y-4 rounded-lg border-2 border-legal-blue/25 bg-legal-blue/[0.04] p-4">
               <div>
-                <p className="flex items-center gap-2 text-sm font-semibold text-legal-blue">
+                <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-legal-blue">
                   <GitMerge className="h-4 w-4" />
-                  Unión matrimonial de esta persona
+                  Unión matrimonial de {editingPersonLabel}
                 </p>
                 <p className="mt-1 text-xs text-legal-gray">
-                  Aplica al adulto que está guardando (no al hijo). Al elegir cónyuge del árbol y guardar, se registra la
-                  pareja para poder asignar hijos a ese matrimonio.
+                  El cónyuge que elijas aquí es de <strong>{editingPersonLabel}</strong>, no del nodo superior (
+                  {superiorLabel}). Al guardar, se registra la pareja para poder asignar hijos a ese matrimonio.
                 </p>
               </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <Label>Cónyuge en el árbol</Label>
+                  <Label>Cónyuge de {editingPersonLabel} (miembro del árbol)</Label>
                   <Select
                     value={form.spouse_member_id || '__none__'}
                     onValueChange={(value) => {
@@ -680,7 +687,7 @@ const MiembrosArbolSienna = () => {
                   </Select>
                 </div>
                 <div>
-                  <Label>Nacimiento del cónyuge</Label>
+                  <Label>Nacimiento del cónyuge de {editingPersonLabel}</Label>
                   <Input
                     value={form.spouse_birth}
                     onChange={(event) => updateForm('spouse_birth', event.target.value)}
@@ -692,16 +699,18 @@ const MiembrosArbolSienna = () => {
 
             <div className="md:col-span-4 space-y-4 rounded-lg border-2 border-legal-gold/35 bg-legal-gold/[0.06] p-4">
               <div>
-                <p className="text-sm font-semibold text-legal-blue">Filiación del hijo o hija</p>
+                <p className="text-sm font-semibold text-legal-blue">
+                  Filiación de {editingPersonLabel} como hijo o hija
+                </p>
                 <p className="mt-1 text-xs text-legal-gray">
-                  Solo para parentesco Hijo/Hija con un superior elegido. Distingue hijos del matrimonio vs hijos de otra
-                  relación.
+                  Solo aplica si {editingPersonLabel} es hijo/hija de <strong>{superiorLabel}</strong> en el árbol.
+                  Aquí defines de qué matrimonio es ese hijo (no el cónyuge personal de {editingPersonLabel}).
                 </p>
               </div>
               {showChildFiliationFields ? (
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
-                    <Label>Unión de filiación (matrimonio / pareja)</Label>
+                    <Label>Matrimonio / pareja de {editingPersonLabel} (progenitor: {superiorLabel})</Label>
                     <Select
                       value={form.filiation_union_id || '__none__'}
                       onValueChange={(value) =>
@@ -723,13 +732,13 @@ const MiembrosArbolSienna = () => {
                     {filiationUnionOptions.length === 0 && selectedParent && (
                       <p className="mt-2 flex items-start gap-1 text-xs text-amber-800">
                         <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                        El superior «{selectedParent.name}» no tiene unión registrada. Edítelo, enlace su cónyuge en la
-                        sección azul de arriba, guarde, y vuelva a este hijo.
+                        {superiorLabel} no tiene unión registrada. Edítelo, enlace su cónyuge en el bloque azul de su
+                        ficha, guarde, y vuelva a {editingPersonLabel}.
                       </p>
                     )}
                   </div>
                   <div>
-                    <Label>Segundo progenitor (opcional)</Label>
+                    <Label>Otro progenitor de {editingPersonLabel} (pareja de {superiorLabel})</Label>
                     <Select
                       value={form.second_parent_id || '__none__'}
                       onValueChange={(value) =>
@@ -750,15 +759,16 @@ const MiembrosArbolSienna = () => {
                     </Select>
                     {secondParentOptions.length === 0 && selectedParent?.spouse_member_id && (
                       <p className="mt-1 text-xs text-legal-gray">
-                        El superior no tiene cónyuge enlazado por ID; use la sección azul en el registro del progenitor.
+                        {superiorLabel} no tiene cónyuge enlazado por ID; edite su ficha (bloque azul) primero.
                       </p>
                     )}
                   </div>
                 </div>
               ) : (
                 <p className="text-sm text-legal-gray">
-                  Elija un <strong>nodo superior</strong> y parentesco <strong>Hijo</strong> o <strong>Hija</strong> para
-                  activar estos campos.
+                  Para activar estos campos: elija un <strong>nodo superior</strong> y parentesco{' '}
+                  <strong>Hijo</strong> o <strong>Hija</strong> para {editingPersonLabel}. Abra la{' '}
+                  <strong>Guía de registro</strong> (icono libro junto a ?) para ver el ejemplo de Víctor Manuel.
                 </p>
               )}
             </div>

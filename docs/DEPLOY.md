@@ -13,11 +13,26 @@ npm run deploy          # sube dist/ por FTP
 npm run check:prod      # verifica health y rutas Sienna
 ```
 
-Despliegue alterno por MCP Hostinger (cuando FTP esté inestable):
+Despliegue alterno por MCP Hostinger (recomendado cuando FTP esté lento o inestable):
 
-- Tool: `hosting_deployStaticWebsite`
-- Dominio: `herenciard.vmsencf.com`
-- Archivo: zip de `dist/` ya compilado.
+1. Compilar y empaquetar **con** `.env` de producción:
+   ```sh
+   npm run build
+   python3 scripts/build-prod-deploy-zip.py
+   ```
+   Genera `herenciard_deploy_full.zip` (`dist/` + `.env` desde `.env.prod.working`).
+
+2. Desplegar con MCP:
+   - Tool: `hosting_deployStaticWebsite`
+   - Dominio: `herenciard.vmsencf.com`
+   - Archivo: `herenciard_deploy_full.zip` (ruta absoluta al zip)
+
+3. Verificar:
+   ```sh
+   npm run check:prod
+   ```
+
+**Importante:** un zip **sin** `.env` deja el backend en **503** hasta ejecutar `npm run deploy:env`. Preferir `herenciard_deploy_full.zip` en deploys MCP.
 
 Solo cambió el backend PHP:
 
@@ -80,10 +95,13 @@ Si usas MCP para static deploy:
 | `scripts/deploy-dist.py` | Sube recursivamente `dist/` |
 | `scripts/deploy-api-php.py` | Sube solo `dist/api.php` y verifica URLs |
 | `scripts/post-deploy-check.sh` | `curl` a health y rutas Sienna |
+| `scripts/build-prod-deploy-zip.py` | Genera `herenciard_deploy_full.zip` (dist + `.env` prod) para MCP |
+| `scripts/upload-prod-env.py` | Sube `.env.prod.working` como `.env` remoto (FTP) |
+
 | `scripts/run-release.sh` | Build + deploy-dist + check |
 
-Los scripts de deploy **nunca** suben ni sobrescriben `.env` en el servidor.
-En cambio, el despliegue estático por MCP depende de lo que venga dentro del zip.
+Los scripts de deploy **nunca** suben ni sobrescriben `.env` en el servidor vía FTP.
+El despliegue estático por MCP depende de lo que vaya dentro del zip; use `build-prod-deploy-zip.py` para incluir credenciales.
 
 ## Variables en servidor
 

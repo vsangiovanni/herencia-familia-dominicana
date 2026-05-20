@@ -6,14 +6,16 @@ interface DocumentHeaderProps {
   title: string;
   subtitle?: string;
   helpKey?: string;
+  helpToolbar?: React.ReactNode;
 }
 
-const DocumentHeader: React.FC<DocumentHeaderProps> = ({ title, subtitle, helpKey }) => {
+const DocumentHeader: React.FC<DocumentHeaderProps> = ({ title, subtitle, helpKey, helpToolbar }) => {
   return (
     <header className="relative mb-6 text-center sm:mb-8">
-      {helpKey && (
-        <div className="absolute right-0 top-0 z-10 sm:right-1">
-          <PageHelp helpKey={helpKey} />
+      {(helpKey || helpToolbar) && (
+        <div className="absolute right-0 top-0 z-10 flex items-center gap-1 sm:right-1">
+          {helpToolbar}
+          {helpKey && <PageHelp helpKey={helpKey} />}
         </div>
       )}
       <div className="mb-2 flex flex-wrap items-center justify-center gap-2 px-1 pr-10 sm:pr-12">
