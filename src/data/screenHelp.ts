@@ -92,17 +92,29 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
   },
   'admin-users': {
     title: 'Administración de usuarios',
+    intro: 'Panel administrativo integral para controlar cuentas, permisos y auditar el uso operativo de la aplicación.',
     sections: [
       {
-        title: 'Usuarios',
+        title: 'Control de usuarios',
         items: [
-          'Apruebe o revoque acceso a nuevas cuentas.',
-          'Asigne rol administrador solo a personal de confianza.',
+          'Cree usuarios, apruebe o revoque accesos y cambie roles (admin/regular).',
+          'Administre permisos por pantalla para cada cuenta desde el botón de permisos.',
+          'Elimine usuarios solo cuando sea necesario y nunca su propia cuenta.',
         ],
       },
       {
-        title: 'Estadísticas',
-        items: ['Revise visitas por página para ver qué módulos usa el equipo.'],
+        title: 'Auditoría por usuario',
+        items: [
+          'Revise visitas totales, actividad en 7 días, páginas únicas y última ruta por usuario.',
+          'Use estos datos para detectar cuentas inactivas, uso irregular o necesidad de soporte.',
+        ],
+      },
+      {
+        title: 'Auditoría de uso de la app',
+        items: [
+          'Filtre bitácora por usuario y ruta para revisar quién accedió, cuándo y desde qué agente.',
+          'Supervise top de páginas y actividad diaria para tomar decisiones operativas.',
+        ],
       },
     ],
   },
@@ -196,13 +208,25 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
       {
         title: 'Registro',
         items: [
-          'Cargue actas, identifique personas y vincule con herederos confirmados.',
-          'Marque si el documento confirma a un heredero para el semáforo en Sienna.',
+          'Flujo: cargue documento, seleccione tipo y vincule al miembro titular del árbol.',
+          'Miembro titular y miembro relacionado son el mismo nodo para evitar duplicidades.',
+          'Marque si el documento confirma al heredero vinculado para el semáforo Sienna.',
+        ],
+      },
+      {
+        title: 'Parentescos del acta',
+        items: [
+          'Padre, madre y cónyuge se seleccionan desde miembros existentes, no por texto libre.',
+          'Así toda la evidencia queda trazable y conectada al árbol sin crear personas duplicadas.',
+          'Use Recalcular parentescos automáticos cuando cambie el titular o se actualice el árbol.',
         ],
       },
       {
         title: 'OCR / texto',
-        items: ['Puede pegar o transcribir texto del acta; revise siempre antes de guardar.'],
+        items: [
+          'La interpretación OCR sugiere datos, pero siempre valide antes de guardar.',
+          'El texto transcrito sirve como soporte, no reemplaza la vinculación por miembros.',
+        ],
       },
     ],
   },
