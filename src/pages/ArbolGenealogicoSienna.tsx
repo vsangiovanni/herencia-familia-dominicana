@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import BackButton from '@/components/BackButton';
 import DocumentHeader from '@/components/DocumentHeader';
 import { api, ConfirmedHeir, SiennaFamilyMember } from '@/lib/api';
@@ -18,9 +18,10 @@ import {
   normalizeName,
 } from '@/lib/dominicanInheritance';
 import { cn } from '@/lib/utils';
-import { Calculator, ClipboardCheck, FileText, GitBranch, Landmark, Route, Save, Users } from 'lucide-react';
+import { Calculator, ClipboardCheck, FileText, GitBranch, GitMerge, Landmark, Maximize2, Minimize2, Route, Save, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { buildWhyIInheritText, formatMoney as formatMoneyExplain, formatPercent as formatPercentExplain } from '@/lib/siennaHeirExplain';
+import { buildCalculationPayload, buildMembersHash } from '@/lib/siennaCalculation';
 
 type TreeMember = SiennaFamilyMember & { children: TreeMember[] };
 
@@ -48,8 +49,9 @@ const buildForest = (members: SiennaFamilyMember[]) => {
 
   const roots: TreeMember[] = [];
   byId.forEach((member) => {
-    const parent = member.parent_id ? byId.get(member.parent_id) : null;
-    if (parent) {
+    const parentId = member.parent_id?.trim();
+    const parent = parentId ? byId.get(parentId) : null;
+    if (parent && parent.id !== member.id) {
       parent.children.push(member);
     } else {
       roots.push(member);
@@ -74,20 +76,47 @@ const explanationRole = (status?: string | null) => {
 const formatPercent = (value: number) =>
   `${new Intl.NumberFormat('es-DO', { maximumFractionDigits: 2 }).format(value)}%`;
 
+const normalizedMemberId = (value: string | null | undefined) => (value || '').trim();
+
+const findSpousePartner = (
+  member: SiennaFamilyMember,
+  membersByName: Map<string, SiennaFamilyMember>
+) => {
+  if (member.spouse) {
+    const direct = membersByName.get(normalizeName(member.spouse));
+    if (direct) return direct;
+  }
+
+  for (const candidate of membersByName.values()) {
+    if (candidate.id === member.id) continue;
+    if (candidate.spouse && normalizeName(candidate.spouse) === normalizeName(member.name)) {
+      return candidate;
+    }
+  }
+
+  return null;
+};
+
 const ClassicNode = ({
   member,
+  heirsByMemberId,
   heirsByName,
   inheritancePlan,
   total,
   estateAmount,
+  membersById,
+  membersByName,
 }: {
   member: TreeMember;
+  heirsByMemberId: Map<string, ConfirmedHeir>;
   heirsByName: Map<string, ConfirmedHeir>;
   inheritancePlan: InheritancePlan;
   total: number;
   estateAmount: number;
+  membersById: Map<string, SiennaFamilyMember>;
+  membersByName: Map<string, SiennaFamilyMember>;
 }) => {
-  const heir = heirsByName.get(normalizeName(member.name));
+  const heir = heirsByMemberId.get(member.id) || heirsByName.get(normalizeName(member.name));
   const inheritanceShare = inheritancePlan.sharesById.get(member.id);
   const savedAmount = Number(heir?.inheritance_amount || 0);
   const isHeir = Boolean(heir || inheritanceShare);
@@ -98,6 +127,9 @@ const ClassicNode = ({
   const amount = calculatedAmount || savedAmount;
   const referenceTotal = estateAmount > 0 ? estateAmount : total;
   const share = inheritanceShare?.share || (referenceTotal > 0 && amount > 0 ? (amount / referenceTotal) * 100 : 0);
+  const parent = member.parent_id ? membersById.get(normalizedMemberId(member.parent_id)) || null : null;
+  const otherParent = parent ? findSpousePartner(parent, membersByName) : null;
+  const hasDualLineage = (inheritanceShare?.sources.length || 0) > 1;
 
   return (
     <li className="relative">
@@ -109,11 +141,11 @@ const ClassicNode = ({
             isHeir && 'border-legal-gold bg-legal-gold/5 shadow-md'
           )}
         >
-          {isHeir && (
-            <div className="mb-2 flex justify-center">
-              <Avatar className="h-16 w-16 border-2 border-legal-gold/50">
-                {heir?.photo_data && <AvatarImage src={heir.photo_data} alt={member.name} className="object-cover" />}
-                <AvatarFallback className="bg-legal-blue/10 text-legal-blue font-semibold">
+          {heir?.photo_data && (
+            <div className="absolute -right-3 -top-3 z-10">
+              <Avatar className="h-14 w-14 rounded-xl border-2 border-legal-gold/60 shadow-lg">
+                <AvatarImage src={heir.photo_data} alt={member.name} className="rounded-xl object-cover" />
+                <AvatarFallback className="rounded-xl bg-legal-blue/10 text-legal-blue font-semibold">
                   {initials(member.name)}
                 </AvatarFallback>
               </Avatar>
@@ -132,6 +164,35 @@ const ClassicNode = ({
             <div className="mt-1 text-xs">
               <span className="text-legal-gray">Cónyuge: </span>
               {member.spouse}
+            </div>
+          )}
+
+          {(parent || otherParent) && (
+            <div className="mt-2 rounded-md bg-legal-blue/5 p-2 text-left">
+              {parent && (
+                <p className="text-xs leading-relaxed text-legal-gray">
+                  <span className="font-semibold text-legal-blue">Padre/Madre base: </span>
+                  {parent.name}
+                </p>
+              )}
+              {otherParent && (
+                <p className="mt-1 text-xs leading-relaxed text-legal-gray">
+                  <span className="font-semibold text-legal-blue">Otro vínculo parental: </span>
+                  {otherParent.name}
+                </p>
+              )}
+              {parent && otherParent && (
+                <div className="mt-2 rounded border border-legal-gold/30 bg-white/80 p-2">
+                  <p className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-legal-blue">
+                    <GitMerge className="h-3 w-3" />
+                    Cruce transversal de ramas
+                  </p>
+                  <div className="dual-lineage-connector mt-1">
+                    <span className="dual-lineage-dot dual-lineage-dot-left" />
+                    <span className="dual-lineage-dot dual-lineage-dot-right" />
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -154,6 +215,7 @@ const ClassicNode = ({
               <div className="flex flex-wrap justify-center gap-1">
                 {(heir?.line_vincenzo || inheritanceShare?.sources.includes('Vincenzo/Vicente')) && <Badge variant="outline">Vincenzo/Vicente</Badge>}
                 {(heir?.line_paolo || inheritanceShare?.sources.includes('Paolo/Paulino')) && <Badge variant="outline">Paolo/Paulino</Badge>}
+                {hasDualLineage && <Badge variant="default">Doble linaje</Badge>}
                 <Badge variant={heir?.status === 'confirmado' ? 'default' : 'secondary'}>{heir?.status || 'calculado'}</Badge>
               </div>
               <div className="rounded-md bg-white/80 p-2">
@@ -190,17 +252,18 @@ const ClassicNode = ({
         </div>
 
         {member.children.length > 0 && (
-          <ul className="classic-tree-children relative flex flex-row space-x-4">
-            <div className="absolute -top-6 left-1/2 h-6 w-0.5 -translate-x-1/2 bg-legal-blue" />
-            {member.children.length > 1 && <div className="absolute left-0 right-0 top-0 h-0.5 bg-legal-blue" />}
+          <ul className={cn('classic-tree-children relative', member.children.length > 1 && 'has-multiple')}>
             {member.children.map((child) => (
               <ClassicNode
                 key={child.id}
                 member={child}
+                heirsByMemberId={heirsByMemberId}
                 heirsByName={heirsByName}
                 inheritancePlan={inheritancePlan}
                 total={total}
                 estateAmount={estateAmount}
+                membersById={membersById}
+                membersByName={membersByName}
               />
             ))}
           </ul>
@@ -216,9 +279,14 @@ const ArbolGenealogicoSienna = () => {
   const [members, setMembers] = useState<SiennaFamilyMember[]>([]);
   const [estateAmount, setEstateAmount] = useState('');
   const [lawyerFeePercentage, setLawyerFeePercentage] = useState('0');
+  const [snapshotNote, setSnapshotNote] = useState('');
+  const [isPresentationMode, setIsPresentationMode] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [lastSnapshotAt, setLastSnapshotAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [paymentSaving, setPaymentSaving] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
+  const treeScreenRef = useRef<HTMLDivElement | null>(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -230,6 +298,19 @@ const ArbolGenealogicoSienna = () => {
       ]);
       setHeirs(heirsResponse.heirs);
       setLawyerFeePercentage(String(settingsResponse.settings.lawyer_fee_percentage ?? 0));
+      try {
+        const latestSnapshotResponse = await api.getLatestSiennaCalculationSnapshot();
+        if (latestSnapshotResponse.snapshot) {
+          setEstateAmount(String(latestSnapshotResponse.snapshot.estate_amount ?? 0));
+          setLawyerFeePercentage(String(latestSnapshotResponse.snapshot.lawyer_fee_percentage ?? 0));
+          setLastSnapshotAt(latestSnapshotResponse.snapshot.created_at || null);
+        } else {
+          setLastSnapshotAt(null);
+        }
+      } catch {
+        // Snapshot endpoint puede no existir temporalmente en backend local viejo.
+        setLastSnapshotAt(null);
+      }
       const plan = buildDominicanInheritancePlan(membersResponse.members);
       setMembers(
         membersResponse.members.map((member) => {
@@ -256,6 +337,17 @@ const ArbolGenealogicoSienna = () => {
     loadData();
   }, []);
 
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    };
+
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
+    };
+  }, []);
+
   const total = useMemo(
     () => heirs.reduce((sum, heir) => sum + Number(heir.inheritance_amount || 0), 0),
     [heirs]
@@ -269,20 +361,55 @@ const ArbolGenealogicoSienna = () => {
     () => new Map(heirs.map((heir) => [normalizeName(heir.heir_name), heir])),
     [heirs]
   );
+  const heirsByMemberId = useMemo(
+    () => new Map(heirs.filter((heir) => heir.sienna_member_id).map((heir) => [String(heir.sienna_member_id), heir])),
+    [heirs]
+  );
+  const membersById = useMemo(
+    () => new Map(members.map((member) => [normalizedMemberId(member.id), member])),
+    [members]
+  );
+  const membersByName = useMemo(
+    () => new Map(members.map((member) => [normalizeName(member.name), member])),
+    [members]
+  );
 
   const forest = useMemo(() => buildForest(members), [members]);
+  const orphanMembers = useMemo(() => {
+    const ids = new Set(members.map((member) => member.id));
+    return members.filter((member) => member.parent_id && !ids.has(member.parent_id));
+  }, [members]);
   const inheritancePlan = useMemo(() => buildDominicanInheritancePlan(members), [members]);
+  const dualLineageRows = useMemo(
+    () =>
+      inheritancePlan.activeHeirs
+        .filter((share) => share.sources.length > 1)
+        .map((share) => {
+          const baseParent = share.member.parent_id
+            ? membersById.get(normalizedMemberId(share.member.parent_id)) || null
+            : null;
+          const linkedParent = baseParent ? findSpousePartner(baseParent, membersByName) : null;
+          return {
+            memberId: share.member.id,
+            memberName: share.member.name,
+            sources: share.sources.join(' + '),
+            baseParentName: baseParent?.name || 'No definido',
+            linkedParentName: linkedParent?.name || 'No definido',
+          };
+        }),
+    [inheritancePlan.activeHeirs, membersById, membersByName]
+  );
   const calculatedPayments = useMemo(() => {
     const totalEstate = distributableEstateAmount;
     return inheritancePlan.activeHeirs.map((share) => {
-      const heir = heirsByName.get(normalizeName(share.member.name));
+      const heir = heirsByMemberId.get(share.member.id) || heirsByName.get(normalizeName(share.member.name));
       return {
         heir,
         share,
         amount: totalEstate > 0 ? totalEstate * (share.share / 100) : Number(heir?.inheritance_amount || 0),
       };
     });
-  }, [distributableEstateAmount, heirsByName, inheritancePlan]);
+  }, [distributableEstateAmount, heirsByMemberId, heirsByName, inheritancePlan]);
   const presentationStats = useMemo(() => {
     const classifiedMembers = members.map((member) => ({
       ...member,
@@ -308,6 +435,7 @@ const ArbolGenealogicoSienna = () => {
       await Promise.all(
         calculatedPayments.map(({ heir, share, amount }) => {
           const payload = {
+            sienna_member_id: share.member.id,
             heir_name: share.member.name,
             relationship_summary: share.reason,
             line_vincenzo: share.sources.includes('Vincenzo/Vicente'),
@@ -325,6 +453,19 @@ const ArbolGenealogicoSienna = () => {
             : api.saveConfirmedHeir(payload);
         })
       );
+      await api.saveSiennaCalculationSnapshot({
+        estate_amount: estateAmountNumber,
+        lawyer_fee_percentage: lawyerFeePercentageNumber,
+        distributable_amount: totalEstate,
+        members_hash: buildMembersHash(members.map((member) => member.id)),
+        payload_json: JSON.stringify(
+          buildCalculationPayload(
+            inheritancePlan,
+            totalEstate,
+            snapshotNote || 'Snapshot guardado desde Árbol Sienna (calcular y guardar pagos).'
+          )
+        ),
+      });
       await loadData();
       toast({ title: 'Montos calculados', description: 'Los pagos quedaron guardados y el árbol fue actualizado.' });
     } catch (error) {
@@ -354,8 +495,38 @@ const ArbolGenealogicoSienna = () => {
     }
   };
 
+  const toggleFullscreen = async () => {
+    if (!document.fullscreenEnabled) {
+      toast({
+        title: 'Pantalla completa no disponible',
+        description: 'Este navegador no permite pantalla completa en este momento.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+        return;
+      }
+
+      if (!treeScreenRef.current) return;
+      await treeScreenRef.current.requestFullscreen();
+    } catch (error) {
+      toast({
+        title: 'No se pudo activar pantalla completa',
+        description: error instanceof Error ? error.message : 'Error desconocido',
+        variant: 'destructive',
+      });
+    }
+  };
+
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div
+      ref={treeScreenRef}
+      className={`app-shell py-8 ${isPresentationMode ? 'max-w-none px-2 sm:px-3 lg:px-4' : ''} ${isFullscreen ? 'bg-legal-beige' : ''}`}
+    >
       <BackButton />
 
       <DocumentHeader
@@ -365,6 +536,22 @@ const ArbolGenealogicoSienna = () => {
       />
 
       <div className="mb-4 flex flex-wrap justify-end gap-2">
+        <Button variant={isFullscreen ? 'default' : 'outline'} size="sm" onClick={toggleFullscreen}>
+          {isFullscreen ? (
+            <>
+              <Minimize2 className="mr-2 h-4 w-4" />
+              Salir pantalla completa
+            </>
+          ) : (
+            <>
+              <Maximize2 className="mr-2 h-4 w-4" />
+              Pantalla completa
+            </>
+          )}
+        </Button>
+        <Button variant={isPresentationMode ? 'default' : 'outline'} size="sm" onClick={() => setIsPresentationMode((current) => !current)}>
+          {isPresentationMode ? 'Salir modo exposición' : 'Modo exposición'}
+        </Button>
         <Button variant="outline" size="sm" asChild>
           <Link to="/sienna/explicacion-herederos">
             <FileText className="mr-2 h-4 w-4" />
@@ -376,7 +563,7 @@ const ArbolGenealogicoSienna = () => {
         </Button>
       </div>
 
-      <div className="mx-auto max-w-[95%] space-y-6">
+      <div className="space-y-6">
         <Card className="border border-legal-gold/20">
           <CardContent className="p-5">
             <h3 className="mb-2 font-serif text-lg font-bold text-legal-blue">Criterio automático del caso Alessandro</h3>
@@ -385,6 +572,47 @@ const ArbolGenealogicoSienna = () => {
             </p>
           </CardContent>
         </Card>
+
+        {orphanMembers.length > 0 && (
+          <Card className="border border-amber-300 bg-amber-50">
+            <CardContent className="p-4">
+              <p className="text-sm font-semibold text-amber-800">
+                Hay miembros sin conexión válida al árbol ({orphanMembers.length}).
+              </p>
+              <p className="mt-1 text-xs text-amber-700">
+                Revise en “Miembros del Árbol” los nodos cuyo superior no existe (parent_id inválido) para que vuelvan a conectarse visualmente.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        <Card className="border border-legal-gold/20">
+          <CardContent className="p-4">
+            <p className="text-xs uppercase tracking-wide text-legal-gray">Último snapshot de cálculo Sienna</p>
+            <p className="mt-1 text-sm text-legal-blue">
+              {lastSnapshotAt ? new Date(lastSnapshotAt).toLocaleString('es-DO') : 'Aún no hay snapshots guardados.'}
+            </p>
+          </CardContent>
+        </Card>
+
+        {dualLineageRows.length > 0 && (
+          <Card className="border border-legal-blue/20">
+            <CardHeader className="bg-legal-blue/5 border-b">
+              <CardTitle className="text-base text-legal-blue">Cruces de ramas (doble linaje)</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 p-4">
+              {dualLineageRows.map((row) => (
+                <div key={row.memberId} className="rounded-md border border-legal-blue/15 bg-white p-3">
+                  <p className="font-semibold text-legal-blue">{row.memberName}</p>
+                  <p className="mt-1 text-xs text-legal-gray">Ramas activas: {row.sources}</p>
+                  <p className="mt-1 text-xs text-legal-gray">
+                    Padre/Madre base: {row.baseParentName} · Otro vínculo parental: {row.linkedParentName}
+                  </p>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
 
         <div className="grid gap-4 md:grid-cols-4">
           <Card className="border border-legal-gold/20">
@@ -465,6 +693,14 @@ const ArbolGenealogicoSienna = () => {
                 Calcular y guardar pagos
               </Button>
             </div>
+            <div>
+              <Label>Nota del snapshot (auditoría de reunión)</Label>
+              <Input
+                value={snapshotNote}
+                onChange={(event) => setSnapshotNote(event.target.value)}
+                placeholder="Ej: Reunión 19/05, excluidos provisionales X e Y."
+              />
+            </div>
 
             <div className="grid gap-3 md:grid-cols-3">
               <div className="rounded-md border border-legal-blue/15 bg-white p-3">
@@ -543,15 +779,23 @@ const ArbolGenealogicoSienna = () => {
                   <div className="p-8 text-center text-legal-gray">Cargando árbol...</div>
                 ) : (
                   <div className="classic-family-tree overflow-auto p-8">
-                    <ul className="classic-tree-root flex justify-center gap-8">
+                    {forest.length > 1 && (
+                      <p className="mb-3 text-xs text-amber-700">
+                        Hay {forest.length} raíces en el árbol. Revise vínculos parentales en Miembros del Árbol si espera una sola raíz.
+                      </p>
+                    )}
+                    <ul className="classic-tree-root">
                       {forest.map((root) => (
                         <ClassicNode
                           key={root.id}
                           member={root}
+                          heirsByMemberId={heirsByMemberId}
                           heirsByName={heirsByName}
                           inheritancePlan={inheritancePlan}
                           total={total}
                           estateAmount={distributableEstateAmount}
+                          membersById={membersById}
+                          membersByName={membersByName}
                         />
                       ))}
                     </ul>

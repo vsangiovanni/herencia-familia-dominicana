@@ -10,6 +10,11 @@ export type InheritanceShare = {
   route: string;
   paymentBasis: string;
   sources: string[];
+  sourceBreakdown: Array<{
+    source: string;
+    share: number;
+    routes: string[];
+  }>;
 };
 
 export type InheritancePlan = {
@@ -54,8 +59,13 @@ const knownIntermediates = new Map([
   [normalizeName('José Vicente Sangiovanni Gesualdo'), 'Intermedio fallecido; Jocelyn y Mayra entran por representación en su rama.'],
 ]);
 
-const isChildRelationship = (member: SiennaFamilyMember) =>
-  member.relationship_to_parent === 'hijo' || member.relationship_to_parent === 'hija' || !member.relationship_to_parent;
+const normalizedMemberId = (value: string | null | undefined) => (value || '').trim();
+
+const isDescendantRelationship = (member: SiennaFamilyMember) =>
+  member.relationship_to_parent === 'hijo' ||
+  member.relationship_to_parent === 'hija' ||
+  member.relationship_to_parent === 'otro' ||
+  !member.relationship_to_parent;
 
 const isDeceased = (member: SiennaFamilyMember) => Boolean(member.death?.trim());
 
@@ -68,11 +78,21 @@ const byNameKey = (members: SiennaFamilyMember[]) =>
   new Map(members.map((member) => [normalizeName(member.name), member]));
 
 const directChildrenOf = (members: SiennaFamilyMember[], parentId: string) =>
-  members.filter((member) => member.parent_id === parentId && isChildRelationship(member));
+  members.filter((member) => normalizedMemberId(member.parent_id) === normalizedMemberId(parentId) && isDescendantRelationship(member));
 
 const findSpousePartner = (member: SiennaFamilyMember, membersByName: Map<string, SiennaFamilyMember>) => {
-  if (!member.spouse) return null;
-  return membersByName.get(normalizeName(member.spouse)) || null;
+  const memberNameKey = normalizeName(member.name);
+  const spouseByOwnReference = member.spouse ? membersByName.get(normalizeName(member.spouse)) || null : null;
+  if (spouseByOwnReference) return spouseByOwnReference;
+
+  for (const candidate of membersByName.values()) {
+    if (normalizeName(candidate.name) === memberNameKey) continue;
+    if (candidate.spouse && normalizeName(candidate.spouse) === memberNameKey) {
+      return candidate;
+    }
+  }
+
+  return null;
 };
 
 const uniqueMembers = (members: SiennaFamilyMember[]) => {
@@ -96,6 +116,16 @@ const addShare = (
   const sources = existing ? Array.from(new Set([...existing.sources, source])) : [source];
   const nextShare = compactShare((existing?.share || 0) + roundedShare);
   const sourceText = sources.join(' y ');
+  const currentBreakdown = new Map(
+    (existing?.sourceBreakdown || []).map((item) => [item.source, { ...item }])
+  );
+  const currentSource = currentBreakdown.get(source);
+  const nextRoutes = Array.from(new Set([...(currentSource?.routes || []), route]));
+  currentBreakdown.set(source, {
+    source,
+    share: compactShare((currentSource?.share || 0) + roundedShare),
+    routes: nextRoutes,
+  });
 
   shares.set(member.id, {
     member,
@@ -111,6 +141,9 @@ const addShare = (
       sources.length > 1
         ? `Acumula ${formatPercent(nextShare)} por concurrencia de ramas sucesorales calculadas conforme al árbol.`
         : `Recibe ${formatPercent(nextShare)} por la rama ${sourceText}.`,
+    sourceBreakdown: Array.from(currentBreakdown.values()).sort((left, right) =>
+      left.source.localeCompare(right.source, 'es')
+    ),
   });
 };
 

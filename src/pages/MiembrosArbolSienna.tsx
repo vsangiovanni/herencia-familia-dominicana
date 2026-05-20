@@ -27,6 +27,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/use-toast';
 import { buildDominicanInheritancePlan, classifyMemberByDominicanLaw, normalizeName } from '@/lib/dominicanInheritance';
+import { ConfirmedHeir, EvidenceDocument } from '@/lib/api';
 import {
   buildMemberTreeContext,
   formatParentOptionLabel,
@@ -34,9 +35,11 @@ import {
 } from '@/lib/siennaFamilyTree';
 import { formatPercent } from '@/lib/siennaHeirExplain';
 import MemberTreeContextPanel from '@/components/sienna/MemberTreeContextPanel';
-import { Edit, GitBranch, Save, Search, SlidersHorizontal, Trash2, UserPlus, Users } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Edit, Eye, FileText, GitBranch, Image as ImageIcon, Save, Search, SlidersHorizontal, Trash2, UserPlus, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Progress } from '@/components/ui/progress';
+import { useAuth } from '@/context/AuthContext';
 
 type MemberForm = {
   id: string;
@@ -120,17 +123,28 @@ const toForm = (member: SiennaFamilyMember): MemberForm => ({
 });
 
 const MiembrosArbolSienna = () => {
+  const { isAdmin } = useAuth();
   const [members, setMembers] = useState<SiennaFamilyMember[]>([]);
+  const [documents, setDocuments] = useState<EvidenceDocument[]>([]);
+  const [heirs, setHeirs] = useState<ConfirmedHeir[]>([]);
   const [form, setForm] = useState<MemberForm>(emptyForm);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
+  const [viewerMemberId, setViewerMemberId] = useState<string | null>(null);
+  const [viewerDocumentId, setViewerDocumentId] = useState<string | null>(null);
 
   const loadMembers = async () => {
     setLoading(true);
     try {
-      const response = await api.listSiennaFamilyMembers();
-      setMembers(response.members);
+      const [membersResponse, documentsResponse, heirsResponse] = await Promise.all([
+        api.listSiennaFamilyMembers(),
+        api.listEvidenceDocuments(),
+        api.listConfirmedHeirs(),
+      ]);
+      setMembers(membersResponse.members);
+      setDocuments(documentsResponse.documents);
+      setHeirs(heirsResponse.heirs);
     } catch (error) {
       toast({
         title: 'No se pudieron cargar los miembros',
@@ -290,6 +304,14 @@ const MiembrosArbolSienna = () => {
   };
 
   const deleteMember = async (member: SiennaFamilyMember) => {
+    if (!isAdmin) {
+      toast({
+        title: 'Accion restringida',
+        description: 'Solo los administradores pueden eliminar miembros del arbol.',
+        variant: 'destructive',
+      });
+      return;
+    }
     await api.deleteSiennaFamilyMember(member.id);
     await loadMembers();
     toast({ title: 'Miembro eliminado', description: 'Si tenía descendientes, quedaron como raíz temporal.' });
@@ -301,6 +323,53 @@ const MiembrosArbolSienna = () => {
     connectors: members.filter((member) => member.inheritance_status === 'no_hereda').length,
     pending: members.filter((member) => member.inheritance_status === 'requiere_revision').length,
   }), [members]);
+
+  const heirsByMemberId = useMemo(
+    () => new Map(heirs.filter((heir) => heir.sienna_member_id).map((heir) => [String(heir.sienna_member_id), heir])),
+    [heirs]
+  );
+
+  const heirsByName = useMemo(
+    () => new Map(heirs.filter((heir) => heir.heir_name).map((heir) => [normalizeName(heir.heir_name), heir])),
+    [heirs]
+  );
+
+  const memberIdByHeirName = useMemo(
+    () =>
+      new Map(
+        heirs
+          .filter((heir) => heir.sienna_member_id && heir.heir_name)
+          .map((heir) => [normalizeName(heir.heir_name), String(heir.sienna_member_id)])
+      ),
+    [heirs]
+  );
+
+  const documentsByMemberId = useMemo(() => {
+    const map = new Map<string, EvidenceDocument[]>();
+    documents.forEach((document) => {
+      const memberId =
+        (document.related_member_id && String(document.related_member_id)) ||
+        (document.related_heir_name ? memberIdByHeirName.get(normalizeName(document.related_heir_name)) : undefined);
+      if (!memberId) return;
+      const current = map.get(memberId) || [];
+      current.push(document);
+      map.set(memberId, current);
+    });
+    return map;
+  }, [documents, memberIdByHeirName]);
+
+  const viewerMemberDocuments = useMemo(
+    () => (viewerMemberId ? documentsByMemberId.get(viewerMemberId) || [] : []),
+    [documentsByMemberId, viewerMemberId]
+  );
+
+  const selectedViewerDocument = useMemo(
+    () =>
+      viewerMemberDocuments.find((document) => document.id === viewerDocumentId) ||
+      viewerMemberDocuments[0] ||
+      null,
+    [viewerDocumentId, viewerMemberDocuments]
+  );
 
   return (
     <SiennaPageLayout>
@@ -516,7 +585,7 @@ const MiembrosArbolSienna = () => {
               />
             </div>
 
-            <Table className="min-w-[1100px]">
+            <Table className="min-w-[1300px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>Miembro</TableHead>
@@ -526,6 +595,8 @@ const MiembrosArbolSienna = () => {
                   <TableHead>¿Hereda?</TableHead>
                   <TableHead>Rol</TableHead>
                   <TableHead>Fechas</TableHead>
+                  <TableHead>Foto</TableHead>
+                  <TableHead>Documentos</TableHead>
                   <TableHead className="hidden xl:table-cell">Notas</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
@@ -533,14 +604,14 @@ const MiembrosArbolSienna = () => {
               <TableBody>
                 {loading && (
                   <TableRow>
-                    <TableCell colSpan={9} className="py-8 text-center text-legal-gray">
+                    <TableCell colSpan={11} className="py-8 text-center text-legal-gray">
                       Cargando miembros...
                     </TableCell>
                   </TableRow>
                 )}
                 {!loading && filteredMembers.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={9} className="py-8 text-center text-legal-gray">
+                    <TableCell colSpan={11} className="py-8 text-center text-legal-gray">
                       No hay miembros que coincidan con la búsqueda.
                     </TableCell>
                   </TableRow>
@@ -549,6 +620,16 @@ const MiembrosArbolSienna = () => {
                   filteredMembers.map((member) => {
                     const context = memberContexts.get(member.id);
                     if (!context) return null;
+                    const linkedHeir = heirsByMemberId.get(member.id) || heirsByName.get(normalizeName(member.name));
+                    const isConfirmedByEvidence = linkedHeir?.status === 'confirmado';
+                    const displayInheritanceLabel = isConfirmedByEvidence
+                      ? 'Sí — confirmado documentalmente'
+                      : context.inheritanceLabel;
+                    const displayTreeRoleLabel = isConfirmedByEvidence
+                      ? 'Heredero confirmado (expediente)'
+                      : context.treeRoleLabel;
+                    const displayInherits = context.inherits || isConfirmedByEvidence;
+                    const memberDocuments = documentsByMemberId.get(member.id) || [];
 
                     return (
                       <TableRow key={member.id}>
@@ -569,19 +650,132 @@ const MiembrosArbolSienna = () => {
                         <TableCell className="min-w-[140px] text-sm text-gray-700">{context.connectionLabel}</TableCell>
                         <TableCell>
                           <Badge
-                            variant={context.inherits ? 'default' : 'secondary'}
-                            className={context.inherits ? 'bg-legal-gold text-white hover:bg-legal-gold/90' : ''}
+                            variant={displayInherits ? 'default' : 'secondary'}
+                            className={displayInherits ? 'bg-legal-gold text-white hover:bg-legal-gold/90' : ''}
                           >
-                            {context.inheritanceLabel}
+                            {displayInheritanceLabel}
                           </Badge>
                         </TableCell>
-                        <TableCell className="min-w-[140px] text-sm text-gray-700">{context.treeRoleLabel}</TableCell>
+                        <TableCell className="min-w-[140px] text-sm text-gray-700">{displayTreeRoleLabel}</TableCell>
                         <TableCell className="whitespace-nowrap text-sm">
                           {member.birth || '—'}
                           {member.death ? ` / † ${member.death}` : ''}
                           {member.spouse ? (
                             <p className="mt-1 text-xs text-legal-gray">Cónyuge: {member.spouse}</p>
                           ) : null}
+                        </TableCell>
+                        <TableCell className="min-w-[110px]">
+                          <div className="flex items-center justify-center">
+                            {linkedHeir?.photo_data ? (
+                              <img
+                                src={String(linkedHeir.photo_data)}
+                                alt={member.name}
+                                className="h-12 w-12 rounded-full border object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-12 w-12 items-center justify-center rounded-full border bg-legal-blue/5">
+                                <ImageIcon className="h-4 w-4 text-legal-gray" />
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="min-w-[220px]">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline">{memberDocuments.length} acta(s)</Badge>
+                            <Dialog
+                              onOpenChange={(open) => {
+                                if (open) {
+                                  setViewerMemberId(member.id);
+                                  setViewerDocumentId(memberDocuments[0]?.id || null);
+                                }
+                              }}
+                            >
+                              <DialogTrigger asChild>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={memberDocuments.length === 0}
+                                >
+                                  <Eye className="mr-1 h-4 w-4" />
+                                  Ver documentación
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent className="max-h-[85vh] overflow-hidden sm:max-w-4xl">
+                                <DialogHeader>
+                                  <DialogTitle>Documentación de {member.name}</DialogTitle>
+                                </DialogHeader>
+                                <div className="grid gap-3 md:grid-cols-[280px_1fr]">
+                                  <div className="max-h-[60vh] space-y-2 overflow-y-auto border-r pr-2">
+                                    {memberDocuments.map((document) => (
+                                      <button
+                                        key={document.id}
+                                        type="button"
+                                        onClick={() => setViewerDocumentId(document.id || null)}
+                                        className={`w-full rounded border p-2 text-left text-sm ${
+                                          selectedViewerDocument?.id === document.id
+                                            ? 'border-legal-gold bg-legal-gold/10'
+                                            : 'border-legal-blue/15'
+                                        }`}
+                                      >
+                                        <p className="font-medium text-legal-blue">{document.title}</p>
+                                        <p className="mt-1 text-xs text-legal-gray">{document.document_type}</p>
+                                      </button>
+                                    ))}
+                                  </div>
+                                  <div className="max-h-[60vh] overflow-y-auto rounded border bg-white p-3">
+                                    {!selectedViewerDocument ? (
+                                      <p className="text-sm text-legal-gray">No hay documentos vinculados.</p>
+                                    ) : (
+                                      <div className="space-y-3">
+                                        <div>
+                                          <p className="font-semibold text-legal-blue">{selectedViewerDocument.title}</p>
+                                          <p className="text-xs text-legal-gray">
+                                            {selectedViewerDocument.document_type} · {selectedViewerDocument.event_date || 'Sin fecha'}
+                                          </p>
+                                        </div>
+                                        {selectedViewerDocument.file_data ? (
+                                          selectedViewerDocument.file_type?.startsWith('image/') ? (
+                                            <img
+                                              src={selectedViewerDocument.file_data}
+                                              alt={selectedViewerDocument.title}
+                                              className="max-h-[420px] w-full rounded border object-contain"
+                                            />
+                                          ) : selectedViewerDocument.file_type === 'application/pdf' ? (
+                                            <iframe
+                                              title={selectedViewerDocument.title}
+                                              src={selectedViewerDocument.file_data}
+                                              className="h-[420px] w-full rounded border"
+                                            />
+                                          ) : (
+                                            <a
+                                              href={selectedViewerDocument.file_data}
+                                              target="_blank"
+                                              rel="noreferrer"
+                                              className="inline-flex items-center text-sm text-legal-blue underline"
+                                            >
+                                              Abrir archivo
+                                            </a>
+                                          )
+                                        ) : selectedViewerDocument.extracted_text ? (
+                                          <div className="rounded border bg-legal-beige/20 p-3 text-xs leading-relaxed text-gray-700">
+                                            {selectedViewerDocument.extracted_text}
+                                          </div>
+                                        ) : (
+                                          <p className="text-sm text-legal-gray">Este registro no tiene archivo adjunto.</p>
+                                        )}
+                                        {selectedViewerDocument.notes && (
+                                          <div className="rounded border bg-legal-blue/5 p-2 text-xs text-gray-700">
+                                            {selectedViewerDocument.notes}
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </DialogContent>
+                            </Dialog>
+                          </div>
                         </TableCell>
                         <TableCell className="hidden min-w-[200px] text-sm text-gray-700 xl:table-cell">
                           {member.inheritance_reason || context.routeLabel || '—'}
@@ -591,14 +785,16 @@ const MiembrosArbolSienna = () => {
                             <Button variant="outline" size="sm" onClick={() => setForm(toForm(member))}>
                               <Edit className="h-4 w-4" />
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-red-600 hover:text-red-700"
-                              onClick={() => deleteMember(member)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            {isAdmin && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-red-600 hover:text-red-700"
+                                onClick={() => deleteMember(member)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
