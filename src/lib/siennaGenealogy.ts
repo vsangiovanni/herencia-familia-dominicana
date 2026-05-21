@@ -347,6 +347,18 @@ export const getDescendantsForRepresentation = (
   });
 };
 
-export const countGenealogyInconsistencies = (bundle: SiennaGenealogyBundle) =>
-  bundle.unions.filter((union) => union.is_inconsistent).length +
-  bundle.parent_links.filter((link) => link.is_inconsistent).length;
+export const countGenealogyInconsistencies = (bundle: SiennaGenealogyBundle) => {
+  const referencedUnionIds = new Set(
+    bundle.parent_links.map((link) => normalizedId(link.union_id)).filter(Boolean)
+  );
+
+  const unionIssues = bundle.unions.filter(
+    (union) =>
+      union.is_inconsistent &&
+      (referencedUnionIds.has(union.id) || normalizedId(union.partner_b_member_id))
+  ).length;
+
+  const linkIssues = bundle.parent_links.filter((link) => link.is_inconsistent).length;
+
+  return unionIssues + linkIssues;
+};

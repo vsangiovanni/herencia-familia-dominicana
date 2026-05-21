@@ -6,12 +6,7 @@ import {
   SiennaFamilyMember,
 } from '@/lib/api';
 import { buildDominicanInheritancePlan, normalizeName } from '@/lib/dominicanInheritance';
-import {
-  getDescendantsForRepresentation,
-  getParentLinksForChild,
-  getUnionsForMember,
-  SiennaGenealogyBundle,
-} from '@/lib/siennaGenealogy';
+import { countGenealogyInconsistencies, getDescendantsForRepresentation, getParentLinksForChild, getUnionsForMember, SiennaGenealogyBundle } from '@/lib/siennaGenealogy';
 
 export type FindingCategory = 'genealogia' | 'calculo' | 'expediente';
 export type FindingSeverity = 'Alta prioridad' | 'Media prioridad' | 'Baja prioridad';
@@ -186,63 +181,26 @@ export const buildSiennaFindings = ({
     });
   }
 
-  const inconsistentUnions = unions.filter((union) => union.is_inconsistent);
-  if (inconsistentUnions.length) {
+  const genealogyIssues = countGenealogyInconsistencies(genealogy);
+  if (genealogyIssues > 0) {
     items.push({
       id: 'genealogy-inconsistent-unions',
       category: 'genealogia',
       severity: 'Alta prioridad',
-      title: 'Uniones matrimoniales inconsistentes',
-      issue: 'Hay parejas registradas solo en texto o sin enlazar por ID en el árbol.',
-      detail: `${inconsistentUnions.length} unión(es) marcada(s) como inconsistentes. Esto afecta la filiación de hijos y el cálculo por matrimonio.`,
-      suggestion: 'Enlace cada cónyuge por ID (bloque azul en Miembros) o use la corrección automática cuando el nombre coincida con un miembro existente.',
+      title: 'Vínculos de filiación inconsistentes',
+      issue: 'Hay uniones o vínculos parentales que afectan el reparto y requieren corrección.',
+      detail: `${genealogyIssues} registro(s) inconsistente(s) vinculado(s) a hijos o filiación formal.`,
+      suggestion: 'Revise Hallazgos o Miembros del árbol para corregir vínculos de hijos y uniones usadas en filiación.',
       fixActions: [
         {
           id: 'genealogy-unions-guide',
-          label: 'Ir a Miembros del árbol',
+          label: 'Ir a Hallazgos',
           type: 'navigate',
-          href: '/sienna/miembros-arbol',
+          href: '/hallazgos',
         },
       ],
     });
   }
-
-  inconsistentUnions.forEach((union) => {
-    const member = membersById.get(union.partner_a_member_id);
-    if (!member || member.spouse_member_id) return;
-
-    const spouseText = member.spouse?.trim();
-    if (!spouseText) return;
-
-    const matchedSpouse = matchMemberBySpouseText(spouseText, members, member.id);
-    if (!matchedSpouse) return;
-
-    items.push({
-      id: `genealogy-link-spouse-${member.id}`,
-      category: 'genealogia',
-      severity: 'Media prioridad',
-      title: `Enlazar cónyuge de ${member.name}`,
-      issue: 'El cónyuge está en texto pero no enlazado como miembro del árbol.',
-      detail: `Coincidencia detectada: «${matchedSpouse.name}». Al enlazar se actualiza la unión matrimonial y mejora la filiación de hijos.`,
-      suggestion: 'Use «Enlazar cónyuge automático» o edite la ficha manualmente en el bloque azul.',
-      relatedMemberIds: [member.id, matchedSpouse.id],
-      fixActions: [
-        {
-          id: `fix-link-spouse-${member.id}`,
-          label: 'Enlazar cónyuge automático',
-          type: 'link_spouse',
-          memberId: member.id,
-          spouseMemberId: matchedSpouse.id,
-        },
-        {
-          id: `edit-link-spouse-${member.id}`,
-          label: 'Editar ficha',
-          type: 'edit_member',
-          memberId: member.id,
-        },
-      ],
-    });
-  });
 
   const childrenMissingLinks = members.filter(
     (member) =>

@@ -37,7 +37,6 @@ import { CheckCircle2, ClipboardList, RefreshCw, Scale, Search } from 'lucide-re
 import { toast } from '@/components/ui/use-toast';
 
 const kindBadgeClass: Record<MemberIssueKind, string> = {
-  link_spouse: 'bg-legal-blue/10 text-legal-blue border-legal-blue/25',
   sync_parent_link: 'bg-legal-gold/15 text-legal-blue border-legal-gold/35',
   complete_filiation: 'bg-legal-gold/15 text-legal-blue border-legal-gold/35',
   dead_branch: 'bg-amber-50 text-amber-900 border-amber-200',
@@ -132,15 +131,6 @@ const Hallazgos = () => {
 
     setSavingRowId(row.id);
     try {
-      if (row.kind === 'link_spouse') {
-        await api.saveSiennaFamilyMember(
-          buildMemberSavePayload(member, members, unions, {
-            spouse_member_id: draft.spouseMemberId || null,
-          })
-        );
-        toast({ title: 'Cónyuge guardado', description: `${member.name} actualizado.` });
-      }
-
       if (row.kind === 'sync_parent_link' || row.kind === 'complete_filiation') {
         await api.saveSiennaFamilyMember(
           buildMemberSavePayload(member, members, unions, {
@@ -255,9 +245,9 @@ const Hallazgos = () => {
                     </p>
                   </div>
                   <div className="rounded-lg border border-legal-gold/30 p-4">
-                    <p className="text-xs uppercase text-legal-gray">Cónyuge / vínculo / rama</p>
+                    <p className="text-xs uppercase text-legal-gray">Vínculo / matrimonio / rama</p>
                     <p className="text-sm font-medium text-legal-blue">
-                      {summary.byKind.link_spouse} / {summary.byKind.sync_parent_link + summary.byKind.complete_filiation} / {summary.byKind.dead_branch}
+                      {summary.byKind.sync_parent_link} / {summary.byKind.complete_filiation} / {summary.byKind.dead_branch}
                     </p>
                   </div>
                 </div>

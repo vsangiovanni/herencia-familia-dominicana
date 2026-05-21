@@ -186,8 +186,9 @@ const CalculoFiliacion = () => {
               )}
               {genealogyIssues > 0 && (
                 <p>
-                  Hay <strong>{genealogyIssues}</strong> uniones/vínculos marcados como inconsistentes en el árbol
-                  (pareja sin ID enlazado). Revise Hallazgos o Miembros del árbol antes de usar cifras en reunión.
+                  Hay <strong>{genealogyIssues}</strong> vínculo(s) o unión(es) inconsistentes que afectan filiación
+                  formal (no incluye cónyuge solo en texto como referencia). Revise Hallazgos antes de usar cifras en
+                  reunión.
                 </p>
               )}
               {childrenMissingLinks.length > 0 && (

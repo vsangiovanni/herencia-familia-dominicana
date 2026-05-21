@@ -43,43 +43,12 @@ export const MemberIssueFixPanel = ({
   const child = members.find((member) => member.id === row.memberId);
   const parentId = child?.parent_id || '';
   const secondParentOptions =
-    row.kind === 'link_spouse' || row.kind === 'dead_branch'
+    row.kind === 'dead_branch'
       ? row.secondParentOptions
       : buildSecondParentOptions(parentId, draft.filiationUnionId || null, members, unions);
 
-  const canSaveSpouse = row.kind === 'link_spouse' && Boolean(draft.spouseMemberId);
   const canSaveFiliation =
     (row.kind === 'sync_parent_link' || row.kind === 'complete_filiation') && Boolean(parentId);
-
-  if (row.kind === 'link_spouse') {
-    return (
-      <div className="space-y-2">
-        <Select
-          value={draft.spouseMemberId || '__none__'}
-          onValueChange={(value) =>
-            onDraftChange({ spouseMemberId: value === '__none__' ? '' : value })
-          }
-        >
-          <SelectTrigger className="h-9">
-            <SelectValue placeholder="Seleccione cónyuge" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__none__">— Seleccione —</SelectItem>
-            {row.spouseOptions.map((option) => (
-              <SelectItem key={option.id} value={option.id}>
-                {option.name}
-                {option.suggested ? ' ★ sugerido' : ''}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Button type="button" size="sm" className="w-full gap-2 sm:w-auto" disabled={!canSaveSpouse || saving} onClick={onSave}>
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          Guardar cónyuge
-        </Button>
-      </div>
-    );
-  }
 
   if (row.kind === 'sync_parent_link' || row.kind === 'complete_filiation') {
     return (

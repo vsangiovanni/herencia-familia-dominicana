@@ -1,5 +1,4 @@
 import { FamilyUnion, MemberParentLink, SiennaFamilyMember } from '@/lib/api';
-import { normalizeName } from '@/lib/dominicanInheritance';
 import {
   formatUnionLabel,
   getDescendantsForRepresentation,
@@ -10,7 +9,6 @@ import {
 } from '@/lib/siennaGenealogy';
 
 export type MemberIssueKind =
-  | 'link_spouse'
   | 'sync_parent_link'
   | 'complete_filiation'
   | 'dead_branch';
@@ -48,29 +46,6 @@ const isChildMember = (member: SiennaFamilyMember) =>
   member.relationship_to_parent === 'hijo' || member.relationship_to_parent === 'hija';
 
 const isDeceased = (member: SiennaFamilyMember) => Boolean(member.death?.trim());
-
-const matchMemberByName = (name: string, members: SiennaFamilyMember[], excludeId: string) => {
-  const key = normalizeName(name);
-  if (!key) return null;
-  return members.find((member) => member.id !== excludeId && normalizeName(member.name) === key) || null;
-};
-
-export const buildSpouseOptions = (member: SiennaFamilyMember, members: SiennaFamilyMember[]) => {
-  const spouseText = member.spouse?.trim();
-  const matched = spouseText ? matchMemberByName(spouseText, members, member.id) : null;
-
-  return members
-    .filter((candidate) => candidate.id !== member.id)
-    .map((candidate) => ({
-      id: candidate.id,
-      name: candidate.name,
-      suggested: matched?.id === candidate.id,
-    }))
-    .sort((left, right) => {
-      if (left.suggested !== right.suggested) return left.suggested ? -1 : 1;
-      return left.name.localeCompare(right.name, 'es');
-    });
-};
 
 export const buildUnionOptionsForParent = (
   parentId: string,
@@ -124,45 +99,6 @@ export const buildMemberIssueRows = (
   const rows: MemberIssueRow[] = [];
   const genealogy: SiennaGenealogyBundle = { unions, parent_links: parentLinks };
   const membersById = new Map(members.map((member) => [member.id, member]));
-
-  members.forEach((member) => {
-    if (member.spouse_member_id) return;
-
-    const hasInconsistentUnion = unions.some(
-      (union) =>
-        union.is_inconsistent &&
-        (union.partner_a_member_id === member.id || union.partner_b_member_id === member.id)
-    );
-
-    // Cónyuge solo en texto (sin ID) es referencia documental; no bloquea el reparto sucesoral.
-    if (!hasInconsistentUnion) return;
-
-    const spouseText = member.spouse?.trim();
-    const matched = spouseText ? matchMemberByName(spouseText, members, member.id) : null;
-    const spouseOptions = buildSpouseOptions(member, members);
-
-    rows.push({
-      id: `link-spouse-${member.id}`,
-      memberId: member.id,
-      memberName: member.name,
-      kind: 'link_spouse',
-      severity: 'Alta prioridad',
-      problem: spouseText
-        ? 'Unión matrimonial inconsistente: el cónyuge debe enlazarse como miembro del árbol.'
-        : 'Unión matrimonial inconsistente: falta enlazar el cónyuge como miembro.',
-      solution:
-        'Seleccione el cónyuge correcto del árbol y guarde. Esto corrige la unión usada para filiación de hijos.',
-      context: spouseText ? `Texto de referencia: «${spouseText}»` : 'Unión marcada inconsistente en base de datos.',
-      defaults: {
-        spouseMemberId: matched?.id || '',
-        filiationUnionId: '',
-        secondParentId: '',
-      },
-      spouseOptions,
-      unionOptions: [],
-      secondParentOptions: [],
-    });
-  });
 
   members.forEach((child) => {
     if (!isChildMember(child) || !child.parent_id) return;
@@ -279,7 +215,7 @@ export const buildMemberIssueRows = (
       acc[row.kind] += 1;
       return acc;
     },
-    { link_spouse: 0, sync_parent_link: 0, complete_filiation: 0, dead_branch: 0 } as Record<
+    { sync_parent_link: 0, complete_filiation: 0, dead_branch: 0 } as Record<
       MemberIssueKind,
       number
     >
@@ -298,7 +234,6 @@ export const buildMemberIssueRows = (
 };
 
 export const kindLabels: Record<MemberIssueKind, string> = {
-  link_spouse: 'Unión inconsistente',
   sync_parent_link: 'Vínculo filiación',
   complete_filiation: 'Matrimonio del hijo',
   dead_branch: 'Rama cortada',

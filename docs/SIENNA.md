@@ -111,8 +111,8 @@ Ayuda en pantalla: icono **?** (`sienna-miembros`, `sienna-miembros-agregar`) e 
 ## Hallazgos — corrección por miembro
 
 - Pantalla `/hallazgos`: tabla **caso por caso** por miembro del árbol.
-- Tipos: unión matrimonial inconsistente (cónyuge sin enlazar), sincronizar vínculo de filiación, completar matrimonio del hijo, rama cortada.
-- El cónyuge solo en texto (referencia documental) **no** se lista como pendiente si no hay unión inconsistente.
+- Tipos: sincronizar vínculo de filiación, completar matrimonio del hijo, rama cortada.
+- El cónyuge en texto (sin miembro en el árbol) es **referencia documental** — no genera pendiente ni nodo aparte.
 - Corrección inline con selectores + Guardar (API `saveSiennaFamilyMember`).
 - Lógica: `src/lib/siennaMemberIssues.ts`, UI: `MemberIssueFixPanel.tsx`.
 
