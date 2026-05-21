@@ -242,7 +242,9 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
       {
         title: 'Monto de la herencia',
         items: [
-          'Indique el monto total del caudal y, si aplica, honorarios de abogado.',
+          'Indique el monto total del caudal y el % de firma de abogados (sobre el bruto).',
+          'Neto repartible = bruto − firma. Los montos por heredero usan siempre ese neto.',
+          'El % se carga desde Settings o el último snapshot guardado; al guardar montos/snapshot se persiste.',
           'Sin monto, verá porcentajes; con monto, cada heredero muestra RD$ calculados.',
         ],
       },
@@ -401,8 +403,9 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
       {
         title: 'Monto',
         items: [
-          'Ingrese el caudal para mostrar montos además de porcentajes.',
-          'Coherente con el monto usado en Árbol Sienna.',
+          'Ingrese el caudal bruto y el mismo % de firma de abogados que en Árbol Sienna.',
+          'Neto = bruto − (bruto × % abogados). Los montos por heredero se calculan sobre el neto.',
+          'Al guardar snapshot (admin) también actualiza el % global en Settings.',
         ],
       },
       {

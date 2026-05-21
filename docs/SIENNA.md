@@ -108,6 +108,16 @@ Ayuda en pantalla: icono **?** (`sienna-miembros`, `sienna-miembros-agregar`) e 
 | PDF por heredero | Botón en cada ficha |
 | Resumen en árbol | Árbol → «Por qué heredan» |
 
+## Honorarios de abogados (% firma)
+
+- Configuración global: `app_settings.lawyer_fee_percentage` (Settings → admin).
+- **Fórmula única** (`resolveEstateAmounts` en `siennaCalculation.ts`):
+  - Firma = bruto × (% / 100)
+  - Neto repartible = bruto − firma
+- **Árbol Sienna** y **Explicación a herederos** usan la misma función; los montos por heredero = neto × % sucesorio real.
+- Al abrir cada pantalla: se lee Settings y, si existe, el **último snapshot** (restaura bruto y % del snapshot).
+- Guardar montos (árbol) o snapshot (explicación, admin) persiste bruto, % y neto en `sienna_calculation_snapshots`.
+
 ## Hallazgos — corrección por miembro
 
 - Pantalla `/hallazgos`: tabla **caso por caso** por miembro del árbol.

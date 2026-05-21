@@ -18,7 +18,32 @@ export type SiennaCalculationSnapshotPayload = {
   excluded_heir_ids?: string[];
 };
 
+export type EstateAmountBreakdown = {
+  grossAmount: number;
+  lawyerFeePercentage: number;
+  lawyerFeeAmount: number;
+  distributableAmount: number;
+};
+
 const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+
+/** Bruto − honorarios de abogados (% sobre bruto) = neto repartible. Usado en árbol y explicación. */
+export const resolveEstateAmounts = (
+  grossInput: number | string | null | undefined,
+  lawyerFeeInput: number | string | null | undefined
+): EstateAmountBreakdown => {
+  const grossAmount = Math.max(0, Number(grossInput || 0));
+  const lawyerFeePercentage = Math.min(100, Math.max(0, Number(lawyerFeeInput || 0)));
+  const lawyerFeeAmount = grossAmount > 0 ? roundMoney(grossAmount * (lawyerFeePercentage / 100)) : 0;
+  const distributableAmount = grossAmount > 0 ? roundMoney(Math.max(0, grossAmount - lawyerFeeAmount)) : 0;
+
+  return {
+    grossAmount,
+    lawyerFeePercentage,
+    lawyerFeeAmount,
+    distributableAmount,
+  };
+};
 
 export const calculateHeirAmount = (sharePercent: number, distributableAmount: number) =>
   roundMoney(distributableAmount * (sharePercent / 100));

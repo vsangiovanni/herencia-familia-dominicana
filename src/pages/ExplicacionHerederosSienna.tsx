@@ -32,7 +32,7 @@ import {
   heirPhotoByName,
   routeSteps,
 } from '@/lib/siennaHeirExplain';
-import { buildCalculationPayload, buildMembersHash, calculateHeirAmount, parseCalculationPayload, resolveHeirSimulatedShare } from '@/lib/siennaCalculation';
+import { buildCalculationPayload, buildMembersHash, calculateHeirAmount, parseCalculationPayload, resolveEstateAmounts, resolveHeirSimulatedShare } from '@/lib/siennaCalculation';
 import { SiennaGenealogyBundle } from '@/lib/siennaGenealogy';
 import { useAuth } from '@/context/AuthContext';
 import {
@@ -156,10 +156,12 @@ const ExplicacionHerederosSienna = () => {
     loadData();
   }, []);
 
-  const grossAmount = Number(estateAmount || 0);
-  const feePercentage = Math.min(100, Math.max(0, Number(lawyerFeePercentage || 0)));
-  const lawyerFee = grossAmount * (feePercentage / 100);
-  const netAmount = Math.max(0, grossAmount - lawyerFee);
+  const estate = useMemo(
+    () => resolveEstateAmounts(estateAmount, lawyerFeePercentage),
+    [estateAmount, lawyerFeePercentage]
+  );
+  const { grossAmount, lawyerFeePercentage: feePercentage, lawyerFeeAmount: lawyerFee, distributableAmount: netAmount } =
+    estate;
   const plan = useMemo(() => buildDominicanInheritancePlan(members, genealogy), [genealogy, members]);
   const photosByName = useMemo(() => heirPhotoByName(heirs), [heirs]);
 
@@ -368,6 +370,9 @@ const ExplicacionHerederosSienna = () => {
                   value={lawyerFeePercentage}
                   onChange={(event) => setLawyerFeePercentage(event.target.value)}
                 />
+                <p className="mt-1 text-xs text-legal-gray">
+                  Sobre el bruto. Mismo valor en Árbol Sienna y Settings.
+                </p>
               </div>
               <div className="rounded-md border border-legal-blue/15 bg-white p-3">
                 <p className="text-xs uppercase text-legal-gray">Neto a repartir</p>

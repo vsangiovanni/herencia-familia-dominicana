@@ -24,7 +24,7 @@ import { cn } from '@/lib/utils';
 import { Calculator, ClipboardCheck, FileText, GitBranch, GitMerge, Landmark, Maximize2, Minimize2, Printer, RotateCcw, Route, Save, Users, ZoomIn, ZoomOut } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { buildWhyIInheritText, formatMoney as formatMoneyExplain, formatPercent as formatPercentExplain } from '@/lib/siennaHeirExplain';
-import { buildCalculationPayload, buildMembersHash, calculateHeirAmount, parseCalculationPayload } from '@/lib/siennaCalculation';
+import { buildCalculationPayload, buildMembersHash, calculateHeirAmount, parseCalculationPayload, resolveEstateAmounts } from '@/lib/siennaCalculation';
 
 type TreeMember = SiennaFamilyMember & { children: TreeMember[] };
 
@@ -414,10 +414,16 @@ const ArbolGenealogicoSienna = () => {
     () => heirs.reduce((sum, heir) => sum + Number(heir.inheritance_amount || 0), 0),
     [heirs]
   );
-  const estateAmountNumber = Number(estateAmount || 0);
-  const lawyerFeePercentageNumber = Math.min(100, Math.max(0, Number(lawyerFeePercentage || 0)));
-  const lawyerFeeAmount = estateAmountNumber > 0 ? estateAmountNumber * (lawyerFeePercentageNumber / 100) : 0;
-  const distributableEstateAmount = estateAmountNumber > 0 ? Math.max(0, estateAmountNumber - lawyerFeeAmount) : 0;
+  const estate = useMemo(
+    () => resolveEstateAmounts(estateAmount, lawyerFeePercentage),
+    [estateAmount, lawyerFeePercentage]
+  );
+  const {
+    grossAmount: estateAmountNumber,
+    lawyerFeePercentage: lawyerFeePercentageNumber,
+    lawyerFeeAmount,
+    distributableAmount: distributableEstateAmount,
+  } = estate;
 
   const heirsByName = useMemo(
     () => new Map(heirs.map((heir) => [normalizeName(heir.heir_name), heir])),
@@ -826,6 +832,9 @@ const ArbolGenealogicoSienna = () => {
                   onChange={(event) => setLawyerFeePercentage(event.target.value)}
                   placeholder="0"
                 />
+                <p className="mt-1 text-xs text-legal-gray">
+                  % sobre el bruto. Persiste en Settings y en el snapshot al guardar montos.
+                </p>
               </div>
               <Button onClick={applyEstateCalculation} disabled={paymentSaving} className="bg-legal-gold hover:bg-legal-gold/90 text-white">
                 <Save className="mr-2 h-4 w-4" />
