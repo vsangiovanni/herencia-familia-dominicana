@@ -26,7 +26,7 @@ import {
 } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/use-toast';
-import { buildDominicanInheritancePlan, classifyMemberByDominicanLaw, normalizeName } from '@/lib/dominicanInheritance';
+import { buildDominicanInheritancePlan, classifyMemberByDominicanLaw, normalizeName, resolveEffectiveInheritanceStatus } from '@/lib/dominicanInheritance';
 import { ConfirmedHeir, EvidenceDocument } from '@/lib/api';
 import {
   buildMemberTreeContext,
@@ -452,15 +452,24 @@ const MiembrosArbolSienna = () => {
     toast({ title: 'Miembro eliminado', description: 'Si tenía descendientes, quedaron como raíz temporal.' });
   };
 
-  const stats = useMemo(() => ({
-    total: members.length,
-    heirs: members.filter((member) => member.inheritance_status === 'posible_heredero' || member.inheritance_status === 'confirmado').length,
-    connectors: members.filter((member) => member.inheritance_status === 'no_hereda').length,
-    pending: members.filter((member) => member.inheritance_status === 'requiere_revision').length,
-    unions: unions.length,
-    parentLinks: parentLinks.length,
-    inconsistentUnions: unions.filter((union) => union.is_inconsistent).length,
-  }), [members, parentLinks.length, unions]);
+  const stats = useMemo(() => {
+    const effectiveStatuses = members.map((member) =>
+      resolveEffectiveInheritanceStatus(member, members, genealogy)
+    );
+
+    return {
+      total: members.length,
+      heirs: effectiveStatuses.filter(
+        (status) => status === 'posible_heredero' || status === 'confirmado'
+      ).length,
+      connectors: effectiveStatuses.filter((status) => status === 'no_hereda').length,
+      pending: effectiveStatuses.filter((status) => status === 'requiere_revision').length,
+      storedPending: members.filter((member) => member.inheritance_status === 'requiere_revision').length,
+      unions: unions.length,
+      parentLinks: parentLinks.length,
+      inconsistentUnions: unions.filter((union) => union.is_inconsistent).length,
+    };
+  }, [genealogy, members, parentLinks.length, unions]);
 
   const showChildFiliationFields =
     form.parent_id !== 'root' &&
@@ -557,7 +566,19 @@ const MiembrosArbolSienna = () => {
           <Card><CardContent className="p-5"><p className="text-sm text-legal-gray">Miembros</p><p className="text-2xl font-bold text-legal-blue">{stats.total}</p></CardContent></Card>
           <Card><CardContent className="p-5"><p className="text-sm text-legal-gray">Herederos</p><p className="text-2xl font-bold text-legal-blue">{stats.heirs}</p></CardContent></Card>
           <Card><CardContent className="p-5"><p className="text-sm text-legal-gray">Enlaces</p><p className="text-2xl font-bold text-legal-blue">{stats.connectors}</p></CardContent></Card>
-          <Card><CardContent className="p-5"><p className="text-sm text-legal-gray">Pendientes</p><p className="text-2xl font-bold text-legal-blue">{stats.pending}</p></CardContent></Card>
+          <Card>
+            <CardContent className="p-5">
+              <p className="text-sm text-legal-gray">Pendientes</p>
+              <p className="text-2xl font-bold text-legal-blue">{stats.pending}</p>
+              <p className="mt-1 text-xs text-legal-gray">Sin clasificar tras autodetectar (cálculo en vivo)</p>
+              {stats.storedPending > stats.pending && (
+                <p className="mt-1 text-xs text-amber-800">
+                  {stats.storedPending - stats.pending} miembro(s) ya clasificados por el cálculo; guarde la ficha para
+                  actualizar la base de datos.
+                </p>
+              )}
+            </CardContent>
+          </Card>
           <Card><CardContent className="p-5"><p className="text-sm text-legal-gray">Uniones</p><p className="text-2xl font-bold text-legal-blue">{stats.unions}</p></CardContent></Card>
           <Card><CardContent className="p-5"><p className="text-sm text-legal-gray">Vínculos filiación</p><p className="text-2xl font-bold text-legal-blue">{stats.parentLinks}</p></CardContent></Card>
         </div>

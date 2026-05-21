@@ -389,3 +389,14 @@ export const classifyMemberByDominicanLaw = (
   };
 };
 
+export const resolveEffectiveInheritanceStatus = (
+  member: SiennaFamilyMember,
+  members: SiennaFamilyMember[],
+  genealogy?: SiennaGenealogyBundle
+): InheritanceStatus => {
+  if (member.inheritance_status && member.inheritance_status !== 'requiere_revision') {
+    return member.inheritance_status;
+  }
+  return classifyMemberByDominicanLaw(member, members, genealogy).inheritance_status;
+};
+

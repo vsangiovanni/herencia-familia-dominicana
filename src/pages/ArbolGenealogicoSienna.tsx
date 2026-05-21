@@ -18,6 +18,7 @@ import {
   InheritancePlan,
   legalCriterionText,
   normalizeName,
+  resolveEffectiveInheritanceStatus,
 } from '@/lib/dominicanInheritance';
 import { cn } from '@/lib/utils';
 import { Calculator, ClipboardCheck, FileText, GitBranch, GitMerge, Landmark, Maximize2, Minimize2, Printer, RotateCcw, Route, Save, Users, ZoomIn, ZoomOut } from 'lucide-react';
@@ -470,15 +471,13 @@ const ArbolGenealogicoSienna = () => {
     () => ({
       finalHeirs: inheritancePlan.activeHeirs.length,
       connectors: members.filter(
-        (member) => member.death?.trim() && !inheritancePlan.sharesById.has(member.id)
+        (member) => resolveEffectiveInheritanceStatus(member, members, genealogy) === 'no_hereda'
       ).length,
       pending: members.filter(
-        (member) =>
-          !inheritancePlan.sharesById.has(member.id) &&
-          member.inheritance_status === 'requiere_revision'
+        (member) => resolveEffectiveInheritanceStatus(member, members, genealogy) === 'requiere_revision'
       ).length,
     }),
-    [inheritancePlan, members]
+    [genealogy, inheritancePlan, members]
   );
 
   const applyEstateCalculation = async () => {
