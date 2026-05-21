@@ -4,6 +4,8 @@ import BackButton from '@/components/BackButton';
 import DocumentHeader from '@/components/DocumentHeader';
 import SoftLoadingIndicator from '@/components/SoftLoadingIndicator';
 import { IssueDraft, MemberIssueFixPanel } from '@/components/sienna/MemberIssueFixPanel';
+import { useSiennaFamily, invalidateSiennaData } from '@/hooks/useSiennaData';
+import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -43,12 +45,11 @@ const kindBadgeClass: Record<MemberIssueKind, string> = {
 };
 
 const Hallazgos = () => {
-  const [members, setMembers] = useState<Awaited<ReturnType<typeof api.listSiennaFamilyMembers>>['members']>([]);
-  const [unions, setUnions] = useState<Awaited<ReturnType<typeof api.listSiennaFamilyMembers>>['unions']>([]);
-  const [parentLinks, setParentLinks] = useState<
-    Awaited<ReturnType<typeof api.listSiennaFamilyMembers>>['parent_links']
-  >([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const { data: familyData, isLoading, isFetching, refetch } = useSiennaFamily();
+  const members = familyData?.members ?? [];
+  const unions = familyData?.unions ?? [];
+  const parentLinks = familyData?.parent_links ?? [];
   const [loadingMessage, setLoadingMessage] = useState('Analizando miembros...');
   const [search, setSearch] = useState('');
   const [kindFilter, setKindFilter] = useState<MemberIssueKind | 'all'>('all');
@@ -56,27 +57,20 @@ const Hallazgos = () => {
   const [savingRowId, setSavingRowId] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
-    setLoading(true);
-    setLoadingMessage('Consultando árbol, uniones y vínculos...');
-    try {
-      const response = await api.listSiennaFamilyMembers();
-      setMembers(response.members);
-      setUnions(response.unions);
-      setParentLinks(response.parent_links);
-    } catch (error) {
-      toast({
-        title: 'No se pudo cargar la revisión',
-        description: error instanceof Error ? error.message : 'Error desconocido',
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    await refetch();
+  }, [refetch]);
+
+  const loading = isLoading;
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    if (isLoading) {
+      setLoadingMessage('Consultando árbol, uniones y vínculos...');
+      return;
+    }
+    if (isFetching) {
+      setLoadingMessage('Actualizando hallazgos...');
+    }
+  }, [isFetching, isLoading]);
 
   const distributedPercent = useMemo(() => {
     const plan = buildDominicanInheritancePlan(members, { unions, parent_links: parentLinks });
@@ -143,6 +137,7 @@ const Hallazgos = () => {
         toast({ title: 'Filiación guardada', description: `${member.name} sincronizado en base de datos.` });
       }
 
+      invalidateSiennaData(queryClient);
       await loadData();
     } catch (error) {
       toast({

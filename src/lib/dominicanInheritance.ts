@@ -349,11 +349,12 @@ export const buildDominicanInheritancePlan = (
 export const classifyMemberByDominicanLaw = (
   member: SiennaFamilyMember,
   members: SiennaFamilyMember[],
-  genealogy?: SiennaGenealogyBundle
+  genealogy?: SiennaGenealogyBundle,
+  plan?: InheritancePlan
 ): Pick<SiennaFamilyMember, 'inheritance_status' | 'inheritance_reason'> => {
   const name = normalizeName(member.name);
-  const plan = buildDominicanInheritancePlan(members, genealogy);
-  const share = plan.sharesById.get(member.id);
+  const resolvedPlan = plan || buildDominicanInheritancePlan(members, genealogy);
+  const share = resolvedPlan.sharesById.get(member.id);
 
   if (name === normalizeName(caseCausanteName)) {
     return {
@@ -392,11 +393,38 @@ export const classifyMemberByDominicanLaw = (
 export const resolveEffectiveInheritanceStatus = (
   member: SiennaFamilyMember,
   members: SiennaFamilyMember[],
-  genealogy?: SiennaGenealogyBundle
+  genealogy?: SiennaGenealogyBundle,
+  plan?: InheritancePlan
 ): InheritanceStatus => {
   if (member.inheritance_status && member.inheritance_status !== 'requiere_revision') {
     return member.inheritance_status;
   }
-  return classifyMemberByDominicanLaw(member, members, genealogy).inheritance_status;
+  return classifyMemberByDominicanLaw(member, members, genealogy, plan).inheritance_status;
+};
+
+export const summarizeInheritanceStatuses = (
+  members: SiennaFamilyMember[],
+  genealogy?: SiennaGenealogyBundle,
+  plan?: InheritancePlan
+) => {
+  const resolvedPlan = plan || buildDominicanInheritancePlan(members, genealogy);
+  let heirs = 0;
+  let connectors = 0;
+  let pending = 0;
+
+  members.forEach((member) => {
+    const status = resolveEffectiveInheritanceStatus(member, members, genealogy, resolvedPlan);
+    if (status === 'posible_heredero' || status === 'confirmado') heirs += 1;
+    else if (status === 'no_hereda') connectors += 1;
+    else if (status === 'requiere_revision') pending += 1;
+  });
+
+  return {
+    total: members.length,
+    heirs,
+    connectors,
+    pending,
+    storedPending: members.filter((member) => member.inheritance_status === 'requiere_revision').length,
+  };
 };
 

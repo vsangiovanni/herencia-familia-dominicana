@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import BackButton from '@/components/BackButton';
 import DocumentHeader from '@/components/DocumentHeader';
 import SoftLoadingIndicator from '@/components/SoftLoadingIndicator';
 import { api, ConfirmedHeir, MemberParentLink, SiennaFamilyMember } from '@/lib/api';
+import { invalidateSiennaData, useSiennaWorkspace } from '@/hooks/useSiennaData';
 import { formatUnionLabel, getParentLinksForChild, resolveSpouseDisplayLabel, resolveSpousePartner, SiennaGenealogyBundle } from '@/lib/siennaGenealogy';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -18,7 +20,7 @@ import {
   InheritancePlan,
   legalCriterionText,
   normalizeName,
-  resolveEffectiveInheritanceStatus,
+  summarizeInheritanceStatuses,
 } from '@/lib/dominicanInheritance';
 import { cn } from '@/lib/utils';
 import { Calculator, ClipboardCheck, FileText, GitBranch, GitMerge, Landmark, Maximize2, Minimize2, Printer, RotateCcw, Route, Save, Users, ZoomIn, ZoomOut } from 'lucide-react';
@@ -299,9 +301,17 @@ const ClassicNode = ({
 
 const ArbolGenealogicoSienna = () => {
   const { isAdmin } = useAuth();
-  const [heirs, setHeirs] = useState<ConfirmedHeir[]>([]);
-  const [members, setMembers] = useState<SiennaFamilyMember[]>([]);
-  const [genealogy, setGenealogy] = useState<SiennaGenealogyBundle>({ unions: [], parent_links: [] });
+  const queryClient = useQueryClient();
+  const { data: workspace, isLoading, isFetching, refetch } = useSiennaWorkspace(true);
+  const members = workspace?.members ?? [];
+  const heirs = workspace?.heirs ?? [];
+  const genealogy = useMemo<SiennaGenealogyBundle>(
+    () => ({
+      unions: workspace?.unions ?? [],
+      parent_links: workspace?.parent_links ?? [],
+    }),
+    [workspace]
+  );
   const [estateAmount, setEstateAmount] = useState('');
   const [lawyerFeePercentage, setLawyerFeePercentage] = useState('0');
   const [snapshotNote, setSnapshotNote] = useState('');
@@ -310,7 +320,7 @@ const ArbolGenealogicoSienna = () => {
   const [zoomLevel, setZoomLevel] = useState(1);
   const [isPanningTree, setIsPanningTree] = useState(false);
   const [lastSnapshotAt, setLastSnapshotAt] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [workspaceInitialized, setWorkspaceInitialized] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('Cargando árbol y cálculos sucesorales...');
   const [paymentSaving, setPaymentSaving] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
@@ -325,68 +335,55 @@ const ArbolGenealogicoSienna = () => {
   });
 
   const loadData = async () => {
-    setLoading(true);
-    setLoadingMessage('Consultando miembros, herederos y configuración...');
-    try {
-      const [heirsResponse, membersResponse, settingsResponse] = await Promise.all([
-        api.listConfirmedHeirs(),
-        api.listSiennaFamilyMembers(),
-        api.getSettings(),
-      ]);
-      setLoadingMessage('Aplicando configuración del caso y preparando cálculo...');
-      const dbMembers = membersResponse.members;
-      applySiennaCaseConfig(settingsResponse.settings.sienna_case_config);
-      setHeirs(heirsResponse.heirs);
-      setLawyerFeePercentage(String(settingsResponse.settings.lawyer_fee_percentage ?? 0));
-      try {
-        setLoadingMessage('Validando snapshot más reciente...');
-        const latestSnapshotResponse = await api.getLatestSiennaCalculationSnapshot();
-        if (latestSnapshotResponse.snapshot) {
-          const currentMembersHash = buildMembersHash(dbMembers.map((member) => member.id));
-          if (
-            latestSnapshotResponse.snapshot.members_hash &&
-            latestSnapshotResponse.snapshot.members_hash !== currentMembersHash
-          ) {
-            toast({
-              title: 'Snapshot desactualizado',
-              description: 'El último snapshot no coincide con los miembros actuales de la DB. Revise y regenere el cálculo.',
-              variant: 'destructive',
-            });
-          }
-          const parsedPayload = parseCalculationPayload(latestSnapshotResponse.snapshot.payload_json);
-          if (parsedPayload?.notes) {
-            setSnapshotNote(parsedPayload.notes);
-          }
-          setEstateAmount(String(latestSnapshotResponse.snapshot.estate_amount ?? 0));
-          setLawyerFeePercentage(String(latestSnapshotResponse.snapshot.lawyer_fee_percentage ?? 0));
-          setLastSnapshotAt(latestSnapshotResponse.snapshot.created_at || null);
-        } else {
-          setLastSnapshotAt(null);
-        }
-      } catch {
-        // Snapshot endpoint puede no existir temporalmente en backend local viejo.
-        setLastSnapshotAt(null);
-      }
-      setLoadingMessage('Renderizando árbol genealógico...');
-      setMembers(dbMembers);
-      setGenealogy({
-        unions: membersResponse.unions || [],
-        parent_links: membersResponse.parent_links || [],
-      });
-    } catch (error) {
-      toast({
-        title: 'No se pudo cargar el árbol Sienna',
-        description: error instanceof Error ? error.message : 'Error desconocido',
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
+    setLoadingMessage('Actualizando datos del árbol...');
+    await refetch();
   };
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (!workspace || workspaceInitialized) return;
+
+    applySiennaCaseConfig(workspace.settings.sienna_case_config);
+    if (workspace.snapshot) {
+      const currentMembersHash = buildMembersHash(workspace.members.map((member) => member.id));
+      if (
+        workspace.snapshot.members_hash &&
+        workspace.snapshot.members_hash !== currentMembersHash
+      ) {
+        toast({
+          title: 'Snapshot desactualizado',
+          description: 'El último snapshot no coincide con los miembros actuales de la DB. Revise y regenere el cálculo.',
+          variant: 'destructive',
+        });
+      }
+      const parsedPayload = parseCalculationPayload(workspace.snapshot.payload_json);
+      if (parsedPayload?.notes) {
+        setSnapshotNote(parsedPayload.notes);
+      }
+      setEstateAmount(String(workspace.snapshot.estate_amount ?? 0));
+      setLawyerFeePercentage(String(workspace.snapshot.lawyer_fee_percentage ?? 0));
+      setLastSnapshotAt(workspace.snapshot.created_at || null);
+    } else {
+      setLawyerFeePercentage(String(workspace.settings.lawyer_fee_percentage ?? 0));
+      setLastSnapshotAt(null);
+    }
+    setWorkspaceInitialized(true);
+  }, [workspace, workspaceInitialized]);
+
+  useEffect(() => {
+    if (isLoading) {
+      setLoadingMessage('Consultando miembros, herederos y configuración...');
+      return;
+    }
+    if (isFetching) {
+      setLoadingMessage('Actualizando datos del árbol...');
+      return;
+    }
+    if (workspace) {
+      setLoadingMessage('Renderizando árbol genealógico...');
+    }
+  }, [isFetching, isLoading, workspace]);
+
+  const loading = isLoading || !workspaceInitialized;
 
   useEffect(() => {
     const onFullscreenChange = () => {
@@ -476,18 +473,14 @@ const ArbolGenealogicoSienna = () => {
       };
     });
   }, [distributableEstateAmount, heirsByMemberId, heirsByName, inheritancePlan]);
-  const presentationStats = useMemo(
-    () => ({
+  const presentationStats = useMemo(() => {
+    const summary = summarizeInheritanceStatuses(members, genealogy, inheritancePlan);
+    return {
       finalHeirs: inheritancePlan.activeHeirs.length,
-      connectors: members.filter(
-        (member) => resolveEffectiveInheritanceStatus(member, members, genealogy) === 'no_hereda'
-      ).length,
-      pending: members.filter(
-        (member) => resolveEffectiveInheritanceStatus(member, members, genealogy) === 'requiere_revision'
-      ).length,
-    }),
-    [genealogy, inheritancePlan, members]
-  );
+      connectors: summary.connectors,
+      pending: summary.pending,
+    };
+  }, [genealogy, inheritancePlan, members]);
 
   const applyEstateCalculation = async () => {
     const totalEstate = distributableEstateAmount;
@@ -498,26 +491,32 @@ const ArbolGenealogicoSienna = () => {
 
     setPaymentSaving(true);
     try {
+      const bulkItems = calculatedPayments
+        .filter(({ heir }) => Boolean(heir?.id))
+        .map(({ heir, amount }) => ({
+          id: heir!.id,
+          inheritance_amount: amount,
+        }));
+
+      const createItems = calculatedPayments.filter(({ heir }) => !heir?.id);
+
+      if (bulkItems.length) {
+        await api.bulkUpdateHeirAmounts(bulkItems);
+      }
+
       await Promise.all(
-        calculatedPayments.map(({ heir, share, amount }) => {
-          const payload = {
+        createItems.map(({ share, amount }) =>
+          api.saveConfirmedHeir({
             sienna_member_id: share.member.id,
             heir_name: share.member.name,
             relationship_summary: share.reason,
             line_vincenzo: share.sources.includes('Vincenzo/Vicente'),
             line_paolo: share.sources.includes('Paolo/Paulino'),
-            status: heir?.status || 'mencionado' as const,
-            notes: heir?.notes || share.paymentBasis,
-            photo_file_name: heir?.photo_file_name,
-            photo_file_type: heir?.photo_file_type,
-            photo_data: heir?.photo_data,
+            status: 'mencionado',
+            notes: share.paymentBasis,
             inheritance_amount: amount,
-          };
-
-          return heir
-            ? api.updateConfirmedHeir(heir.id, payload)
-            : api.saveConfirmedHeir(payload);
-        })
+          })
+        )
       );
       await api.saveSiennaCalculationSnapshot({
         estate_amount: estateAmountNumber,
@@ -531,7 +530,8 @@ const ArbolGenealogicoSienna = () => {
             snapshotNote || 'Snapshot guardado desde Árbol Sienna (calcular y guardar pagos).'
           )
         ),
-      });
+      }      );
+      invalidateSiennaData(queryClient);
       await loadData();
       toast({ title: 'Montos calculados', description: 'Los pagos quedaron guardados y el árbol fue actualizado.' });
     } catch (error) {

@@ -1,8 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Tesseract from 'tesseract.js';
+import { useQueryClient } from '@tanstack/react-query';
 import BackButton from '@/components/BackButton';
 import DocumentHeader from '@/components/DocumentHeader';
 import { api, ConfirmedHeir, EvidenceDocument, SiennaFamilyMember } from '@/lib/api';
+import { invalidateSiennaData, useSiennaWorkspace } from '@/hooks/useSiennaData';
 import { sortMembersByName } from '@/lib/siennaFamilyTree';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -176,10 +178,19 @@ const findSpousePartner = (
 };
 
 const DocumentosProbatorios = () => {
+  const queryClient = useQueryClient();
+  const { data: workspace, refetch } = useSiennaWorkspace(true);
+  const members = workspace?.members ?? [];
+  const heirs = workspace?.heirs ?? [];
+  const [documentOverrides, setDocumentOverrides] = useState<Record<string, EvidenceDocument>>({});
+  const documents = useMemo(
+    () =>
+      (workspace?.documents ?? []).map((document) =>
+        document.id && documentOverrides[document.id] ? { ...document, ...documentOverrides[document.id] } : document
+      ),
+    [documentOverrides, workspace?.documents]
+  );
   const [form, setForm] = useState<DocumentForm>(emptyForm);
-  const [documents, setDocuments] = useState<EvidenceDocument[]>([]);
-  const [heirs, setHeirs] = useState<ConfirmedHeir[]>([]);
-  const [members, setMembers] = useState<SiennaFamilyMember[]>([]);
   const [ocrBusy, setOcrBusy] = useState(false);
   const [saveBusy, setSaveBusy] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
@@ -247,25 +258,24 @@ const DocumentosProbatorios = () => {
   };
 
   const loadData = async () => {
-    const [documentsResponse, heirsResponse, membersResponse] = await Promise.all([
-      api.listEvidenceDocuments(),
-      api.listConfirmedHeirs(),
-      api.listSiennaFamilyMembers(),
-    ]);
-    setDocuments(documentsResponse.documents);
-    setHeirs(heirsResponse.heirs);
-    setMembers(membersResponse.members);
+    await refetch();
   };
 
+  const ensureDocumentMedia = useCallback(async (documentId: string | null) => {
+    if (!documentId) return;
+    const document = documents.find((item) => item.id === documentId);
+    if (!document || document.file_data) return;
+    if (!document.has_file && !document.has_extracted_text) return;
+    const response = await api.getEvidenceDocument(documentId);
+    setDocumentOverrides((current) => ({
+      ...current,
+      [documentId]: response.document,
+    }));
+  }, [documents]);
+
   useEffect(() => {
-    loadData().catch((error) => {
-      toast({
-        title: 'No se pudo cargar el expediente',
-        description: error.message,
-        variant: 'destructive',
-      });
-    });
-  }, []);
+    void ensureDocumentMedia(viewerDocumentId);
+  }, [ensureDocumentMedia, viewerDocumentId]);
 
   useEffect(() => {
     setHeirDrafts((current) => {
@@ -397,6 +407,7 @@ const DocumentosProbatorios = () => {
         related_heir_name: relatedHeirName || null,
         people_involved: peopleInvolved,
       });
+      invalidateSiennaData(queryClient);
       await loadData();
       setForm(emptyForm);
       toast({ title: 'Documento guardado', description: 'El expediente probatorio fue actualizado.' });
@@ -434,6 +445,7 @@ const DocumentosProbatorios = () => {
   const deleteDocument = async (id?: string) => {
     if (!id) return;
     await api.deleteEvidenceDocument(id);
+    invalidateSiennaData(queryClient);
     await loadData();
   };
 
@@ -473,6 +485,7 @@ const DocumentosProbatorios = () => {
         photo_data: draft.photo_data ?? heir.photo_data ?? null,
         inheritance_amount: Number(draft.inheritance_amount ?? heir.inheritance_amount ?? 0),
       });
+      invalidateSiennaData(queryClient);
       await loadData();
       toast({ title: 'Heredero actualizado', description: 'Foto y monto quedaron guardados para el árbol Sienna.' });
     } catch (error) {

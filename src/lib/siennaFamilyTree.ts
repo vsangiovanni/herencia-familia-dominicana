@@ -257,12 +257,13 @@ export const sortMembersByTree = (
   members: SiennaFamilyMember[],
   plan?: InheritancePlan
 ): SiennaFamilyMember[] => {
-  const inheritancePlan = plan || buildDominicanInheritancePlan(members);
+  const pathById = new Map<string, string>();
+  members.forEach((member) => {
+    pathById.set(member.id, getParentalLine(getAncestryPath(member.id, members)));
+  });
 
   return [...members].sort((left, right) => {
-    const leftPath = getParentalLine(getAncestryPath(left.id, members));
-    const rightPath = getParentalLine(getAncestryPath(right.id, members));
-    const pathCompare = leftPath.localeCompare(rightPath, 'es');
+    const pathCompare = (pathById.get(left.id) || '').localeCompare(pathById.get(right.id) || '', 'es');
     if (pathCompare !== 0) return pathCompare;
     return Number(left.sort_order || 0) - Number(right.sort_order || 0) || left.name.localeCompare(right.name, 'es');
   });

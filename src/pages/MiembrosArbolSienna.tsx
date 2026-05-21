@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import BackButton from '@/components/BackButton';
 import DocumentHeader from '@/components/DocumentHeader';
 import SiennaPageLayout from '@/components/sienna/SiennaPageLayout';
@@ -26,7 +27,8 @@ import {
 } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/use-toast';
-import { buildDominicanInheritancePlan, classifyMemberByDominicanLaw, normalizeName, resolveEffectiveInheritanceStatus } from '@/lib/dominicanInheritance';
+import { buildDominicanInheritancePlan, classifyMemberByDominicanLaw, normalizeName, summarizeInheritanceStatuses } from '@/lib/dominicanInheritance';
+import { invalidateSiennaData, useSiennaWorkspace } from '@/hooks/useSiennaData';
 import { ConfirmedHeir, EvidenceDocument } from '@/lib/api';
 import {
   buildMemberTreeContext,
@@ -185,14 +187,22 @@ const toForm = (
 
 const MiembrosArbolSienna = () => {
   const { isAdmin } = useAuth();
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
-  const [members, setMembers] = useState<SiennaFamilyMember[]>([]);
-  const [unions, setUnions] = useState<FamilyUnion[]>([]);
-  const [parentLinks, setParentLinks] = useState<MemberParentLink[]>([]);
-  const [documents, setDocuments] = useState<EvidenceDocument[]>([]);
-  const [heirs, setHeirs] = useState<ConfirmedHeir[]>([]);
+  const { data: workspace, isLoading, isFetching, refetch } = useSiennaWorkspace(false);
+  const members = workspace?.members ?? [];
+  const unions = workspace?.unions ?? [];
+  const parentLinks = workspace?.parent_links ?? [];
+  const heirs = workspace?.heirs ?? [];
+  const [documentOverrides, setDocumentOverrides] = useState<Record<string, EvidenceDocument>>({});
+  const documents = useMemo(
+    () =>
+      (workspace?.documents ?? []).map((document) =>
+        document.id && documentOverrides[document.id] ? { ...document, ...documentOverrides[document.id] } : document
+      ),
+    [documentOverrides, workspace?.documents]
+  );
   const [form, setForm] = useState<MemberForm>(emptyForm);
-  const [loading, setLoading] = useState(true);
   const [loadingMessage, setLoadingMessage] = useState('Cargando miembros y contexto del árbol...');
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
@@ -200,34 +210,38 @@ const MiembrosArbolSienna = () => {
   const [viewerDocumentId, setViewerDocumentId] = useState<string | null>(null);
 
   const loadMembers = async () => {
-    setLoading(true);
-    setLoadingMessage('Consultando miembros del árbol...');
-    try {
-      const [membersResponse, documentsResponse, heirsResponse] = await Promise.all([
-        api.listSiennaFamilyMembers(),
-        api.listEvidenceDocuments(),
-        api.listConfirmedHeirs(),
-      ]);
-      setLoadingMessage('Vinculando documentos y herederos al árbol...');
-      setMembers(membersResponse.members);
-      setUnions(membersResponse.unions || []);
-      setParentLinks(membersResponse.parent_links || []);
-      setDocuments(documentsResponse.documents);
-      setHeirs(heirsResponse.heirs);
-    } catch (error) {
-      toast({
-        title: 'No se pudieron cargar los miembros',
-        description: error instanceof Error ? error.message : 'Error desconocido',
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
+    setLoadingMessage('Actualizando miembros del árbol...');
+    await refetch();
   };
 
+  const loading = isLoading;
+
   useEffect(() => {
-    loadMembers();
+    if (isLoading) {
+      setLoadingMessage('Consultando miembros del árbol...');
+      return;
+    }
+    if (isFetching) {
+      setLoadingMessage('Actualizando miembros del árbol...');
+      return;
+    }
+    setLoadingMessage('Vinculando documentos y herederos al árbol...');
+  }, [isFetching, isLoading]);
+
+  const ensureDocumentMedia = useCallback(async (document: EvidenceDocument | null | undefined) => {
+    if (!document?.id || document.file_data) return;
+    if (!document.has_file && !document.has_extracted_text) return;
+    const response = await api.getEvidenceDocument(document.id);
+    setDocumentOverrides((current) => ({
+      ...current,
+      [document.id!]: response.document,
+    }));
   }, []);
+
+  useEffect(() => {
+    const selected = documents.find((document) => document.id === viewerDocumentId);
+    void ensureDocumentMedia(selected);
+  }, [documents, ensureDocumentMedia, viewerDocumentId]);
 
   useEffect(() => {
     const editId = searchParams.get('edit');
@@ -431,6 +445,7 @@ const MiembrosArbolSienna = () => {
             : undefined,
       });
       resetForm();
+      invalidateSiennaData(queryClient);
       await loadMembers();
       toast({ title: 'Miembro guardado', description: 'La administración del árbol fue actualizada.' });
     } catch (error) {
@@ -454,28 +469,21 @@ const MiembrosArbolSienna = () => {
       return;
     }
     await api.deleteSiennaFamilyMember(member.id);
+    invalidateSiennaData(queryClient);
     await loadMembers();
     toast({ title: 'Miembro eliminado', description: 'Si tenía descendientes, quedaron como raíz temporal.' });
   };
 
   const stats = useMemo(() => {
-    const effectiveStatuses = members.map((member) =>
-      resolveEffectiveInheritanceStatus(member, members, genealogy)
-    );
+    const summary = summarizeInheritanceStatuses(members, genealogy, inheritancePlan);
 
     return {
-      total: members.length,
-      heirs: effectiveStatuses.filter(
-        (status) => status === 'posible_heredero' || status === 'confirmado'
-      ).length,
-      connectors: effectiveStatuses.filter((status) => status === 'no_hereda').length,
-      pending: effectiveStatuses.filter((status) => status === 'requiere_revision').length,
-      storedPending: members.filter((member) => member.inheritance_status === 'requiere_revision').length,
+      ...summary,
       unions: unions.length,
       parentLinks: parentLinks.length,
       inconsistentUnions: unions.filter((union) => union.is_inconsistent).length,
     };
-  }, [genealogy, members, parentLinks.length, unions]);
+  }, [genealogy, inheritancePlan, members, parentLinks.length, unions]);
 
   const showChildFiliationFields =
     form.parent_id !== 'root' &&

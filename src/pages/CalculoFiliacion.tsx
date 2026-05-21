@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import BackButton from '@/components/BackButton';
 import DocumentHeader from '@/components/DocumentHeader';
-import { api, ConfirmedHeir, SiennaFamilyMember } from '@/lib/api';
+import { ConfirmedHeir, SiennaFamilyMember } from '@/lib/api';
+import { useConfirmedHeirs, useSiennaFamily } from '@/hooks/useSiennaData';
 import { buildDominicanInheritancePlan, normalizeName } from '@/lib/dominicanInheritance';
 import { countGenealogyInconsistencies } from '@/lib/siennaGenealogy';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -59,27 +60,13 @@ const prettyRoute = (routes: string[]) =>
     .join(' | ');
 
 const CalculoFiliacion = () => {
-  const [members, setMembers] = useState<SiennaFamilyMember[]>([]);
-  const [unions, setUnions] = useState<Awaited<ReturnType<typeof api.listSiennaFamilyMembers>>['unions']>([]);
-  const [parentLinks, setParentLinks] = useState<Awaited<ReturnType<typeof api.listSiennaFamilyMembers>>['parent_links']>([]);
+  const { data: familyData } = useSiennaFamily();
+  const { data: heirsData } = useConfirmedHeirs(false);
+  const members = familyData?.members ?? [];
+  const unions = familyData?.unions ?? [];
+  const parentLinks = familyData?.parent_links ?? [];
   const [estateAmount, setEstateAmount] = useState(0);
-  const [confirmedHeirs, setConfirmedHeirs] = useState<ConfirmedHeir[]>([]);
-
-  useEffect(() => {
-    Promise.all([api.listSiennaFamilyMembers(), api.listConfirmedHeirs()])
-      .then(([membersResponse, heirsResponse]) => {
-        setMembers(membersResponse.members);
-        setUnions(membersResponse.unions);
-        setParentLinks(membersResponse.parent_links);
-        setConfirmedHeirs(heirsResponse.heirs);
-      })
-      .catch(() => {
-        setMembers([]);
-        setUnions([]);
-        setParentLinks([]);
-        setConfirmedHeirs([]);
-      });
-  }, []);
+  const confirmedHeirs = heirsData?.heirs ?? [];
 
   const genealogy = useMemo(
     () => ({ unions, parent_links: parentLinks }),

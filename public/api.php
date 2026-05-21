@@ -105,7 +105,119 @@ function can_seed_case_data(): bool {
   return (int)($memberCount['count'] ?? 0) === 0 && (int)($heirCount['count'] ?? 0) === 0;
 }
 
+function wants_media(): bool {
+  return in_array(strtolower((string)($_GET['includeMedia'] ?? '')), ['1', 'true', 'yes', 'on'], true);
+}
+
+function fetch_confirmed_heirs(bool $includeMedia = false): array {
+  $photoSelect = $includeMedia
+    ? 'h.photo_data'
+    : '(CASE WHEN h.photo_data IS NOT NULL AND CHAR_LENGTH(h.photo_data) > 0 THEN 1 ELSE 0 END) AS has_photo';
+
+  $heirs = query_all(
+    "SELECT h.id, h.sienna_member_id, h.heir_name, h.relationship_summary, h.line_vincenzo, h.line_paolo, h.status, h.notes,
+            h.photo_file_name, h.photo_file_type, h.inheritance_amount, h.created_by, h.updated_by, h.created_at, h.updated_at,
+            {$photoSelect},
+            creator.email AS created_by_email, creator.full_name AS created_by_name,
+            updater.email AS updated_by_email, updater.full_name AS updated_by_name,
+            COUNT(d.id) AS evidence_count
+     FROM confirmed_heirs h
+     LEFT JOIN evidence_documents d ON d.related_heir_name = h.heir_name OR d.related_member_id = h.sienna_member_id
+     LEFT JOIN profiles creator ON creator.id = h.created_by
+     LEFT JOIN profiles updater ON updater.id = h.updated_by
+     GROUP BY h.id
+     ORDER BY h.heir_name"
+  );
+
+  foreach ($heirs as &$heir) {
+    $heir['line_vincenzo'] = (bool)$heir['line_vincenzo'];
+    $heir['line_paolo'] = (bool)$heir['line_paolo'];
+    $heir['evidence_count'] = (int)($heir['evidence_count'] ?? 0);
+    if (!$includeMedia) {
+      $heir['has_photo'] = (bool)($heir['has_photo'] ?? false);
+    }
+  }
+
+  return $heirs;
+}
+
+function fetch_evidence_documents(bool $includeMedia = false): array {
+  $select = $includeMedia
+    ? 'SELECT *'
+    : "SELECT id, title, document_type, primary_member_id, primary_person, event_date, event_place,
+              father_member_id, father_name, mother_member_id, mother_name, spouse_member_id, spouse_name,
+              related_member_id, related_heir_name, confirms_heir, people_involved, notes, file_name, file_type,
+              created_by, updated_by, created_at, updated_at,
+              (CASE WHEN file_data IS NOT NULL AND CHAR_LENGTH(file_data) > 0 THEN 1 ELSE 0 END) AS has_file,
+              (CASE WHEN extracted_text IS NOT NULL AND CHAR_LENGTH(extracted_text) > 0 THEN 1 ELSE 0 END) AS has_extracted_text";
+
+  $docs = query_all($select . ' FROM evidence_documents ORDER BY created_at DESC');
+  foreach ($docs as &$doc) {
+    $doc['confirms_heir'] = (bool)$doc['confirms_heir'];
+    $doc['people_involved'] = $doc['people_involved'] ? json_decode($doc['people_involved'], true) : [];
+    if (!$includeMedia) {
+      $doc['has_file'] = (bool)($doc['has_file'] ?? false);
+      $doc['has_extracted_text'] = (bool)($doc['has_extracted_text'] ?? false);
+    }
+  }
+
+  return $docs;
+}
+
+function fetch_sienna_family_bundle(): array {
+  $members = query_all(
+    'SELECT sfm.id, sfm.parent_id, sfm.relationship_to_parent, sfm.name, sfm.birth, sfm.death, sfm.spouse_member_id, sfm.spouse, sfm.spouse_birth,
+            sfm.inheritance_status, sfm.inheritance_reason, sfm.is_highlighted_ancestor, sfm.sort_order,
+            sfm.created_by, sfm.updated_by, sfm.created_at, sfm.updated_at,
+            creator.email AS created_by_email, creator.full_name AS created_by_name,
+            updater.email AS updated_by_email, updater.full_name AS updated_by_name
+     FROM sienna_family_members sfm
+     LEFT JOIN profiles creator ON creator.id = sfm.created_by
+     LEFT JOIN profiles updater ON updater.id = sfm.updated_by
+     ORDER BY COALESCE(sfm.parent_id, \'\'), sfm.sort_order, sfm.name'
+  );
+  foreach ($members as &$member) {
+    $member['is_highlighted_ancestor'] = (bool)$member['is_highlighted_ancestor'];
+    $member['sort_order'] = (int)$member['sort_order'];
+  }
+
+  $unions = query_all('SELECT * FROM family_unions ORDER BY partner_a_member_id, partner_b_member_id');
+  $parentLinks = query_all('SELECT * FROM member_parent_links ORDER BY child_member_id, parent_member_id');
+  foreach ($unions as &$union) {
+    $union['is_inconsistent'] = (bool)$union['is_inconsistent'];
+  }
+  foreach ($parentLinks as &$link) {
+    $link['is_primary_line'] = (bool)$link['is_primary_line'];
+    $link['is_inconsistent'] = (bool)$link['is_inconsistent'];
+  }
+
+  return [
+    'members' => $members,
+    'unions' => $unions,
+    'parent_links' => $parentLinks,
+  ];
+}
+
+function fetch_app_settings(): array {
+  $settings = [];
+  foreach (query_all('SELECT setting_key, setting_value FROM app_settings') as $row) {
+    if ($row['setting_key'] === 'sienna_case_config' && $row['setting_value']) {
+      $decoded = json_decode((string)$row['setting_value'], true);
+      $settings[$row['setting_key']] = is_array($decoded) ? $decoded : null;
+    } else {
+      $settings[$row['setting_key']] = $row['setting_value'];
+    }
+  }
+  return $settings;
+}
+
 function ensure_schema(): void {
+  static $initialized = false;
+  if ($initialized) {
+    return;
+  }
+  $initialized = true;
+
   db()->exec("
     CREATE TABLE IF NOT EXISTS profiles (
       id CHAR(36) PRIMARY KEY,
@@ -464,6 +576,11 @@ function ensure_schema(): void {
       );
     }
   }
+
+  try {
+    db()->exec('CREATE INDEX idx_snapshots_created ON sienna_calculation_snapshots (created_at DESC)');
+  } catch (Throwable $ignored) {
+  }
 }
 
 function public_profile(?array $profile): ?array {
@@ -803,17 +920,27 @@ try {
 
   if ($method === 'GET' && $path === '/confirmed-heirs') {
     require_user();
-    json_response(['heirs' => query_all(
-      'SELECT h.*, creator.email AS created_by_email, creator.full_name AS created_by_name,
-              updater.email AS updated_by_email, updater.full_name AS updated_by_name,
-              COUNT(d.id) AS evidence_count
-       FROM confirmed_heirs h
-       LEFT JOIN evidence_documents d ON d.related_heir_name = h.heir_name OR d.related_member_id = h.sienna_member_id
-       LEFT JOIN profiles creator ON creator.id = h.created_by
-       LEFT JOIN profiles updater ON updater.id = h.updated_by
-       GROUP BY h.id
-       ORDER BY h.heir_name'
-    )]);
+    json_response(['heirs' => fetch_confirmed_heirs(wants_media())]);
+  }
+
+  if ($method === 'POST' && $path === '/confirmed-heirs/bulk-amounts') {
+    $user = require_user();
+    $data = body();
+    $items = is_array($data['items'] ?? null) ? $data['items'] : [];
+    foreach ($items as $item) {
+      if (!is_array($item)) continue;
+      $id = trim((string)($item['id'] ?? ''));
+      if ($id === '') continue;
+      exec_sql(
+        'UPDATE confirmed_heirs SET inheritance_amount = :amount, updated_by = :updatedBy WHERE id = :id',
+        [
+          'id' => $id,
+          'amount' => (float)($item['inheritance_amount'] ?? 0),
+          'updatedBy' => $user['id'],
+        ]
+      );
+    }
+    json_response(['ok' => true]);
   }
 
   if ($method === 'POST' && $path === '/confirmed-heirs') {
@@ -877,33 +1004,34 @@ try {
     json_response(['ok' => true]);
   }
 
+  if ($method === 'GET' && $path === '/sienna-workspace') {
+    require_user();
+    $includeMedia = wants_media();
+    $family = fetch_sienna_family_bundle();
+    json_response([
+      'members' => $family['members'],
+      'unions' => $family['unions'],
+      'parent_links' => $family['parent_links'],
+      'heirs' => fetch_confirmed_heirs($includeMedia),
+      'documents' => fetch_evidence_documents(false),
+      'settings' => fetch_app_settings(),
+      'snapshot' => query_one(
+        'SELECT id, estate_amount, lawyer_fee_percentage, distributable_amount, members_hash, payload_json, created_by, created_at
+         FROM sienna_calculation_snapshots
+         ORDER BY created_at DESC
+         LIMIT 1'
+      ),
+    ]);
+  }
+
   if ($method === 'GET' && $path === '/sienna-family-members') {
     require_user();
-    $members = query_all(
-      'SELECT sfm.id, sfm.parent_id, sfm.relationship_to_parent, sfm.name, sfm.birth, sfm.death, sfm.spouse_member_id, sfm.spouse, sfm.spouse_birth,
-              sfm.inheritance_status, sfm.inheritance_reason, sfm.is_highlighted_ancestor, sfm.sort_order,
-              sfm.created_by, sfm.updated_by, sfm.created_at, sfm.updated_at,
-              creator.email AS created_by_email, creator.full_name AS created_by_name,
-              updater.email AS updated_by_email, updater.full_name AS updated_by_name
-       FROM sienna_family_members sfm
-       LEFT JOIN profiles creator ON creator.id = sfm.created_by
-       LEFT JOIN profiles updater ON updater.id = sfm.updated_by
-       ORDER BY COALESCE(sfm.parent_id, \'\'), sfm.sort_order, sfm.name'
-    );
-    foreach ($members as &$member) {
-      $member['is_highlighted_ancestor'] = (bool)$member['is_highlighted_ancestor'];
-      $member['sort_order'] = (int)$member['sort_order'];
-    }
-    $unions = query_all('SELECT * FROM family_unions ORDER BY partner_a_member_id, partner_b_member_id');
-    $parentLinks = query_all('SELECT * FROM member_parent_links ORDER BY child_member_id, parent_member_id');
-    foreach ($unions as &$union) {
-      $union['is_inconsistent'] = (bool)$union['is_inconsistent'];
-    }
-    foreach ($parentLinks as &$link) {
-      $link['is_primary_line'] = (bool)$link['is_primary_line'];
-      $link['is_inconsistent'] = (bool)$link['is_inconsistent'];
-    }
-    json_response(['members' => $members, 'unions' => $unions, 'parent_links' => $parentLinks]);
+    $family = fetch_sienna_family_bundle();
+    json_response([
+      'members' => $family['members'],
+      'unions' => $family['unions'],
+      'parent_links' => $family['parent_links'],
+    ]);
   }
 
   if ($method === 'POST' && $path === '/sienna-family-members') {
@@ -1019,12 +1147,18 @@ try {
 
   if ($method === 'GET' && $path === '/evidence-documents') {
     require_user();
-    $docs = query_all('SELECT * FROM evidence_documents ORDER BY created_at DESC');
-    foreach ($docs as &$doc) {
-      $doc['confirms_heir'] = (bool)$doc['confirms_heir'];
-      $doc['people_involved'] = $doc['people_involved'] ? json_decode($doc['people_involved'], true) : [];
+    json_response(['documents' => fetch_evidence_documents(wants_media())]);
+  }
+
+  if (preg_match('#^/evidence-documents/([^/]+)$#', $path, $m) && $method === 'GET') {
+    require_user();
+    $doc = query_one('SELECT * FROM evidence_documents WHERE id = :id LIMIT 1', ['id' => $m[1]]);
+    if (!$doc) {
+      json_response(['message' => 'Documento no encontrado'], 404);
     }
-    json_response(['documents' => $docs]);
+    $doc['confirms_heir'] = (bool)$doc['confirms_heir'];
+    $doc['people_involved'] = $doc['people_involved'] ? json_decode($doc['people_involved'], true) : [];
+    json_response(['document' => $doc]);
   }
 
   if ($method === 'POST' && $path === '/evidence-documents') {

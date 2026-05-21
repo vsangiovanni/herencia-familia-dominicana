@@ -31,7 +31,14 @@ const MiembrosArbolSienna = lazy(() => import('./pages/MiembrosArbolSienna'));
 const ExplicacionHerederosSienna = lazy(() => import('./pages/ExplicacionHerederosSienna'));
 const DocumentosProbatorios = lazy(() => import('./pages/DocumentosProbatorios'));
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
 
 function App() {
   return (

@@ -28,6 +28,7 @@ export interface ConfirmedHeir {
   photo_file_name?: string | null;
   photo_file_type?: string | null;
   photo_data?: string | null;
+  has_photo?: boolean;
   inheritance_amount?: number | string | null;
   evidence_count?: number;
 }
@@ -55,6 +56,8 @@ export interface EvidenceDocument {
   file_name?: string | null;
   file_type?: string | null;
   file_data?: string | null;
+  has_file?: boolean;
+  has_extracted_text?: boolean;
   created_at?: string | null;
   updated_at?: string | null;
 }
@@ -220,8 +223,15 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(data),
     }),
-  listConfirmedHeirs: () =>
-    request<{ heirs: ConfirmedHeir[] }>("/api/confirmed-heirs"),
+  listConfirmedHeirs: (options?: { includeMedia?: boolean }) =>
+    request<{ heirs: ConfirmedHeir[] }>(
+      `/api/confirmed-heirs${options?.includeMedia ? "?includeMedia=1" : ""}`
+    ),
+  bulkUpdateHeirAmounts: (items: Array<{ id: string; inheritance_amount: number }>) =>
+    request<{ ok: boolean }>("/api/confirmed-heirs/bulk-amounts", {
+      method: "POST",
+      body: JSON.stringify({ items }),
+    }),
   saveConfirmedHeir: (data: Omit<ConfirmedHeir, "id" | "evidence_count">) =>
     request<{ ok: boolean }>("/api/confirmed-heirs", {
       method: "POST",
@@ -232,8 +242,12 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(data),
     }),
-  listEvidenceDocuments: () =>
-    request<{ documents: EvidenceDocument[] }>("/api/evidence-documents"),
+  listEvidenceDocuments: (options?: { includeMedia?: boolean }) =>
+    request<{ documents: EvidenceDocument[] }>(
+      `/api/evidence-documents${options?.includeMedia ? "?includeMedia=1" : ""}`
+    ),
+  getEvidenceDocument: (id: string) =>
+    request<{ document: EvidenceDocument }>(`/api/evidence-documents/${id}`),
   saveEvidenceDocument: (data: EvidenceDocument) =>
     request<{ ok: boolean }>("/api/evidence-documents", {
       method: "POST",
@@ -247,6 +261,16 @@ export const api = {
       unions: FamilyUnion[];
       parent_links: MemberParentLink[];
     }>("/api/sienna-family-members"),
+  getSiennaWorkspace: (options?: { includeMedia?: boolean }) =>
+    request<{
+      members: SiennaFamilyMember[];
+      unions: FamilyUnion[];
+      parent_links: MemberParentLink[];
+      heirs: ConfirmedHeir[];
+      documents: EvidenceDocument[];
+      settings: Record<string, string | number | boolean | SiennaCaseConfig | null>;
+      snapshot: SiennaCalculationSnapshot | null;
+    }>(`/api/sienna-workspace${options?.includeMedia ? "?includeMedia=1" : ""}`),
   saveSiennaFamilyMember: (
     data: Omit<SiennaFamilyMember, "created_at" | "updated_at"> & { filiation?: MemberFiliationPayload }
   ) =>
