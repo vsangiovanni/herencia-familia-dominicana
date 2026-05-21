@@ -167,13 +167,14 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
     ],
   },
   hallazgos: {
-    title: 'Hallazgos',
+    title: 'Corrección por miembro',
     sections: [
       {
-        title: 'Revisión',
+        title: 'Tabla caso por caso',
         items: [
-          'Inconsistencias detectadas entre documentos, árbol y herederos.',
-          'Priorice ítems en rojo o marcados como riesgo antes de cerrar el expediente.',
+          'Cada fila es un miembro con un problema concreto: cónyuge, vínculo de filiación, matrimonio del hijo o rama cortada.',
+          'Use los selectores en «Corregir aquí» y pulse Guardar sin salir de la pantalla.',
+          'Los casos resueltos desaparecen al recargar; avance hasta que no queden pendientes.',
         ],
       },
     ],

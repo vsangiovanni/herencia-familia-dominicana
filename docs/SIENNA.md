@@ -108,12 +108,12 @@ Ayuda en pantalla: icono **?** (`sienna-miembros`, `sienna-miembros-agregar`) e 
 | PDF por heredero | Botón en cada ficha |
 | Resumen en árbol | Árbol → «Por qué heredan» |
 
-## Hallazgos dinámicos
+## Hallazgos — corrección por miembro
 
-- La pantalla `/hallazgos` ya no depende de observaciones fijas.
-- El análisis se recalcula con `members`, `heirs` y `documents` en cada carga.
-- Evalúa automáticamente: doble línea, conflictos de fechas, herederos sin soporte, documentos sin miembro titular y estados pendientes.
-- Muestra severidad por hallazgo (alta/media/baja) y próximos pasos contextuales.
+- Pantalla `/hallazgos`: tabla **caso por caso** por miembro del árbol.
+- Tipos: enlazar cónyuge, sincronizar vínculo de filiación, completar matrimonio del hijo, rama cortada.
+- Corrección inline con selectores + Guardar (API `saveSiennaFamilyMember`).
+- Lógica: `src/lib/siennaMemberIssues.ts`, UI: `MemberIssueFixPanel.tsx`.
 
 ## PDF de explicación (mosaico de soporte)
 

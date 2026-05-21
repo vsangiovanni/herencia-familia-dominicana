@@ -1,315 +1,388 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import BackButton from '@/components/BackButton';
 import DocumentHeader from '@/components/DocumentHeader';
 import SoftLoadingIndicator from '@/components/SoftLoadingIndicator';
+import { IssueDraft, MemberIssueFixPanel } from '@/components/sienna/MemberIssueFixPanel';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { api, ConfirmedHeir, EvidenceDocument, SiennaFamilyMember } from '@/lib/api';
-import { AlertTriangle, CheckCircle2, FileSearch, GitBranch, Scale } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { api } from '@/lib/api';
+import { buildDominicanInheritancePlan } from '@/lib/dominicanInheritance';
+import { buildMemberSavePayload } from '@/lib/siennaFindings';
+import {
+  buildMemberIssueRows,
+  kindLabels,
+  MemberIssueKind,
+  MemberIssueRow,
+} from '@/lib/siennaMemberIssues';
+import { CheckCircle2, ClipboardList, RefreshCw, Scale, Search } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 
-type Severity = 'Alta prioridad' | 'Media prioridad' | 'Baja prioridad';
-
-type DynamicFinding = {
-  title: string;
-  severity: Severity;
-  issue: string;
-  detail: string;
-  suggestion: string;
+const kindBadgeClass: Record<MemberIssueKind, string> = {
+  link_spouse: 'bg-legal-blue/10 text-legal-blue border-legal-blue/25',
+  sync_parent_link: 'bg-legal-gold/15 text-legal-blue border-legal-gold/35',
+  complete_filiation: 'bg-legal-gold/15 text-legal-blue border-legal-gold/35',
+  dead_branch: 'bg-amber-50 text-amber-900 border-amber-200',
 };
 
-const normalizeName = (value: string) =>
-  value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .trim();
-
 const Hallazgos = () => {
-  const [members, setMembers] = useState<SiennaFamilyMember[]>([]);
-  const [documents, setDocuments] = useState<EvidenceDocument[]>([]);
-  const [heirs, setHeirs] = useState<ConfirmedHeir[]>([]);
+  const [members, setMembers] = useState<Awaited<ReturnType<typeof api.listSiennaFamilyMembers>>['members']>([]);
+  const [unions, setUnions] = useState<Awaited<ReturnType<typeof api.listSiennaFamilyMembers>>['unions']>([]);
+  const [parentLinks, setParentLinks] = useState<
+    Awaited<ReturnType<typeof api.listSiennaFamilyMembers>>['parent_links']
+  >([]);
   const [loading, setLoading] = useState(true);
-  const [loadingMessage, setLoadingMessage] = useState('Analizando hallazgos actuales...');
+  const [loadingMessage, setLoadingMessage] = useState('Analizando miembros...');
+  const [search, setSearch] = useState('');
+  const [kindFilter, setKindFilter] = useState<MemberIssueKind | 'all'>('all');
+  const [drafts, setDrafts] = useState<Record<string, IssueDraft>>({});
+  const [savingRowId, setSavingRowId] = useState<string | null>(null);
 
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      setLoadingMessage('Consultando miembros, herederos y documentos...');
-      try {
-        const [membersResponse, documentsResponse, heirsResponse] = await Promise.all([
-          api.listSiennaFamilyMembers(),
-          api.listEvidenceDocuments(),
-          api.listConfirmedHeirs(),
-        ]);
-        setLoadingMessage('Calculando inconsistencias y riesgos...');
-        setMembers(membersResponse.members);
-        setDocuments(documentsResponse.documents);
-        setHeirs(heirsResponse.heirs);
-      } catch (error) {
-        toast({
-          title: 'No se pudo cargar Hallazgos',
-          description: error instanceof Error ? error.message : 'Error desconocido',
-          variant: 'destructive',
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadData();
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setLoadingMessage('Consultando árbol, uniones y vínculos...');
+    try {
+      const response = await api.listSiennaFamilyMembers();
+      setMembers(response.members);
+      setUnions(response.unions);
+      setParentLinks(response.parent_links);
+    } catch (error) {
+      toast({
+        title: 'No se pudo cargar la revisión',
+        description: error instanceof Error ? error.message : 'Error desconocido',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const findings = useMemo<DynamicFinding[]>(() => {
-    const items: DynamicFinding[] = [];
-    const memberNameById = new Map(members.map((member) => [member.id, member.name]));
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
-    const dualLineHeirs = heirs.filter((heir) => heir.line_vincenzo && heir.line_paolo);
-    if (dualLineHeirs.length) {
-      const sampleNames = dualLineHeirs.slice(0, 4).map((heir) => heir.heir_name).join(', ');
-      items.push({
-        title: 'Herederos con doble línea familiar',
-        severity: 'Alta prioridad',
-        issue:
-          'Hay herederos llamados simultáneamente por Vincenzo/Vicente y Paolo/Paulino, lo que requiere narrativa jurídica más precisa.',
-        detail: `Se detectaron ${dualLineHeirs.length} heredero(s) con doble línea. Ejemplos: ${sampleNames}.`,
-        suggestion:
-          'Mantener una matriz de doble filiación por heredero y validar en cada actualización que ambas rutas tengan respaldo documental.',
-      });
-    }
+  const distributedPercent = useMemo(() => {
+    const plan = buildDominicanInheritancePlan(members, { unions, parent_links: parentLinks });
+    return plan.activeHeirs.reduce((sum, share) => sum + share.share, 0);
+  }, [members, parentLinks, unions]);
 
-    const membersByName = new Map<string, SiennaFamilyMember[]>();
-    members.forEach((member) => {
-      const key = normalizeName(member.name);
-      const list = membersByName.get(key) || [];
-      list.push(member);
-      membersByName.set(key, list);
+  const { rows, summary } = useMemo(
+    () => buildMemberIssueRows(members, unions, parentLinks, distributedPercent),
+    [distributedPercent, members, parentLinks, unions]
+  );
+
+  useEffect(() => {
+    const next: Record<string, IssueDraft> = {};
+    rows.forEach((row) => {
+      next[row.id] = {
+        spouseMemberId: row.defaults.spouseMemberId,
+        filiationUnionId: row.defaults.filiationUnionId,
+        secondParentId: row.defaults.secondParentId,
+      };
     });
+    setDrafts(next);
+  }, [rows]);
 
-    const duplicatedNames = Array.from(membersByName.entries()).filter(([, list]) => list.length > 1);
-    if (duplicatedNames.length) {
-      items.push({
-        title: 'Nombres repetidos en el árbol',
-        severity: 'Media prioridad',
-        issue: 'Existen personas con el mismo nombre y esto puede confundir relaciones o documentos asociados.',
-        detail: `Se detectaron ${duplicatedNames.length} nombre(s) duplicado(s) en miembros del árbol.`,
-        suggestion:
-          'Agregar identificadores de contexto en las fichas (rama, padre/madre o fecha) para evitar ambigüedad al cargar y validar evidencias.',
-      });
-    }
+  const filteredRows = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return rows.filter((row) => {
+      if (kindFilter !== 'all' && row.kind !== kindFilter) return false;
+      if (!query) return true;
+      return (
+        row.memberName.toLowerCase().includes(query) ||
+        row.problem.toLowerCase().includes(query) ||
+        (row.context || '').toLowerCase().includes(query)
+      );
+    });
+  }, [kindFilter, rows, search]);
 
-    const deathDateConflicts = duplicatedNames
-      .map(([, list]) => {
-        const deaths = Array.from(
-          new Set(list.map((member) => (member.death || '').trim()).filter(Boolean))
+  const completionPercent = members.length
+    ? Math.round(((members.length - summary.membersAffected) / members.length) * 100)
+    : 100;
+
+  const updateDraft = (rowId: string, patch: Partial<IssueDraft>) => {
+    setDrafts((current) => ({
+      ...current,
+      [rowId]: { ...current[rowId], ...patch },
+    }));
+  };
+
+  const saveRow = async (row: MemberIssueRow) => {
+    const member = members.find((item) => item.id === row.memberId);
+    const draft = drafts[row.id];
+    if (!member || !draft) return;
+
+    setSavingRowId(row.id);
+    try {
+      if (row.kind === 'link_spouse') {
+        await api.saveSiennaFamilyMember(
+          buildMemberSavePayload(member, members, unions, {
+            spouse_member_id: draft.spouseMemberId || null,
+          })
         );
-        return deaths.length > 1 ? { name: list[0].name, deaths } : null;
-      })
-      .filter(Boolean) as Array<{ name: string; deaths: string[] }>;
+        toast({ title: 'Cónyuge guardado', description: `${member.name} actualizado.` });
+      }
 
-    if (deathDateConflicts.length) {
-      const sampleConflict = deathDateConflicts[0];
-      items.push({
-        title: 'Fechas de defunción inconsistentes',
-        severity: 'Alta prioridad',
-        issue: 'Hay personas con más de una fecha de defunción registrada.',
-        detail: `Se encontraron ${deathDateConflicts.length} conflicto(s). Ejemplo: ${sampleConflict.name} (${sampleConflict.deaths.join(' vs ')}).`,
-        suggestion:
-          'Verificar actas de defunción para cada conflicto y normalizar una sola fecha válida en todo el expediente.',
+      if (row.kind === 'sync_parent_link' || row.kind === 'complete_filiation') {
+        await api.saveSiennaFamilyMember(
+          buildMemberSavePayload(member, members, unions, {
+            filiation: {
+              union_id: draft.filiationUnionId || null,
+              second_parent_id: draft.secondParentId || null,
+            },
+          })
+        );
+        toast({ title: 'Filiación guardada', description: `${member.name} sincronizado en base de datos.` });
+      }
+
+      await loadData();
+    } catch (error) {
+      toast({
+        title: 'No se pudo guardar',
+        description: error instanceof Error ? error.message : 'Error desconocido',
+        variant: 'destructive',
       });
+    } finally {
+      setSavingRowId(null);
     }
+  };
 
-    const evidenceMemberIds = new Set(
-      documents
-        .map((document) => (document.related_member_id || '').trim())
-        .filter(Boolean)
+  const renderRow = (row: MemberIssueRow) => {
+    const draft = drafts[row.id] || row.defaults;
+
+    return (
+      <TableRow key={row.id} className="align-top">
+        <TableCell className="min-w-[11rem]">
+          <p className="font-semibold text-legal-blue">{row.memberName}</p>
+          <Badge variant="outline" className={`mt-1 text-[10px] ${kindBadgeClass[row.kind]}`}>
+            {kindLabels[row.kind]}
+          </Badge>
+          {row.context && <p className="mt-1 text-xs text-legal-gray">{row.context}</p>}
+        </TableCell>
+        <TableCell className="min-w-[14rem]">
+          <p className="text-sm text-gray-900">{row.problem}</p>
+          <p className="mt-1 text-xs leading-relaxed text-legal-gray">{row.solution}</p>
+        </TableCell>
+        <TableCell className="min-w-[15rem]">
+          <MemberIssueFixPanel
+            row={row}
+            draft={draft}
+            members={members}
+            unions={unions}
+            saving={savingRowId === row.id}
+            onDraftChange={(patch) => updateDraft(row.id, patch)}
+            onSave={() => saveRow(row)}
+          />
+        </TableCell>
+        <TableCell>
+          <Badge
+            variant="outline"
+            className={
+              row.severity === 'Alta prioridad' ? 'border-red-200 text-red-700' : 'border-amber-200 text-amber-800'
+            }
+          >
+            {row.severity === 'Alta prioridad' ? 'Alta' : 'Media'}
+          </Badge>
+        </TableCell>
+      </TableRow>
     );
-    const heirsWithoutEvidence = heirs.filter((heir) => {
-      if (!heir.sienna_member_id) return true;
-      return !evidenceMemberIds.has(heir.sienna_member_id);
-    });
-    if (heirsWithoutEvidence.length) {
-      items.push({
-        title: 'Herederos sin soporte documental vinculado',
-        severity: 'Alta prioridad',
-        issue: 'Hay herederos sin documentos relacionados directamente en el expediente.',
-        detail: `Se detectaron ${heirsWithoutEvidence.length} heredero(s) sin soporte asociado por miembro.`,
-        suggestion:
-          'Priorizar carga de actas por heredero y activar validación mínima de al menos un documento por cada candidato heredero.',
-      });
-    }
-
-    const documentsWithoutMember = documents.filter((document) => !document.related_member_id);
-    if (documentsWithoutMember.length) {
-      items.push({
-        title: 'Documentos sin miembro titular asociado',
-        severity: 'Media prioridad',
-        issue:
-          'Existen documentos cargados que no apuntan a un miembro del árbol y su valor probatorio se reduce.',
-        detail: `Hay ${documentsWithoutMember.length} documento(s) sin miembro titular asociado.`,
-        suggestion:
-          'Completar `Miembro titular` en cada documento para que el sistema pueda usarlo en trazabilidad y cálculo.',
-      });
-    }
-
-    const pendingHeirs = heirs.filter((heir) => heir.status !== 'confirmado');
-    if (pendingHeirs.length) {
-      items.push({
-        title: 'Herederos pendientes de confirmación',
-        severity: 'Media prioridad',
-        issue: 'Parte de los herederos siguen en estado pendiente o mencionado.',
-        detail: `${pendingHeirs.length} heredero(s) no están confirmados todavía.`,
-        suggestion:
-          'Completar evidencias y actualizar estado para estabilizar cálculos y reportes legales.',
-      });
-    }
-
-    if (!items.length) {
-      items.push({
-        title: 'Sin hallazgos críticos activos',
-        severity: 'Baja prioridad',
-        issue: 'No se detectaron inconsistencias relevantes con la data actual.',
-        detail: 'El árbol, herederos y documentos están alineados según las reglas evaluadas.',
-        suggestion:
-          'Mantener revisión periódica al cargar nuevos documentos o editar miembros para conservar consistencia.',
-      });
-    }
-
-    return items;
-  }, [documents, heirs, members]);
-
-  const actionItems = useMemo(() => {
-    const actions = [
-      'Revisar y cerrar hallazgos de alta prioridad antes de usar reportes finales.',
-      'Validar fechas y parentescos contra actas antes de publicar cambios legales.',
-      'Mantener vinculación documento -> miembro titular en cada carga nueva.',
-    ];
-    if (heirs.some((heir) => heir.status !== 'confirmado')) {
-      actions.push('Convertir herederos en estado pendiente a confirmado cuando exista soporte suficiente.');
-    }
-    if (documents.some((document) => !document.related_member_id)) {
-      actions.push('Corregir documentos huérfanos asignando miembro titular desde Documentos Probatorios.');
-    }
-    return actions;
-  }, [documents, heirs]);
-
-  const highPriorityFindings = findings.filter((finding) => finding.severity === 'Alta prioridad').length;
-  const focusTitle = findings[0]?.title || 'Revisión general';
-  const statusLabel =
-    highPriorityFindings > 0
-      ? 'Requiere atención prioritaria'
-      : findings.some((finding) => finding.severity === 'Media prioridad')
-        ? 'En seguimiento'
-        : 'Controlado';
+  };
 
   return (
     <div className="app-shell py-8">
       <BackButton />
 
       <DocumentHeader
-        title="Hallazgos"
-        subtitle="Inconsistencias, riesgos y sugerencias de revisión"
+        title="Corrección por miembro"
+        subtitle="Revise cada caso, aplique la solución en la misma fila y avance hasta dejar el árbol consistente"
         helpKey="hallazgos"
       />
       <SoftLoadingIndicator active={loading} message={loadingMessage} />
 
-      <div className="max-w-6xl mx-auto space-y-6">
+      <div className="mx-auto max-w-7xl space-y-6">
         <Card className="border border-legal-gold/20 shadow-md">
-          <CardHeader className="bg-legal-blue/5 border-b">
+          <CardHeader className="border-b bg-legal-blue/5">
             <CardTitle className="flex items-center gap-2 text-legal-blue">
-              <FileSearch className="h-5 w-5" />
-              Resumen de Revisión
+              <ClipboardList className="h-5 w-5" />
+              Progreso de corrección
             </CardTitle>
           </CardHeader>
-          <CardContent className="p-6">
-            <p className="text-gray-700 mb-4">
-              Esta página se actualiza de forma dinámica usando miembros, herederos y documentos vigentes.
-              No altera cálculos ni decisiones jurídicas: organiza alertas de consistencia para revisión.
-            </p>
-            <div className="grid md:grid-cols-3 gap-4">
-              <div className="bg-legal-beige/50 border-l-4 border-legal-gold p-4">
-                <p className="text-sm text-legal-gray">Hallazgos registrados</p>
-                <p className="text-2xl font-bold text-legal-blue">{loading ? '...' : findings.length}</p>
+          <CardContent className="space-y-4 p-6">
+            {rows.length === 0 ? (
+              <div className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50/80 p-4">
+                <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-700" />
+                <div>
+                  <p className="font-semibold text-emerald-900">Árbol consistente</p>
+                  <p className="mt-1 text-sm text-emerald-800">
+                    No hay pendientes de cónyuge, filiación ni ramas cortadas detectados. Cálculo distribuido:{' '}
+                    {summary.distributedPercent.toFixed(2)}%.
+                  </p>
+                </div>
               </div>
-              <div className="bg-legal-beige/50 border-l-4 border-legal-gold p-4">
-                <p className="text-sm text-legal-gray">Foco principal</p>
-                <p className="font-medium text-legal-blue">{loading ? 'Cargando...' : focusTitle}</p>
-              </div>
-              <div className="bg-legal-beige/50 border-l-4 border-legal-gold p-4">
-                <p className="text-sm text-legal-gray">Estado</p>
-                <p className="font-medium text-legal-blue">{loading ? 'Cargando...' : statusLabel}</p>
-              </div>
+            ) : (
+              <>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="rounded-lg border border-legal-gold/30 bg-legal-beige/40 p-4">
+                    <p className="text-xs uppercase text-legal-gray">Casos pendientes</p>
+                    <p className="text-2xl font-bold text-legal-blue">{summary.totalIssues}</p>
+                  </div>
+                  <div className="rounded-lg border border-legal-blue/20 bg-legal-blue/5 p-4">
+                    <p className="text-xs uppercase text-legal-gray">Miembros afectados</p>
+                    <p className="text-2xl font-bold text-legal-blue">{summary.membersAffected}</p>
+                  </div>
+                  <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-4">
+                    <p className="text-xs uppercase text-legal-gray">Cuota sin asignar</p>
+                    <p className="text-2xl font-bold text-amber-900">
+                      {summary.undistributedPercent.toFixed(2)}%
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-legal-gold/30 p-4">
+                    <p className="text-xs uppercase text-legal-gray">Cónyuge / vínculo / rama</p>
+                    <p className="text-sm font-medium text-legal-blue">
+                      {summary.byKind.link_spouse} / {summary.byKind.sync_parent_link + summary.byKind.complete_filiation} / {summary.byKind.dead_branch}
+                    </p>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-xs text-legal-gray">
+                    <span>Miembros sin pendientes detectados</span>
+                    <span>{completionPercent}%</span>
+                  </div>
+                  <Progress value={completionPercent} className="h-2" />
+                </div>
+              </>
+            )}
+
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" size="sm" variant="outline" className="gap-2" onClick={loadData} disabled={loading}>
+                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                Recargar
+              </Button>
+              <Button type="button" size="sm" variant="outline" asChild>
+                <Link to="/calculo-filiacion" className="gap-2">
+                  <Scale className="h-4 w-4" />
+                  Ver cálculo por filiación
+                </Link>
+              </Button>
             </div>
           </CardContent>
         </Card>
 
-        <div className="grid gap-6">
-          {findings.map((finding, index) => (
-            <Card key={finding.title} className="border border-legal-gold/20 shadow-md">
-              <CardHeader className="pb-3">
-                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
-                  <CardTitle className="flex items-start gap-2 text-xl text-legal-blue">
-                    <AlertTriangle className="h-5 w-5 mt-1 text-legal-gold" />
-                    <span>{index + 1}. {finding.title}</span>
-                  </CardTitle>
-                  <Badge
-                    variant="outline"
-                    className={`w-fit border-legal-gold ${
-                      finding.severity === 'Alta prioridad'
-                        ? 'text-red-700'
-                        : finding.severity === 'Media prioridad'
-                          ? 'text-amber-700'
-                          : 'text-emerald-700'
-                    }`}
-                  >
-                    {finding.severity}
-                  </Badge>
+        {rows.length > 0 && (
+          <Card className="border border-legal-gold/20 shadow-md">
+            <CardHeader className="border-b bg-legal-blue/5">
+              <CardTitle className="text-legal-blue">Tabla de corrección — caso por caso</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 p-4 sm:p-6">
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-legal-gray" />
+                  <Input
+                    className="pl-9"
+                    placeholder="Buscar por miembro o problema..."
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                  />
                 </div>
-              </CardHeader>
-              <CardContent className="p-6 pt-0">
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="font-medium text-legal-blue mb-1">Inconsistencia o riesgo</h3>
-                    <p className="text-gray-700">{finding.issue}</p>
-                  </div>
-                  <Separator className="bg-legal-gold/20" />
-                  <div>
-                    <h3 className="font-medium text-legal-blue mb-1">Lectura del hallazgo</h3>
-                    <p className="text-gray-700">{finding.detail}</p>
-                  </div>
-                  <div className="bg-legal-blue/5 border border-legal-blue/20 rounded-md p-4">
-                    <h3 className="flex items-center gap-2 font-medium text-legal-blue mb-2">
-                      <CheckCircle2 className="h-4 w-4" />
-                      Sugerencia de solución
-                    </h3>
-                    <p className="text-gray-700">{finding.suggestion}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                <Select value={kindFilter} onValueChange={(value) => setKindFilter(value as MemberIssueKind | 'all')}>
+                  <SelectTrigger className="w-full sm:w-[14rem]">
+                    <SelectValue placeholder="Tipo de problema" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos los tipos</SelectItem>
+                    {(Object.keys(kindLabels) as MemberIssueKind[]).map((kind) => (
+                      <SelectItem key={kind} value={kind}>
+                        {kindLabels[kind]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-        <Card className="border border-legal-gold/20 shadow-md">
-          <CardHeader className="bg-legal-blue/5 border-b">
-            <CardTitle className="flex items-center gap-2 text-legal-blue">
-              <Scale className="h-5 w-5" />
-              Próximos Pasos Recomendados
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
-            <ul className="space-y-3">
-              {actionItems.map((item) => (
-                <li key={item} className="flex gap-3 text-gray-700">
-                  <GitBranch className="h-5 w-5 text-legal-gold shrink-0 mt-0.5" />
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
+              <div className="hidden overflow-x-auto md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Miembro</TableHead>
+                      <TableHead>Problema y solución</TableHead>
+                      <TableHead>Corregir aquí</TableHead>
+                      <TableHead>Prioridad</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>{filteredRows.map((row) => renderRow(row))}</TableBody>
+                </Table>
+              </div>
+
+              <div className="space-y-4 md:hidden">
+                {filteredRows.map((row) => {
+                  const draft = drafts[row.id] || row.defaults;
+                  return (
+                    <div key={row.id} className="rounded-lg border border-legal-gold/25 bg-white p-4">
+                      <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <p className="font-semibold text-legal-blue">{row.memberName}</p>
+                          <Badge variant="outline" className={`mt-1 text-[10px] ${kindBadgeClass[row.kind]}`}>
+                            {kindLabels[row.kind]}
+                          </Badge>
+                        </div>
+                        <Badge variant="outline">{row.severity === 'Alta prioridad' ? 'Alta' : 'Media'}</Badge>
+                      </div>
+                      {row.context && <p className="mb-2 text-xs text-legal-gray">{row.context}</p>}
+                      <p className="text-sm text-gray-900">{row.problem}</p>
+                      <p className="mt-1 text-xs text-legal-gray">{row.solution}</p>
+                      <div className="mt-3 border-t border-legal-gold/15 pt-3">
+                        <MemberIssueFixPanel
+                          row={row}
+                          draft={draft}
+                          members={members}
+                          unions={unions}
+                          saving={savingRowId === row.id}
+                          onDraftChange={(patch) => updateDraft(row.id, patch)}
+                          onSave={() => saveRow(row)}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {filteredRows.length === 0 && rows.length > 0 && (
+                <p className="text-center text-sm text-legal-gray">Ningún caso coincide con el filtro.</p>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {summary.undistributedPercent > 0.05 && (
+          <Card className="border border-amber-200 bg-amber-50/50">
+            <CardContent className="p-4 text-sm text-amber-950">
+              <strong>Nota sobre el cálculo:</strong> aún hay {summary.undistributedPercent.toFixed(2)}% del caudal
+              simulado sin heredero vivo. Corrija ramas cortadas y vínculos faltantes arriba; luego verifique en{' '}
+              <Link to="/calculo-filiacion" className="font-medium underline">
+                Cálculo por filiación
+              </Link>
+              .
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );
