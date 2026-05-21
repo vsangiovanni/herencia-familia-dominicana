@@ -8,7 +8,7 @@ import {
   normalizeName,
 } from '@/lib/dominicanInheritance';
 import { formatPercent } from '@/lib/siennaHeirExplain';
-import { ChildFiliationGroup, groupChildrenForMember, SiennaGenealogyBundle } from '@/lib/siennaGenealogy';
+import { ChildFiliationGroup, getDirectChildrenOfMember, groupChildrenForMember, SiennaGenealogyBundle } from '@/lib/siennaGenealogy';
 
 export type TreeRole =
   | 'causante'
@@ -228,7 +228,9 @@ export const buildMemberTreeContext = (
     : [];
   const directChildren = childFiliationGroups.length
     ? childFiliationGroups.flatMap((group) => group.children)
-    : members.filter((item) => item.parent_id === member.id && isChildRelationship(item));
+    : genealogy
+      ? getDirectChildrenOfMember(member.id, members, genealogy)
+      : members.filter((item) => item.parent_id === member.id && isChildRelationship(item));
 
   return {
     ancestryPath,

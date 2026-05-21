@@ -1,5 +1,10 @@
 import { SiennaFamilyMember } from './api';
-import { getDescendantsForRepresentation, SiennaGenealogyBundle } from './siennaGenealogy';
+import {
+  getDescendantsForRepresentation,
+  getDirectChildrenOfMember,
+  resolveSpousePartner,
+  SiennaGenealogyBundle,
+} from './siennaGenealogy';
 
 export type InheritanceStatus = 'posible_heredero' | 'no_hereda' | 'requiere_revision' | 'confirmado';
 
@@ -152,33 +157,17 @@ const byNameKey = (members: SiennaFamilyMember[]) =>
 const byIdKey = (members: SiennaFamilyMember[]) =>
   new Map(members.map((member) => [normalizedMemberId(member.id), member]));
 
-const directChildrenOf = (members: SiennaFamilyMember[], parentId: string) =>
-  members.filter((member) => normalizedMemberId(member.parent_id) === normalizedMemberId(parentId) && isDescendantRelationship(member));
-
-const findSpousePartner = (
-  member: SiennaFamilyMember,
-  membersByName: Map<string, SiennaFamilyMember>,
-  membersById: Map<string, SiennaFamilyMember>
+const directChildrenOf = (
+  members: SiennaFamilyMember[],
+  parentId: string,
+  genealogy?: SiennaGenealogyBundle
 ) => {
-  const memberNameKey = normalizeName(member.name);
-  const spouseByMemberId = member.spouse_member_id
-    ? membersById.get(normalizedMemberId(member.spouse_member_id)) || null
-    : null;
-  if (spouseByMemberId) return spouseByMemberId;
-  const spouseByOwnReference = member.spouse ? membersByName.get(normalizeName(member.spouse)) || null : null;
-  if (spouseByOwnReference) return spouseByOwnReference;
-
-  for (const candidate of membersById.values()) {
-    if (normalizeName(candidate.name) === memberNameKey) continue;
-    if (normalizedMemberId(candidate.spouse_member_id) === normalizedMemberId(member.id)) {
-      return candidate;
-    }
-    if (candidate.spouse && normalizeName(candidate.spouse) === memberNameKey) {
-      return candidate;
-    }
+  if (genealogy && (genealogy.parent_links.length > 0 || genealogy.unions.length > 0)) {
+    return getDirectChildrenOfMember(parentId, members, genealogy);
   }
-
-  return null;
+  return members.filter(
+    (member) => normalizedMemberId(member.parent_id) === normalizedMemberId(parentId) && isDescendantRelationship(member)
+  );
 };
 
 const uniqueMembers = (members: SiennaFamilyMember[]) => {
@@ -241,14 +230,12 @@ const descendantsForRepresentation = (
   genealogy?: SiennaGenealogyBundle
 ) => {
   if (genealogy && (genealogy.parent_links.length > 0 || genealogy.unions.length > 0)) {
-    return uniqueMembers(
-      getDescendantsForRepresentation(member, members, genealogy, findSpousePartner)
-    );
+    return uniqueMembers(getDescendantsForRepresentation(member, members, genealogy));
   }
 
-  const ownChildren = directChildrenOf(members, member.id);
-  const spousePartner = findSpousePartner(member, membersByName, membersById);
-  const spouseChildren = spousePartner ? directChildrenOf(members, spousePartner.id) : [];
+  const ownChildren = directChildrenOf(members, member.id, genealogy);
+  const spousePartner = resolveSpousePartner(member, members, genealogy, 'calculation');
+  const spouseChildren = spousePartner ? directChildrenOf(members, spousePartner.id, genealogy) : [];
 
   return uniqueMembers([...ownChildren, ...spouseChildren]);
 };
@@ -304,7 +291,7 @@ export const buildDominicanInheritancePlan = (
   const sharesById = new Map<string, InheritanceShare>();
 
   if (causante) {
-    const directDescendants = directChildrenOf(members, causante.id);
+    const directDescendants = directChildrenOf(members, causante.id, genealogy);
     if (directDescendants.length) {
       const share = 100 / directDescendants.length;
       directDescendants.forEach((child) => {
@@ -361,10 +348,11 @@ export const buildDominicanInheritancePlan = (
 
 export const classifyMemberByDominicanLaw = (
   member: SiennaFamilyMember,
-  members: SiennaFamilyMember[]
+  members: SiennaFamilyMember[],
+  genealogy?: SiennaGenealogyBundle
 ): Pick<SiennaFamilyMember, 'inheritance_status' | 'inheritance_reason'> => {
   const name = normalizeName(member.name);
-  const plan = buildDominicanInheritancePlan(members);
+  const plan = buildDominicanInheritancePlan(members, genealogy);
   const share = plan.sharesById.get(member.id);
 
   if (name === normalizeName(caseCausanteName)) {
@@ -388,7 +376,7 @@ export const classifyMemberByDominicanLaw = (
     };
   }
 
-  if (isDeceased(member) && descendantsForRepresentation(member, members, byNameKey(members), byIdKey(members)).length) {
+  if (isDeceased(member) && descendantsForRepresentation(member, members, byNameKey(members), byIdKey(members), genealogy).length) {
     return {
       inheritance_status: 'no_hereda',
       inheritance_reason: 'Nodo intermedio fallecido; su cuota se transmite por representación a sus descendientes vivos documentados.',

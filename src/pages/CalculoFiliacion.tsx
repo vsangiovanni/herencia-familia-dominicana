@@ -187,8 +187,7 @@ const CalculoFiliacion = () => {
               {genealogyIssues > 0 && (
                 <p>
                   Hay <strong>{genealogyIssues}</strong> uniones/vínculos marcados como inconsistentes en el árbol
-                  (cónyuge solo en texto, pareja sin ID, etc.). Revise Miembros del árbol antes de usar cifras en
-                  reunión.
+                  (pareja sin ID enlazado). Revise Hallazgos o Miembros del árbol antes de usar cifras en reunión.
                 </p>
               )}
               {childrenMissingLinks.length > 0 && (

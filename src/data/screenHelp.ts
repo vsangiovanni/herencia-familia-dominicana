@@ -172,7 +172,8 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
       {
         title: 'Tabla caso por caso',
         items: [
-          'Cada fila es un miembro con un problema concreto: cónyuge, vínculo de filiación, matrimonio del hijo o rama cortada.',
+          'Cada fila es un miembro con un problema que afecta filiación o reparto: unión inconsistente, vínculo de filiación, matrimonio del hijo o rama cortada.',
+          'Tener cónyuge solo en texto (sin ID) es referencia documental y no se lista aquí si no hay unión inconsistente.',
           'Use los selectores en «Corregir aquí» y pulse Guardar sin salir de la pantalla.',
           'Los casos resueltos desaparecen al recargar; avance hasta que no queden pendientes.',
         ],

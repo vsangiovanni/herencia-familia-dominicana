@@ -37,7 +37,9 @@ import {
   formatUnionLabel,
   getParentLinksForChild,
   getUnionsForMember,
+  SiennaGenealogyBundle,
 } from '@/lib/siennaGenealogy';
+import { buildSecondParentOptions } from '@/lib/siennaMemberIssues';
 import { formatPercent } from '@/lib/siennaHeirExplain';
 import MemberTreeContextPanel from '@/components/sienna/MemberTreeContextPanel';
 import MemberRegistrationGuide from '@/components/sienna/MemberRegistrationGuide';
@@ -59,7 +61,7 @@ import {
   UserPlus,
   Users,
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Progress } from '@/components/ui/progress';
 import { useAuth } from '@/context/AuthContext';
 
@@ -117,7 +119,11 @@ const resolveSpouseName = (
   return fallbackName;
 };
 
-const determineInheritance = (form: MemberForm, members: SiennaFamilyMember[]) => {
+const determineInheritance = (
+  form: MemberForm,
+  members: SiennaFamilyMember[],
+  genealogy: SiennaGenealogyBundle
+) => {
   if (form.inheritance_status !== 'requiere_revision') {
     return {
       inheritance_status: form.inheritance_status,
@@ -145,7 +151,7 @@ const determineInheritance = (form: MemberForm, members: SiennaFamilyMember[]) =
     ? members.map((member) => (member.id === memberId ? draftMember : member))
     : [...members, draftMember];
 
-  return classifyMemberByDominicanLaw(draftMember, draftMembers);
+  return classifyMemberByDominicanLaw(draftMember, draftMembers, genealogy);
 };
 
 const toForm = (
@@ -179,6 +185,7 @@ const toForm = (
 
 const MiembrosArbolSienna = () => {
   const { isAdmin } = useAuth();
+  const [searchParams] = useSearchParams();
   const [members, setMembers] = useState<SiennaFamilyMember[]>([]);
   const [unions, setUnions] = useState<FamilyUnion[]>([]);
   const [parentLinks, setParentLinks] = useState<MemberParentLink[]>([]);
@@ -222,13 +229,27 @@ const MiembrosArbolSienna = () => {
     loadMembers();
   }, []);
 
+  useEffect(() => {
+    const editId = searchParams.get('edit');
+    if (!editId || loading || !members.length) return;
+    const member = members.find((item) => item.id === editId);
+    if (member) {
+      setForm(toForm(member, parentLinks));
+    }
+  }, [loading, members, parentLinks, searchParams]);
+
   const updateForm = (field: keyof MemberForm, value: string | boolean) => {
     setForm((current) => ({ ...current, [field]: value }));
   };
 
   const resetForm = () => setForm(emptyForm);
 
-  const evaluation = useMemo(() => determineInheritance(form, members), [form, members]);
+  const genealogy = useMemo(
+    () => ({ unions, parent_links: parentLinks }),
+    [parentLinks, unions]
+  );
+
+  const evaluation = useMemo(() => determineInheritance(form, members, genealogy), [form, genealogy, members]);
   const resolvedInheritanceStatus =
     form.inheritance_status === 'requiere_revision' ? evaluation.inheritance_status : form.inheritance_status;
   const manualInheritanceOverride = form.inheritance_status !== 'requiere_revision';
@@ -236,10 +257,6 @@ const MiembrosArbolSienna = () => {
     ? form.inheritance_reason || 'Estado definido manualmente en la administración del árbol.'
     : evaluation.inheritance_reason;
 
-  const genealogy = useMemo(
-    () => ({ unions, parent_links: parentLinks }),
-    [parentLinks, unions]
-  );
   const inheritancePlan = useMemo(
     () => buildDominicanInheritancePlan(members, genealogy),
     [genealogy, members]
@@ -373,11 +390,8 @@ const MiembrosArbolSienna = () => {
     if (form.parent_id === 'root') return [];
     const parent = membersById.get(form.parent_id);
     if (!parent) return [];
-    const spouseId = parent.spouse_member_id;
-    if (!spouseId || spouseId === form.id) return [];
-    const spouse = membersById.get(spouseId);
-    return spouse ? [spouse] : [];
-  }, [form.id, form.parent_id, membersById]);
+    return buildSecondParentOptions(parent.id, form.filiation_union_id || null, members, unions);
+  }, [form.filiation_union_id, form.parent_id, members, membersById, unions]);
 
   const saveMember = async () => {
     if (!form.name.trim()) {

@@ -3,7 +3,7 @@ import BackButton from '@/components/BackButton';
 import DocumentHeader from '@/components/DocumentHeader';
 import SoftLoadingIndicator from '@/components/SoftLoadingIndicator';
 import { api, ConfirmedHeir, MemberParentLink, SiennaFamilyMember } from '@/lib/api';
-import { formatUnionLabel, getParentLinksForChild, SiennaGenealogyBundle } from '@/lib/siennaGenealogy';
+import { formatUnionLabel, getParentLinksForChild, resolveSpouseDisplayLabel, resolveSpousePartner, SiennaGenealogyBundle } from '@/lib/siennaGenealogy';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -43,22 +43,43 @@ const initials = (name: string) =>
     .join('')
     .toUpperCase();
 
-const buildForest = (members: SiennaFamilyMember[]) => {
+const buildForest = (members: SiennaFamilyMember[], bundle?: SiennaGenealogyBundle) => {
   const byId = new Map<string, TreeMember>();
   members.forEach((member) => {
     byId.set(member.id, { ...member, children: [] });
   });
 
-  const roots: TreeMember[] = [];
+  const childToParent = new Map<string, string>();
+
   byId.forEach((member) => {
     const parentId = member.parent_id?.trim();
-    const parent = parentId ? byId.get(parentId) : null;
-    if (parent && parent.id !== member.id) {
-      parent.children.push(member);
-    } else {
-      roots.push(member);
+    if (parentId && byId.has(parentId) && parentId !== member.id) {
+      childToParent.set(member.id, parentId);
     }
   });
+
+  if (bundle?.parent_links.length) {
+    for (const link of bundle.parent_links) {
+      const childId = (link.child_member_id || '').trim();
+      const parentId = (link.parent_member_id || '').trim();
+      if (!childId || !parentId || childId === parentId || !byId.has(childId) || !byId.has(parentId)) continue;
+      if (!childToParent.has(childId)) {
+        childToParent.set(childId, parentId);
+      }
+    }
+  }
+
+  childToParent.forEach((parentId, childId) => {
+    const child = byId.get(childId);
+    const parent = byId.get(parentId);
+    if (!child || !parent) return;
+    if (!parent.children.some((item) => item.id === childId)) {
+      parent.children.push(child);
+    }
+  });
+
+  const attached = new Set(childToParent.keys());
+  const roots = Array.from(byId.values()).filter((member) => !attached.has(member.id));
 
   const sortTree = (nodes: TreeMember[]) => {
     nodes.sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0) || a.name.localeCompare(b.name));
@@ -80,33 +101,6 @@ const formatPercent = (value: number) =>
 
 const normalizedMemberId = (value: string | null | undefined) => (value || '').trim();
 
-const findSpousePartner = (
-  member: SiennaFamilyMember,
-  membersByName: Map<string, SiennaFamilyMember>,
-  membersById: Map<string, SiennaFamilyMember>
-) => {
-  if (member.spouse_member_id) {
-    const byId = membersById.get(normalizedMemberId(member.spouse_member_id));
-    if (byId) return byId;
-  }
-  if (member.spouse) {
-    const direct = membersByName.get(normalizeName(member.spouse));
-    if (direct) return direct;
-  }
-
-  for (const candidate of membersById.values()) {
-    if (candidate.id === member.id) continue;
-    if (candidate.spouse_member_id && normalizedMemberId(candidate.spouse_member_id) === normalizedMemberId(member.id)) {
-      return candidate;
-    }
-    if (candidate.spouse && normalizeName(candidate.spouse) === normalizeName(member.name)) {
-      return candidate;
-    }
-  }
-
-  return null;
-};
-
 const ClassicNode = ({
   member,
   heirsByMemberId,
@@ -115,7 +109,7 @@ const ClassicNode = ({
   total,
   estateAmount,
   membersById,
-  membersByName,
+  allMembers,
   genealogy,
 }: {
   member: TreeMember;
@@ -125,7 +119,7 @@ const ClassicNode = ({
   total: number;
   estateAmount: number;
   membersById: Map<string, SiennaFamilyMember>;
-  membersByName: Map<string, SiennaFamilyMember>;
+  allMembers: SiennaFamilyMember[];
   genealogy: SiennaGenealogyBundle;
 }) => {
   const heir = heirsByMemberId.get(member.id) || heirsByName.get(normalizeName(member.name));
@@ -140,11 +134,8 @@ const ClassicNode = ({
   const referenceTotal = estateAmount > 0 ? estateAmount : total;
   const share = inheritanceShare?.share || (referenceTotal > 0 && amount > 0 ? (amount / referenceTotal) * 100 : 0);
   const parent = member.parent_id ? membersById.get(normalizedMemberId(member.parent_id)) || null : null;
-  const otherParent = parent ? findSpousePartner(parent, membersByName, membersById) : null;
-  const spouseLabel =
-    (member.spouse_member_id ? membersById.get(normalizedMemberId(member.spouse_member_id))?.name : null) ||
-    member.spouse ||
-    null;
+  const otherParent = parent ? resolveSpousePartner(parent, allMembers, genealogy, 'calculation') : null;
+  const spouseLabel = resolveSpouseDisplayLabel(member, allMembers, genealogy);
   const hasDualLineage = (inheritanceShare?.sources.length || 0) > 1;
   const childLinks = getParentLinksForChild(member.id, genealogy.parent_links);
   const unionLink = childLinks.find((link: MemberParentLink) => link.union_id);
@@ -291,7 +282,7 @@ const ClassicNode = ({
                 total={total}
                 estateAmount={estateAmount}
                 membersById={membersById}
-                membersByName={membersByName}
+                allMembers={allMembers}
                 genealogy={genealogy}
               />
             ))}
@@ -436,12 +427,8 @@ const ArbolGenealogicoSienna = () => {
     () => new Map(members.map((member) => [normalizedMemberId(member.id), member])),
     [members]
   );
-  const membersByName = useMemo(
-    () => new Map(members.map((member) => [normalizeName(member.name), member])),
-    [members]
-  );
 
-  const forest = useMemo(() => buildForest(members), [members]);
+  const forest = useMemo(() => buildForest(members, genealogy), [genealogy, members]);
   const orphanMembers = useMemo(() => {
     const ids = new Set(members.map((member) => member.id));
     return members.filter((member) => member.parent_id && !ids.has(member.parent_id));
@@ -455,7 +442,9 @@ const ArbolGenealogicoSienna = () => {
           const baseParent = share.member.parent_id
             ? membersById.get(normalizedMemberId(share.member.parent_id)) || null
             : null;
-          const linkedParent = baseParent ? findSpousePartner(baseParent, membersByName, membersById) : null;
+          const linkedParent = baseParent
+            ? resolveSpousePartner(baseParent, members, genealogy, 'calculation')
+            : null;
           return {
             memberId: share.member.id,
             memberName: share.member.name,
@@ -464,7 +453,7 @@ const ArbolGenealogicoSienna = () => {
             linkedParentName: linkedParent?.name || 'No definido',
           };
         }),
-    [inheritancePlan.activeHeirs, membersById, membersByName]
+    [genealogy, inheritancePlan.activeHeirs, members, membersById]
   );
   const calculatedPayments = useMemo(() => {
     const totalEstate = distributableEstateAmount;
@@ -479,11 +468,17 @@ const ArbolGenealogicoSienna = () => {
   }, [distributableEstateAmount, heirsByMemberId, heirsByName, inheritancePlan]);
   const presentationStats = useMemo(
     () => ({
-      finalHeirs: members.filter((member) => member.inheritance_status === 'posible_heredero' || member.inheritance_status === 'confirmado').length,
-      connectors: members.filter((member) => member.inheritance_status === 'no_hereda').length,
-      pending: members.filter((member) => member.inheritance_status === 'requiere_revision').length,
+      finalHeirs: inheritancePlan.activeHeirs.length,
+      connectors: members.filter(
+        (member) => member.death?.trim() && !inheritancePlan.sharesById.has(member.id)
+      ).length,
+      pending: members.filter(
+        (member) =>
+          !inheritancePlan.sharesById.has(member.id) &&
+          member.inheritance_status === 'requiere_revision'
+      ).length,
     }),
-    [members]
+    [inheritancePlan, members]
   );
 
   const applyEstateCalculation = async () => {
@@ -992,7 +987,7 @@ const ArbolGenealogicoSienna = () => {
                             total={total}
                             estateAmount={distributableEstateAmount}
                             membersById={membersById}
-                            membersByName={membersByName}
+                            allMembers={members}
                             genealogy={genealogy}
                           />
                         ))}

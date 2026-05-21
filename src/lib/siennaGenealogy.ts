@@ -21,7 +21,93 @@ export const buildParentLinkId = (childId: string, parentId: string, unionId?: s
 export const isChildRelationship = (member: SiennaFamilyMember) =>
   member.relationship_to_parent === 'hijo' ||
   member.relationship_to_parent === 'hija' ||
+  member.relationship_to_parent === 'otro' ||
   !member.relationship_to_parent;
+
+export type SpouseResolveMode = 'calculation' | 'display' | 'suggestions';
+
+export const resolveSpousePartner = (
+  member: SiennaFamilyMember,
+  members: SiennaFamilyMember[],
+  bundle?: SiennaGenealogyBundle,
+  mode: SpouseResolveMode = 'calculation'
+): SiennaFamilyMember | null => {
+  const membersById = new Map(members.map((item) => [item.id, item]));
+  const membersByName = new Map(members.map((item) => [normalizeName(item.name), item]));
+  const memberId = normalizedId(member.id);
+
+  if (member.spouse_member_id) {
+    const linked = membersById.get(normalizedId(member.spouse_member_id));
+    if (linked) return linked;
+  }
+
+  if (bundle?.unions.length) {
+    for (const union of getUnionsForMember(memberId, bundle.unions)) {
+      const otherId =
+        normalizedId(union.partner_a_member_id) === memberId
+          ? union.partner_b_member_id
+          : union.partner_a_member_id;
+      if (otherId) {
+        const other = membersById.get(normalizedId(otherId));
+        if (other) return other;
+      }
+    }
+  }
+
+  for (const candidate of membersById.values()) {
+    if (candidate.id === member.id) continue;
+    if (normalizedId(candidate.spouse_member_id) === memberId) return candidate;
+  }
+
+  if (mode === 'display' || mode === 'suggestions') {
+    if (member.spouse) {
+      const byName = membersByName.get(normalizeName(member.spouse));
+      if (byName) return byName;
+    }
+    const memberNameKey = normalizeName(member.name);
+    for (const candidate of membersById.values()) {
+      if (candidate.spouse && normalizeName(candidate.spouse) === memberNameKey) return candidate;
+    }
+  }
+
+  return null;
+};
+
+export const resolveSpouseDisplayLabel = (
+  member: SiennaFamilyMember,
+  members: SiennaFamilyMember[],
+  bundle?: SiennaGenealogyBundle
+): string | null => {
+  const linked = resolveSpousePartner(member, members, bundle, 'display');
+  if (linked) return linked.name;
+  return member.spouse?.trim() || null;
+};
+
+export const getDirectChildrenOfMember = (
+  parentId: string,
+  members: SiennaFamilyMember[],
+  bundle?: SiennaGenealogyBundle
+): SiennaFamilyMember[] => {
+  const childMap = new Map<string, SiennaFamilyMember>();
+  const pid = normalizedId(parentId);
+
+  members
+    .filter((item) => normalizedId(item.parent_id) === pid && isChildRelationship(item))
+    .forEach((child) => childMap.set(child.id, child));
+
+  if (bundle?.parent_links.length) {
+    getChildIdsFromLinks(pid, bundle.parent_links).forEach((childId) => {
+      const child = members.find((item) => item.id === childId);
+      if (child && isChildRelationship(child)) childMap.set(child.id, child);
+    });
+  }
+
+  return Array.from(childMap.values()).sort(
+    (left, right) =>
+      Number(left.sort_order || 0) - Number(right.sort_order || 0) ||
+      left.name.localeCompare(right.name, 'es')
+  );
+};
 
 export const findUnionBetween = (
   memberAId: string,
@@ -189,16 +275,10 @@ export const groupChildrenForMember = (
 export const getDescendantsForRepresentation = (
   member: SiennaFamilyMember,
   members: SiennaFamilyMember[],
-  bundle: SiennaGenealogyBundle,
-  findSpousePartner: (
-    member: SiennaFamilyMember,
-    membersByName: Map<string, SiennaFamilyMember>,
-    membersById: Map<string, SiennaFamilyMember>
-  ) => SiennaFamilyMember | null
+  bundle: SiennaGenealogyBundle
 ) => {
   const membersById = new Map(members.map((item) => [item.id, item]));
-  const membersByName = new Map(members.map((item) => [normalizeName(item.name), item]));
-  const spousePartner = findSpousePartner(member, membersByName, membersById);
+  const spousePartner = resolveSpousePartner(member, members, bundle, 'calculation');
   const union = spousePartner ? findUnionBetween(member.id, spousePartner.id, bundle.unions) : null;
 
   if (bundle.parent_links.length > 0) {

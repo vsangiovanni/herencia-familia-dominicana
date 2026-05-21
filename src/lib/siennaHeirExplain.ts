@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import { ConfirmedHeir, EvidenceDocument, SiennaFamilyMember } from '@/lib/api';
 import { caseCausanteName, getSiennaCaseConfig, InheritanceShare, normalizeName } from '@/lib/dominicanInheritance';
+import { resolveSpouseDisplayLabel, SiennaGenealogyBundle } from '@/lib/siennaGenealogy';
 
 export type EvidenceTrafficLevel = 'green' | 'amber' | 'red';
 
@@ -110,19 +111,24 @@ export const routeSteps = (share: InheritanceShare) =>
 
 export const buildMemberLifeTimeline = (
   member: SiennaFamilyMember,
-  share?: InheritanceShare
+  share?: InheritanceShare,
+  members?: SiennaFamilyMember[],
+  genealogy?: SiennaGenealogyBundle
 ): LifeTimelineEvent[] => {
   const events: LifeTimelineEvent[] = [];
 
   if (member.birth) {
     events.push({ kind: 'nacimiento', date: member.birth, label: 'Nacimiento', detail: member.name });
   }
-  if (member.spouse) {
+  const spouseLabel = members
+    ? resolveSpouseDisplayLabel(member, members, genealogy)
+    : member.spouse?.trim() || null;
+  if (spouseLabel) {
     events.push({
       kind: 'matrimonio',
       date: member.spouse_birth || 'Por documentar',
       label: 'Matrimonio / unión',
-      detail: `Con ${member.spouse}`,
+      detail: `Con ${spouseLabel}`,
     });
   }
   if (member.death) {

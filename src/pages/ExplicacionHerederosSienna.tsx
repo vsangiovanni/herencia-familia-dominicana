@@ -600,7 +600,7 @@ const ExplicacionHerederosSienna = () => {
           <TabsContent value="tiempo">
             <div className="grid gap-4 lg:grid-cols-2">
               {briefs.map((brief) => {
-                const timeline = buildMemberLifeTimeline(brief.share.member, brief.share);
+                const timeline = buildMemberLifeTimeline(brief.share.member, brief.share, members, genealogy);
                 return (
                   <Card key={brief.share.member.id} className="border border-legal-gold/20">
                     <CardHeader className="border-b bg-legal-blue/5">

@@ -5,6 +5,7 @@ import {
   getDescendantsForRepresentation,
   getParentLinksForChild,
   getUnionsForMember,
+  resolveSpousePartner,
   SiennaGenealogyBundle,
 } from '@/lib/siennaGenealogy';
 
@@ -47,27 +48,6 @@ const isChildMember = (member: SiennaFamilyMember) =>
   member.relationship_to_parent === 'hijo' || member.relationship_to_parent === 'hija';
 
 const isDeceased = (member: SiennaFamilyMember) => Boolean(member.death?.trim());
-
-const findSpousePartner = (
-  member: SiennaFamilyMember,
-  membersByName: Map<string, SiennaFamilyMember>,
-  membersById: Map<string, SiennaFamilyMember>
-) => {
-  if (member.spouse_member_id) {
-    const linked = membersById.get(member.spouse_member_id);
-    if (linked) return linked;
-  }
-  if (member.spouse) {
-    const byName = membersByName.get(normalizeName(member.spouse));
-    if (byName) return byName;
-  }
-  for (const candidate of membersById.values()) {
-    if (candidate.id === member.id) continue;
-    if (candidate.spouse_member_id === member.id) return candidate;
-    if (candidate.spouse && normalizeName(candidate.spouse) === normalizeName(member.name)) return candidate;
-  }
-  return null;
-};
 
 const matchMemberByName = (name: string, members: SiennaFamilyMember[], excludeId: string) => {
   const key = normalizeName(name);
@@ -129,7 +109,7 @@ export const buildSecondParentOptions = (
     options.set(parent.spouse_member_id, membersById.get(parent.spouse_member_id)!.name);
   }
 
-  const partner = findSpousePartner(parent, new Map(members.map((m) => [normalizeName(m.name), m])), membersById);
+  const partner = resolveSpousePartner(parent, members, { unions, parent_links: [] }, 'suggestions');
   if (partner) options.set(partner.id, partner.name);
 
   return Array.from(options.entries()).map(([id, name]) => ({ id, name }));
@@ -148,15 +128,16 @@ export const buildMemberIssueRows = (
   members.forEach((member) => {
     if (member.spouse_member_id) return;
 
-    const spouseText = member.spouse?.trim();
     const hasInconsistentUnion = unions.some(
       (union) =>
         union.is_inconsistent &&
         (union.partner_a_member_id === member.id || union.partner_b_member_id === member.id)
     );
 
-    if (!spouseText && !hasInconsistentUnion) return;
+    // Cónyuge solo en texto (sin ID) es referencia documental; no bloquea el reparto sucesoral.
+    if (!hasInconsistentUnion) return;
 
+    const spouseText = member.spouse?.trim();
     const matched = spouseText ? matchMemberByName(spouseText, members, member.id) : null;
     const spouseOptions = buildSpouseOptions(member, members);
 
@@ -167,10 +148,11 @@ export const buildMemberIssueRows = (
       kind: 'link_spouse',
       severity: 'Alta prioridad',
       problem: spouseText
-        ? 'Tiene cónyuge en texto pero no enlazado por ID en el árbol.'
+        ? 'Unión matrimonial inconsistente: el cónyuge debe enlazarse como miembro del árbol.'
         : 'Unión matrimonial inconsistente: falta enlazar el cónyuge como miembro.',
-      solution: 'Seleccione el cónyuge correcto del árbol y guarde. Se actualiza la unión matrimonial (bloque azul).',
-      context: spouseText ? `Texto actual: «${spouseText}»` : 'Unión marcada inconsistente en base de datos.',
+      solution:
+        'Seleccione el cónyuge correcto del árbol y guarde. Esto corrige la unión usada para filiación de hijos.',
+      context: spouseText ? `Texto de referencia: «${spouseText}»` : 'Unión marcada inconsistente en base de datos.',
       defaults: {
         spouseMemberId: matched?.id || '',
         filiationUnionId: '',
@@ -255,12 +237,7 @@ export const buildMemberIssueRows = (
   members.forEach((member) => {
     if (!isDeceased(member)) return;
 
-    const descendants = getDescendantsForRepresentation(
-      member,
-      members,
-      genealogy,
-      findSpousePartner
-    );
+    const descendants = getDescendantsForRepresentation(member, members, genealogy);
     if (descendants.length > 0) return;
 
     const referencedAsParent =
@@ -321,7 +298,7 @@ export const buildMemberIssueRows = (
 };
 
 export const kindLabels: Record<MemberIssueKind, string> = {
-  link_spouse: 'Cónyuge',
+  link_spouse: 'Unión inconsistente',
   sync_parent_link: 'Vínculo filiación',
   complete_filiation: 'Matrimonio del hijo',
   dead_branch: 'Rama cortada',
