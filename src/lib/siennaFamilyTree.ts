@@ -54,6 +54,12 @@ const TREE_ROLE_LABELS: Record<TreeRole, string> = {
 export const buildMembersById = (members: SiennaFamilyMember[]) =>
   new Map(members.map((member) => [member.id, member]));
 
+export const compareSpanish = (left: string, right: string) =>
+  left.localeCompare(right, 'es', { sensitivity: 'base' });
+
+export const sortMembersByName = (members: SiennaFamilyMember[]) =>
+  [...members].sort((left, right) => compareSpanish(left.name, right.name));
+
 export const getAncestryPath = (
   memberId: string | null | undefined,
   members: SiennaFamilyMember[]

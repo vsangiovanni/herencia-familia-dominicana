@@ -3,6 +3,7 @@ import Tesseract from 'tesseract.js';
 import BackButton from '@/components/BackButton';
 import DocumentHeader from '@/components/DocumentHeader';
 import { api, ConfirmedHeir, EvidenceDocument, SiennaFamilyMember } from '@/lib/api';
+import { sortMembersByName } from '@/lib/siennaFamilyTree';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -62,7 +63,7 @@ const documentTypes = [
   'Documento de identidad',
   'Sentencia o acto legal',
   'Acta no clasificada',
-];
+].sort((left, right) => left.localeCompare(right, 'es', { sensitivity: 'base' }));
 
 const normalizeText = (value: string) =>
   value
@@ -197,7 +198,22 @@ const DocumentosProbatorios = () => {
     () => new Map(members.map((member) => [normalizeName(member.name), member])),
     [members]
   );
-  const knownPeople = useMemo(() => members.map((member) => member.name), [members]);
+  const membersSortedByName = useMemo(() => sortMembersByName(members), [members]);
+  const heirsSortedByName = useMemo(
+    () =>
+      [...heirs].sort((left, right) =>
+        left.heir_name.localeCompare(right.heir_name, 'es', { sensitivity: 'base' })
+      ),
+    [heirs]
+  );
+  const documentsSortedByTitle = useMemo(
+    () =>
+      [...documents].sort((left, right) =>
+        (left.title || '').localeCompare(right.title || '', 'es', { sensitivity: 'base' })
+      ),
+    [documents]
+  );
+  const knownPeople = useMemo(() => membersSortedByName.map((member) => member.name), [membersSortedByName]);
   const getAutoLinkedRelatives = (memberId: string) => {
     const primary = membersById.get(memberId);
     if (!primary) {
@@ -581,7 +597,7 @@ const DocumentosProbatorios = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">Sin declarar</SelectItem>
-                      {members.map((member) => (
+                      {membersSortedByName.map((member) => (
                         <SelectItem key={member.id} value={member.id}>{member.name}</SelectItem>
                       ))}
                     </SelectContent>
@@ -603,7 +619,7 @@ const DocumentosProbatorios = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">Sin declarar</SelectItem>
-                      {members.map((member) => (
+                      {membersSortedByName.map((member) => (
                         <SelectItem key={member.id} value={member.id}>{member.name}</SelectItem>
                       ))}
                     </SelectContent>
@@ -625,7 +641,7 @@ const DocumentosProbatorios = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">Sin declarar</SelectItem>
-                      {members.map((member) => (
+                      {membersSortedByName.map((member) => (
                         <SelectItem key={member.id} value={member.id}>{member.name}</SelectItem>
                       ))}
                     </SelectContent>
@@ -661,7 +677,7 @@ const DocumentosProbatorios = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">Seleccionar miembro</SelectItem>
-                      {members.map((member) => (
+                      {membersSortedByName.map((member) => (
                         <SelectItem key={member.id} value={member.id}>{member.name}</SelectItem>
                       ))}
                     </SelectContent>
@@ -742,7 +758,7 @@ const DocumentosProbatorios = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {heirs.map((heir) => {
+                {heirsSortedByName.map((heir) => {
                   const draft = heirDrafts[heir.id] || heir;
                   const photo = draft.photo_data || heir.photo_data;
                   return (
@@ -837,7 +853,7 @@ const DocumentosProbatorios = () => {
                     </TableCell>
                   </TableRow>
                 )}
-                {documents.map((document) => (
+                {documentsSortedByTitle.map((document) => (
                   <TableRow key={document.id}>
                     <TableCell className="font-medium text-legal-blue">{document.title}</TableCell>
                     <TableCell>{document.document_type}</TableCell>

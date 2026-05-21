@@ -52,10 +52,12 @@ export const buildUnionOptionsForParent = (
   unions: FamilyUnion[],
   membersById: Map<string, SiennaFamilyMember>
 ) =>
-  getUnionsForMember(parentId, unions).map((union) => ({
-    id: union.id,
-    label: `${formatUnionLabel(union, membersById)}${union.is_inconsistent ? ' (inconsistente)' : ''}`,
-  }));
+  getUnionsForMember(parentId, unions)
+    .map((union) => ({
+      id: union.id,
+      label: `${formatUnionLabel(union, membersById)}${union.is_inconsistent ? ' (inconsistente)' : ''}`,
+    }))
+    .sort((left, right) => left.label.localeCompare(right.label, 'es', { sensitivity: 'base' }));
 
 export const buildSecondParentOptions = (
   parentId: string,
@@ -87,7 +89,9 @@ export const buildSecondParentOptions = (
   const partner = resolveSpousePartner(parent, members, { unions, parent_links: [] }, 'suggestions');
   if (partner) options.set(partner.id, partner.name);
 
-  return Array.from(options.entries()).map(([id, name]) => ({ id, name }));
+  return Array.from(options.entries())
+    .map(([id, name]) => ({ id, name }))
+    .sort((left, right) => left.name.localeCompare(right.name, 'es', { sensitivity: 'base' }));
 };
 
 export const buildMemberIssueRows = (

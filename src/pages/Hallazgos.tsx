@@ -298,7 +298,9 @@ const Hallazgos = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todos los tipos</SelectItem>
-                    {(Object.keys(kindLabels) as MemberIssueKind[]).map((kind) => (
+                    {(Object.keys(kindLabels) as MemberIssueKind[])
+                      .sort((left, right) => kindLabels[left].localeCompare(kindLabels[right], 'es', { sensitivity: 'base' }))
+                      .map((kind) => (
                       <SelectItem key={kind} value={kind}>
                         {kindLabels[kind]}
                       </SelectItem>

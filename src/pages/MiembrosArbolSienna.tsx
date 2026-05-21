@@ -31,15 +31,15 @@ import { ConfirmedHeir, EvidenceDocument } from '@/lib/api';
 import {
   buildMemberTreeContext,
   formatParentOptionLabel,
+  sortMembersByName,
   sortMembersByTree,
 } from '@/lib/siennaFamilyTree';
 import {
   formatUnionLabel,
   getParentLinksForChild,
-  getUnionsForMember,
   SiennaGenealogyBundle,
 } from '@/lib/siennaGenealogy';
-import { buildSecondParentOptions } from '@/lib/siennaMemberIssues';
+import { buildSecondParentOptions, buildUnionOptionsForParent } from '@/lib/siennaMemberIssues';
 import { formatPercent } from '@/lib/siennaHeirExplain';
 import MemberTreeContextPanel from '@/components/sienna/MemberTreeContextPanel';
 import MemberRegistrationGuide from '@/components/sienna/MemberRegistrationGuide';
@@ -271,11 +271,17 @@ const MiembrosArbolSienna = () => {
     [members]
   );
   const spouseOptions = useMemo(
-    () =>
-      members
-        .filter((member) => member.id !== form.id)
-        .sort((left, right) => left.name.localeCompare(right.name, 'es')),
+    () => sortMembersByName(members.filter((member) => member.id !== form.id)),
     [form.id, members]
+  );
+  const unionsSortedByLabel = useMemo(
+    () =>
+      [...unions].sort((left, right) =>
+        formatUnionLabel(left, membersById).localeCompare(formatUnionLabel(right, membersById), 'es', {
+          sensitivity: 'base',
+        })
+      ),
+    [membersById, unions]
   );
 
   const memberContexts = useMemo(
@@ -383,7 +389,7 @@ const MiembrosArbolSienna = () => {
     if (form.parent_id === 'root') return [];
     const parent = membersById.get(form.parent_id);
     if (!parent) return [];
-    return getUnionsForMember(parent.id, unions);
+    return buildUnionOptionsForParent(parent.id, unions, membersById);
   }, [form.parent_id, membersById, unions]);
 
   const secondParentOptions = useMemo(() => {
@@ -608,7 +614,7 @@ const MiembrosArbolSienna = () => {
             </ol>
             {unions.length > 0 ? (
               <ul className="max-h-40 space-y-1 overflow-y-auto rounded-md border border-legal-blue/15 bg-white/80 p-3 text-xs">
-                {unions.slice(0, 24).map((union) => (
+                {unionsSortedByLabel.slice(0, 24).map((union) => (
                   <li key={union.id} className="flex flex-wrap items-center gap-2">
                     <span className="text-legal-blue">{formatUnionLabel(union, membersById)}</span>
                     {union.is_inconsistent && (
@@ -652,7 +658,7 @@ const MiembrosArbolSienna = () => {
                 <SelectTrigger><SelectValue placeholder="Seleccione el ascendiente" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="root">Raíz del árbol (sin superior)</SelectItem>
-                  {members.filter((member) => member.id !== form.id).map((member) => (
+                  {spouseOptions.map((member) => (
                     <SelectItem key={member.id} value={member.id}>
                       {formatParentOptionLabel(member, members)}
                     </SelectItem>
@@ -757,9 +763,9 @@ const MiembrosArbolSienna = () => {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__none__">Sin unión (hijo de otra relación / solo este progenitor)</SelectItem>
-                        {filiationUnionOptions.map((union) => (
-                          <SelectItem key={union.id} value={union.id}>
-                            {formatUnionLabel(union, membersById)}
+                        {filiationUnionOptions.map((option) => (
+                          <SelectItem key={option.id} value={option.id}>
+                            {option.label}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -1090,7 +1096,13 @@ const MiembrosArbolSienna = () => {
                                 </DialogHeader>
                                 <div className="grid gap-3 md:grid-cols-[280px_1fr]">
                                   <div className="max-h-[60vh] space-y-2 overflow-y-auto border-r pr-2">
-                                    {memberDocuments.map((document) => (
+                                    {[...memberDocuments]
+                                      .sort((left, right) =>
+                                        (left.title || '').localeCompare(right.title || '', 'es', {
+                                          sensitivity: 'base',
+                                        })
+                                      )
+                                      .map((document) => (
                                       <button
                                         key={document.id}
                                         type="button"

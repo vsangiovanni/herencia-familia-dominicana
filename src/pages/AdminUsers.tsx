@@ -229,10 +229,12 @@ const AdminUsers = () => {
   };
 
   const openPermissionsDialog = (user: UserData) => {
-    const pagesWithSelection = pages.map((page) => ({
-      ...page,
-      selected: user.permissions?.some((permission) => permission.page_id === page.id) || false,
-    }));
+    const pagesWithSelection = pages
+      .map((page) => ({
+        ...page,
+        selected: user.permissions?.some((permission) => permission.page_id === page.id) || false,
+      }))
+      .sort((left, right) => (left.name || '').localeCompare(right.name || '', 'es', { sensitivity: 'base' }));
     setPages(pagesWithSelection);
     setSelectedUser(user);
     setPermissionsDialogOpen(true);
@@ -305,6 +307,15 @@ const AdminUsers = () => {
   };
 
   const usersById = useMemo(() => new Map(users.map((user) => [user.id, user])), [users]);
+  const usersForAuditFilter = useMemo(
+    () =>
+      [...users].sort((left, right) =>
+        (left.full_name || left.email).localeCompare(right.full_name || right.email, 'es', {
+          sensitivity: 'base',
+        })
+      ),
+    [users]
+  );
 
   const visitsByUserId = useMemo(() => {
     const map = new Map<string, PageVisit[]>();
@@ -652,7 +663,7 @@ const AdminUsers = () => {
                       onChange={(event) => setAuditUserId(event.target.value)}
                     >
                       <option value="all">Todos</option>
-                      {users.map((user) => (
+                      {usersForAuditFilter.map((user) => (
                         <option key={user.id} value={user.id}>
                           {user.full_name || user.email}
                         </option>
