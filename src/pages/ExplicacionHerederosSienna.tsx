@@ -32,7 +32,7 @@ import {
   heirPhotoByName,
   routeSteps,
 } from '@/lib/siennaHeirExplain';
-import { buildCalculationPayload, buildMembersHash, parseCalculationPayload } from '@/lib/siennaCalculation';
+import { buildCalculationPayload, buildMembersHash, calculateHeirAmount, parseCalculationPayload, resolveHeirSimulatedShare } from '@/lib/siennaCalculation';
 import { SiennaGenealogyBundle } from '@/lib/siennaGenealogy';
 import { useAuth } from '@/context/AuthContext';
 import {
@@ -180,12 +180,18 @@ const ExplicacionHerederosSienna = () => {
   const includedTotal = plan.activeHeirs
     .filter((share) => !excludedHeirs.includes(share.member.id))
     .reduce((sum, share) => sum + share.share, 0);
+  const distributedTotal = plan.activeHeirs.reduce((sum, share) => sum + share.share, 0);
+  const isRenormalizedSimulation = excludedHeirs.length > 0;
 
   const briefs = useMemo<HeirBrief[]>(
     () =>
       plan.activeHeirs.map((share) => {
         const excluded = excludedHeirs.includes(share.member.id);
-        const simulatedShare = excluded || includedTotal <= 0 ? 0 : (share.share / includedTotal) * 100;
+        const simulatedShare = resolveHeirSimulatedShare(share.share, {
+          excluded,
+          excludedHeirIds: excludedHeirs,
+          includedTotal,
+        });
         const heirDocs =
           documentsByHeir.get(`member:${share.member.id}`) ||
           documentsByHeir.get(`name:${normalizeName(share.member.name)}`) ||
@@ -194,7 +200,7 @@ const ExplicacionHerederosSienna = () => {
           share,
           documents: heirDocs,
           simulatedShare,
-          simulatedAmount: netAmount * (simulatedShare / 100),
+          simulatedAmount: calculateHeirAmount(simulatedShare, netAmount),
           photo: photosByName.get(normalizeName(share.member.name)) || null,
           traffic: evaluateEvidenceSupport(heirDocs, share.member, members),
         };
@@ -383,6 +389,18 @@ const ExplicacionHerederosSienna = () => {
             <p className="text-xs text-legal-gray">
               Último snapshot: {lastSnapshotAt ? new Date(lastSnapshotAt).toLocaleString('es-DO') : 'sin registro'}
             </p>
+            {isRenormalizedSimulation && (
+              <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">
+                Hay herederos excluidos en la simulación: los porcentajes se recalculan repartiendo el 100% del neto solo
+                entre los incluidos. Debe coincidir con el árbol solo cuando no hay exclusiones.
+              </p>
+            )}
+            {!isRenormalizedSimulation && distributedTotal < 99.95 && (
+              <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">
+                El cálculo reparte {formatPercent(distributedTotal)} del caudal; el resto queda sin heredero vivo en alguna
+                rama. Los montos usan ese porcentaje real (igual que en el árbol Sienna).
+              </p>
+            )}
 
             <div className="overflow-x-auto rounded-md border border-legal-blue/15">
               <table className="w-full min-w-[640px] text-sm">

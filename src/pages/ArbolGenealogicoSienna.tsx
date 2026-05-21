@@ -24,7 +24,7 @@ import { cn } from '@/lib/utils';
 import { Calculator, ClipboardCheck, FileText, GitBranch, GitMerge, Landmark, Maximize2, Minimize2, Printer, RotateCcw, Route, Save, Users, ZoomIn, ZoomOut } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { buildWhyIInheritText, formatMoney as formatMoneyExplain, formatPercent as formatPercentExplain } from '@/lib/siennaHeirExplain';
-import { buildCalculationPayload, buildMembersHash, parseCalculationPayload } from '@/lib/siennaCalculation';
+import { buildCalculationPayload, buildMembersHash, calculateHeirAmount, parseCalculationPayload } from '@/lib/siennaCalculation';
 
 type TreeMember = SiennaFamilyMember & { children: TreeMember[] };
 
@@ -130,8 +130,11 @@ const ClassicNode = ({
   const inheritanceStatus = heir ? 'confirmado' : (inheritanceShare ? 'posible_heredero' : member.inheritance_status);
   const inheritanceReason = inheritanceShare?.reason || heir?.relationship_summary || member.inheritance_reason;
   const role = inheritanceShare?.role || explanationRole(inheritanceStatus);
-  const calculatedAmount = estateAmount > 0 && inheritanceShare ? estateAmount * (inheritanceShare.share / 100) : 0;
-  const amount = calculatedAmount || savedAmount;
+  const calculatedAmount =
+    inheritanceShare && estateAmount > 0
+      ? calculateHeirAmount(inheritanceShare.share, estateAmount)
+      : 0;
+  const amount = calculatedAmount > 0 ? calculatedAmount : savedAmount;
   const referenceTotal = estateAmount > 0 ? estateAmount : total;
   const share = inheritanceShare?.share || (referenceTotal > 0 && amount > 0 ? (amount / referenceTotal) * 100 : 0);
   const parent = member.parent_id ? membersById.get(normalizedMemberId(member.parent_id)) || null : null;
@@ -463,7 +466,7 @@ const ArbolGenealogicoSienna = () => {
       return {
         heir,
         share,
-        amount: totalEstate > 0 ? totalEstate * (share.share / 100) : Number(heir?.inheritance_amount || 0),
+        amount: totalEstate > 0 ? calculateHeirAmount(share.share, totalEstate) : Number(heir?.inheritance_amount || 0),
       };
     });
   }, [distributableEstateAmount, heirsByMemberId, heirsByName, inheritancePlan]);
@@ -877,7 +880,7 @@ const ArbolGenealogicoSienna = () => {
                   {inheritancePlan.activeHeirs.map((share) => {
                     const amount =
                       distributableEstateAmount > 0
-                        ? distributableEstateAmount * (share.share / 100)
+                        ? calculateHeirAmount(share.share, distributableEstateAmount)
                         : Number(heirsByName.get(normalizeName(share.member.name))?.inheritance_amount || 0);
                     return (
                       <div key={share.member.id} className="rounded-md border border-legal-gold/25 bg-legal-gold/5 p-3">

@@ -20,6 +20,25 @@ export type SiennaCalculationSnapshotPayload = {
 
 const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
+export const calculateHeirAmount = (sharePercent: number, distributableAmount: number) =>
+  roundMoney(distributableAmount * (sharePercent / 100));
+
+/** Reparto proporcional al caudal; solo renormaliza si hay herederos excluidos en la simulación. */
+export const resolveHeirSimulatedShare = (
+  rawShare: number,
+  options: {
+    excluded: boolean;
+    excludedHeirIds: string[];
+    includedTotal: number;
+  }
+): number => {
+  if (options.excluded) return 0;
+  if (options.excludedHeirIds.length > 0 && options.includedTotal > 0) {
+    return (rawShare / options.includedTotal) * 100;
+  }
+  return rawShare;
+};
+
 export const buildHeirCalculationRows = (
   plan: InheritancePlan,
   distributableAmount: number
@@ -28,7 +47,7 @@ export const buildHeirCalculationRows = (
     member_id: share.member.id,
     heir_name: share.member.name,
     share_percent: share.share,
-    amount: roundMoney(distributableAmount * (share.share / 100)),
+    amount: calculateHeirAmount(share.share, distributableAmount),
     route: share.route,
     payment_basis: share.paymentBasis,
     reason: share.reason,
