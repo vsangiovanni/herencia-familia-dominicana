@@ -3,6 +3,7 @@ import BackButton from '@/components/BackButton';
 import DocumentHeader from '@/components/DocumentHeader';
 import { api, ConfirmedHeir, SiennaFamilyMember } from '@/lib/api';
 import { buildDominicanInheritancePlan, normalizeName } from '@/lib/dominicanInheritance';
+import { countGenealogyInconsistencies } from '@/lib/siennaGenealogy';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { GitBranch, Scale, UserCheck } from 'lucide-react';
+import { GitBranch, Scale, UserCheck, AlertTriangle } from 'lucide-react';
 
 type DistributionLine = {
   line: string;
@@ -59,6 +60,8 @@ const prettyRoute = (routes: string[]) =>
 
 const CalculoFiliacion = () => {
   const [members, setMembers] = useState<SiennaFamilyMember[]>([]);
+  const [unions, setUnions] = useState<Awaited<ReturnType<typeof api.listSiennaFamilyMembers>>['unions']>([]);
+  const [parentLinks, setParentLinks] = useState<Awaited<ReturnType<typeof api.listSiennaFamilyMembers>>['parent_links']>([]);
   const [estateAmount, setEstateAmount] = useState(0);
   const [confirmedHeirs, setConfirmedHeirs] = useState<ConfirmedHeir[]>([]);
 
@@ -66,15 +69,29 @@ const CalculoFiliacion = () => {
     Promise.all([api.listSiennaFamilyMembers(), api.listConfirmedHeirs()])
       .then(([membersResponse, heirsResponse]) => {
         setMembers(membersResponse.members);
+        setUnions(membersResponse.unions);
+        setParentLinks(membersResponse.parent_links);
         setConfirmedHeirs(heirsResponse.heirs);
       })
       .catch(() => {
         setMembers([]);
+        setUnions([]);
+        setParentLinks([]);
         setConfirmedHeirs([]);
       });
   }, []);
 
-  const inheritancePlan = useMemo(() => buildDominicanInheritancePlan(members), [members]);
+  const genealogy = useMemo(
+    () => ({ unions, parent_links: parentLinks }),
+    [parentLinks, unions]
+  );
+
+  const inheritancePlan = useMemo(
+    () => buildDominicanInheritancePlan(members, genealogy),
+    [genealogy, members]
+  );
+
+  const genealogyIssues = useMemo(() => countGenealogyInconsistencies(genealogy), [genealogy]);
 
   const distributionLines = useMemo<DistributionLine[]>(
     () =>
@@ -126,6 +143,16 @@ const CalculoFiliacion = () => {
 
   const totalPercentage = totalsByHeir.reduce((sum, item) => sum + item.percentage, 0);
   const totalAmount = totalsByHeir.reduce((sum, item) => sum + item.amount, 0);
+  const undistributedPercentage = Math.max(0, 100 - totalPercentage);
+  const childrenMissingLinks = useMemo(
+    () =>
+      members.filter(
+        (member) =>
+          (member.relationship_to_parent === 'hijo' || member.relationship_to_parent === 'hija') &&
+          !parentLinks.some((link) => link.child_member_id === member.id)
+      ),
+    [members, parentLinks]
+  );
 
   const heirEvidenceByMemberId = new Map(
     confirmedHeirs.filter((heir) => heir.sienna_member_id).map((heir) => [String(heir.sienna_member_id), heir])
@@ -143,6 +170,42 @@ const CalculoFiliacion = () => {
       />
 
       <div className="max-w-7xl mx-auto space-y-6">
+        {(Math.abs(totalPercentage - 100) > 0.05 || genealogyIssues > 0 || childrenMissingLinks.length > 0) && (
+          <Card className="border border-amber-300 bg-amber-50/80 shadow-sm">
+            <CardContent className="space-y-2 p-4 text-sm text-amber-950">
+              <p className="flex items-center gap-2 font-semibold">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                Validaciones del cálculo
+              </p>
+              {Math.abs(totalPercentage - 100) > 0.05 && (
+                <p>
+                  Solo se distribuye <strong>{formatPercent(totalPercentage)}</strong> del caudal; quedan{' '}
+                  <strong>{formatPercent(undistributedPercentage)}</strong> sin heredero vivo registrado en alguna rama
+                  (nodos fallecidos sin descendencia documentada).
+                </p>
+              )}
+              {genealogyIssues > 0 && (
+                <p>
+                  Hay <strong>{genealogyIssues}</strong> uniones/vínculos marcados como inconsistentes en el árbol
+                  (cónyuge solo en texto, pareja sin ID, etc.). Revise Miembros del árbol antes de usar cifras en
+                  reunión.
+                </p>
+              )}
+              {childrenMissingLinks.length > 0 && (
+                <p>
+                  <strong>{childrenMissingLinks.length}</strong> hijo(s)/hija(s) aún no tienen vínculo de filiación en{' '}
+                  <code className="text-xs">member_parent_links</code>:{' '}
+                  {childrenMissingLinks
+                    .slice(0, 4)
+                    .map((member) => member.name)
+                    .join(', ')}
+                  {childrenMissingLinks.length > 4 ? '…' : ''}. Edítelos y guarde para sincronizar filiación.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         <Card className="border border-legal-gold/20 shadow-md">
           <CardHeader className="bg-legal-blue/5 border-b">
             <CardTitle className="flex items-center gap-2 text-legal-blue">
@@ -227,7 +290,7 @@ const CalculoFiliacion = () => {
                     heirEvidenceByMemberId.get(item.memberId) || heirEvidenceByName.get(normalizeName(item.heir));
 
                   return (
-                    <TableRow key={`${item.line}-${item.memberId}`}>
+                    <TableRow key={`${item.line}-${item.memberId}-${item.route}`}>
                       <TableCell className="font-medium text-legal-blue">{item.line}</TableCell>
                       <TableCell>{item.branch}</TableCell>
                       <TableCell>{item.heir}</TableCell>

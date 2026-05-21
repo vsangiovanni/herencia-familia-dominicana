@@ -232,6 +232,21 @@ export const getDescendantsForRepresentation = (
       });
     }
 
+    members
+      .filter(
+        (item) => normalizedId(item.parent_id) === normalizedId(member.id) && isChildRelationship(item)
+      )
+      .forEach((child) => childMap.set(child.id, child));
+
+    if (spousePartner) {
+      members
+        .filter(
+          (item) =>
+            normalizedId(item.parent_id) === normalizedId(spousePartner.id) && isChildRelationship(item)
+        )
+        .forEach((child) => childMap.set(child.id, child));
+    }
+
     if (childMap.size > 0) return Array.from(childMap.values());
   }
 
