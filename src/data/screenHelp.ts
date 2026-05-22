@@ -276,6 +276,36 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
       },
     ],
   },
+  'sienna-dobles-linajes': {
+    title: 'Análisis de Dobles Linajes',
+    intro: 'Consola visual para auditar convergencias familiares sin reemplazar el árbol Sienna.',
+    sections: [
+      {
+        title: 'Qué analiza',
+        items: [
+          'Detecta personas conectadas por más de una ruta genealógica usando el backend y la base de datos real.',
+          'Compara rutas por fuente familiar, identifica ancestros compartidos y estima complejidad del cruce.',
+          'Muestra alertas por duplicados, vínculos dudosos, fechas incoherentes y relaciones sospechosas.',
+        ],
+      },
+      {
+        title: 'Cómo usarla',
+        items: [
+          'Use el buscador para filtrar por nombre, apellido, rama, ancestro o ID interno.',
+          'Seleccione una persona para ver Ruta A, Ruta B, punto de convergencia y explicación automática.',
+          'Los colores distinguen Paolo/Paulino, Vincenzo/Vicente, doble linaje, fallecidos e inconsistencias.',
+        ],
+      },
+      {
+        title: 'Corrección controlada',
+        items: [
+          'Esta pantalla no modifica relaciones automáticamente.',
+          'Use Abrir en árbol para contexto visual general.',
+          'Use Editar vínculos para ir a Miembros del Árbol, donde las correcciones quedan con usuario y fecha.',
+        ],
+      },
+    ],
+  },
   'sienna-miembros': {
     title: 'Miembros del árbol',
     intro:

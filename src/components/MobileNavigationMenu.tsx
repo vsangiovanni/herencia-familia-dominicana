@@ -74,6 +74,9 @@ const MobileNavigationMenu = () => {
           <DropdownMenuItem onClick={() => navigate('/sienna/arbol-genealogico')}>
             Árbol Sienna
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => navigate('/sienna/dobles-linajes')}>
+            Dobles Linajes
+          </DropdownMenuItem>
           <DropdownMenuItem onClick={() => navigate('/sienna/miembros-arbol')}>
             Miembros del Árbol
           </DropdownMenuItem>

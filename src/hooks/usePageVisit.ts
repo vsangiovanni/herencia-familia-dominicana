@@ -20,6 +20,7 @@ const pageNames: PageConfig = {
   '/hallazgos': 'Hallazgos',
   '/documentos-probatorios': 'Documentos Probatorios',
   '/sienna/arbol-genealogico': 'Árbol Sienna',
+  '/sienna/dobles-linajes': 'Análisis de Dobles Linajes',
   '/sienna/miembros-arbol': 'Miembros Árbol Sienna',
   '/sienna/explicacion-herederos': 'Explicación Sienna para Herederos',
   '/perfil': 'Perfil de Usuario',

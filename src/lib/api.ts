@@ -99,6 +99,75 @@ export interface SiennaRealtimeCalculation {
   generated_at: string;
 }
 
+export type DualLineageSeverity = "info" | "warning" | "critical";
+
+export interface DualLineageRouteNode {
+  id: string;
+  name: string;
+  birth?: string | null;
+  death?: string | null;
+  is_deceased: boolean;
+}
+
+export interface DualLineageRoute {
+  source: string;
+  root_id: string;
+  path: DualLineageRouteNode[];
+  label: string;
+  depth: number;
+}
+
+export interface DualLineageIssue {
+  id: string;
+  type: string;
+  severity: DualLineageSeverity;
+  title: string;
+  detail: string;
+  member_id?: string | null;
+  action_href?: string | null;
+}
+
+export interface DualLineageCase {
+  member: {
+    id: string;
+    name: string;
+    birth?: string | null;
+    death?: string | null;
+    is_deceased: boolean;
+    inheritance_status?: SiennaFamilyMember["inheritance_status"];
+  };
+  sources: string[];
+  route_count: number;
+  generation_depth: number;
+  complexity_score: number;
+  complexity_level: "baja" | "media" | "alta";
+  convergence_point?: { id: string; name: string } | null;
+  shared_ancestors: Array<DualLineageRouteNode & { route_count: number }>;
+  routes: DualLineageRoute[];
+  calculation_routes: Array<{ source: string; share: number; routes: string[] }>;
+  issues: DualLineageIssue[];
+  explanation: string;
+  tree_href: string;
+  edit_href: string;
+}
+
+export interface DualLineageAnalysis {
+  generated_at: string;
+  summary: {
+    members_total: number;
+    dual_lineage_total: number;
+    convergence_total: number;
+    suspicious_total: number;
+    critical_total: number;
+    pending_validation_total: number;
+  };
+  root_labels: string[];
+  dual_cases: DualLineageCase[];
+  top_ancestors: Array<{ id: string; name: string; count: number }>;
+  inconsistencies: DualLineageIssue[];
+  audit_policy: { mode: string; message: string };
+}
+
 export interface SiennaFamilyMember {
   id: string;
   parent_id?: string | null;
@@ -304,6 +373,8 @@ export const api = {
     const query = params.toString();
     return request<{ calculation: SiennaRealtimeCalculation }>("/api/sienna-calculation" + (query ? "?" + query : ""));
   },
+  getSiennaDualLineageAnalysis: () =>
+    request<{ analysis: DualLineageAnalysis }>("/api/sienna-dual-lineage-analysis"),
   saveSiennaFamilyMember: (
     data: Omit<SiennaFamilyMember, "created_at" | "updated_at"> & { filiation?: MemberFiliationPayload }
   ) =>

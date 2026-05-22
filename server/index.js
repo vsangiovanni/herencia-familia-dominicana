@@ -473,6 +473,203 @@ async function buildSiennaRealtimeCalculation({ estateAmount, lawyerFeePercentag
   };
 }
 
+const parseSiennaYear = (value) => {
+  const match = String(value || '').match(/(\d{4})/);
+  return match ? Number(match[1]) : null;
+};
+
+const getParentIdsForAnalysis = (member, membersById, links) => {
+  const ids = new Set();
+  if (member.parent_id && membersById.has(normalizedMemberId(member.parent_id))) {
+    ids.add(normalizedMemberId(member.parent_id));
+  }
+  getParentLinksForChild(member.id, links).forEach((link) => {
+    const parentId = normalizedMemberId(link.parent_member_id);
+    if (parentId && membersById.has(parentId)) ids.add(parentId);
+  });
+  return Array.from(ids);
+};
+
+const enumerateAncestorRoutes = (memberId, membersById, links, path = [], depth = 0) => {
+  const member = membersById.get(memberId);
+  if (!member || depth > 16) return [];
+  if (path.includes(memberId)) {
+    return [[...path, memberId].map((id) => membersById.get(id)).filter(Boolean)];
+  }
+  const nextPath = [...path, memberId];
+  const parentIds = getParentIdsForAnalysis(member, membersById, links);
+  if (!parentIds.length) return [nextPath.map((id) => membersById.get(id)).filter(Boolean)];
+  return parentIds.flatMap((parentId) => enumerateAncestorRoutes(parentId, membersById, links, nextPath, depth + 1));
+};
+
+const routeLabel = (route) => route.map((member) => member.name).reverse().join(' -> ');
+
+const buildSiennaDualLineageAnalysis = async () => {
+  const family = await loadSiennaFamilyBundle();
+  const settings = await loadAppSettings();
+  const calculation = await buildSiennaRealtimeCalculation();
+  const members = family.members;
+  const membersById = new Map(members.map((member) => [member.id, member]));
+  const genealogy = { unions: family.unions, parent_links: family.parent_links };
+  const activeRoots = settings?.sienna_case_config?.active_collateral_roots || [
+    { name: 'Vincenzo (Vicente) Sangiovanni', label: 'Vincenzo/Vicente' },
+    { name: 'Paolo (Paulino) Sangiovanni', label: 'Paolo/Paulino' },
+  ];
+  const rootIdsByLabel = new Map();
+  activeRoots.forEach((root) => {
+    const found = members.find((member) => normalizeSiennaName(member.name) === normalizeSiennaName(root.name));
+    if (found) rootIdsByLabel.set(root.label || root.name, found.id);
+  });
+
+  const duplicateNames = Array.from(
+    members.reduce((map, member) => {
+      const key = normalizeSiennaName(member.name);
+      if (!key) return map;
+      map.set(key, [...(map.get(key) || []), member]);
+      return map;
+    }, new Map()).values()
+  ).filter((items) => items.length > 1);
+
+  const suspicious = [];
+  const addIssue = (type, severity, title, detail, memberId = null, actionHref = null) => {
+    suspicious.push({ id: `${type}-${suspicious.length + 1}`, type, severity, title, detail, member_id: memberId, action_href: actionHref });
+  };
+
+  duplicateNames.forEach((items) => {
+    addIssue(
+      'duplicate_name',
+      'warning',
+      'Nombre duplicado',
+      `${items[0].name} aparece ${items.length} veces y puede crear rutas ambiguas.`,
+      items[0].id,
+      `/sienna/miembros-arbol?edit=${encodeURIComponent(items[0].id)}`
+    );
+  });
+
+  family.parent_links.forEach((link) => {
+    if (!membersById.has(link.child_member_id) || !membersById.has(link.parent_member_id)) {
+      addIssue('invalid_link', 'critical', 'Vínculo con miembro inexistente', `Link ${link.id} referencia child/parent no disponible.`, link.child_member_id);
+    }
+    if (link.is_inconsistent || link.confidence === 'baja') {
+      addIssue('doubtful_link', 'warning', 'Relación dudosa', link.inconsistency_reason || 'Vínculo marcado con baja confianza.', link.child_member_id, `/sienna/miembros-arbol?edit=${encodeURIComponent(link.child_member_id)}`);
+    }
+  });
+
+  family.unions.forEach((union) => {
+    if (union.is_inconsistent || union.confidence === 'baja') {
+      addIssue('doubtful_union', 'warning', 'Unión por validar', union.inconsistency_reason || 'Unión marcada como inconsistente o de baja confianza.', union.partner_a_member_id, `/sienna/miembros-arbol?edit=${encodeURIComponent(union.partner_a_member_id)}`);
+    }
+  });
+
+  members.forEach((member) => {
+    const birthYear = parseSiennaYear(member.birth);
+    const deathYear = parseSiennaYear(member.death);
+    if (birthYear && deathYear && deathYear < birthYear) {
+      addIssue('date_conflict', 'critical', 'Fecha incoherente', `${member.name} tiene defunción anterior al nacimiento.`, member.id, `/sienna/miembros-arbol?edit=${encodeURIComponent(member.id)}`);
+    }
+    getParentIdsForAnalysis(member, membersById, family.parent_links).forEach((parentId) => {
+      const parent = membersById.get(parentId);
+      const parentBirth = parseSiennaYear(parent?.birth);
+      if (birthYear && parentBirth && birthYear - parentBirth < 12) {
+        addIssue('impossible_parent_age', 'warning', 'Edad parental sospechosa', `${parent.name} tendría menos de 12 años al nacer ${member.name}.`, member.id, `/sienna/miembros-arbol?edit=${encodeURIComponent(member.id)}`);
+      }
+    });
+  });
+
+  const dualCases = members.map((member) => {
+    const routes = enumerateAncestorRoutes(member.id, membersById, family.parent_links);
+    const routesByRoot = Array.from(rootIdsByLabel.entries()).flatMap(([label, rootId]) =>
+      routes
+        .filter((route) => route.some((item) => item.id === rootId))
+        .map((route) => ({
+          source: label,
+          root_id: rootId,
+          path: route.slice().reverse().map((item) => ({
+            id: item.id,
+            name: item.name,
+            birth: item.birth,
+            death: item.death,
+            is_deceased: isDeceasedMember(item),
+          })),
+          label: routeLabel(route),
+          depth: Math.max(0, route.length - 1),
+        }))
+    );
+    const sources = Array.from(new Set(routesByRoot.map((route) => route.source)));
+    const ancestorCounts = new Map();
+    routesByRoot.forEach((route) => route.path.forEach((node) => {
+      if (node.id !== member.id) ancestorCounts.set(node.id, (ancestorCounts.get(node.id) || 0) + 1);
+    }));
+    const sharedAncestors = Array.from(ancestorCounts.entries())
+      .filter(([, count]) => count > 1)
+      .map(([id, count]) => ({ ...membersById.get(id), route_count: count }))
+      .filter(Boolean);
+    const calculationRow = calculation.active_heirs.find((row) => row.member_id === member.id);
+    const isDualByCalculation = (calculationRow?.sources || []).length > 1;
+    if (sources.length < 2 && !isDualByCalculation && sharedAncestors.length < 2) return null;
+    const complexityScore = Math.min(100, sources.length * 26 + routesByRoot.length * 8 + sharedAncestors.length * 6 + suspicious.filter((issue) => issue.member_id === member.id).length * 10);
+    return {
+      member: {
+        id: member.id,
+        name: member.name,
+        birth: member.birth,
+        death: member.death,
+        is_deceased: isDeceasedMember(member),
+        inheritance_status: member.inheritance_status,
+      },
+      sources: sources.length ? sources : calculationRow?.sources || [],
+      route_count: routesByRoot.length || (calculationRow?.source_breakdown || []).reduce((sum, item) => sum + item.routes.length, 0),
+      generation_depth: routesByRoot.length ? Math.max(...routesByRoot.map((route) => route.depth)) : 0,
+      complexity_score: complexityScore,
+      complexity_level: complexityScore >= 70 ? 'alta' : complexityScore >= 42 ? 'media' : 'baja',
+      convergence_point: sharedAncestors[0] ? { id: sharedAncestors[0].id, name: sharedAncestors[0].name } : null,
+      shared_ancestors: sharedAncestors.slice(0, 8).map((ancestor) => ({
+        id: ancestor.id,
+        name: ancestor.name,
+        birth: ancestor.birth,
+        death: ancestor.death,
+        route_count: ancestor.route_count,
+        is_deceased: isDeceasedMember(ancestor),
+      })),
+      routes: routesByRoot,
+      calculation_routes: calculationRow?.source_breakdown || [],
+      issues: suspicious.filter((issue) => issue.member_id === member.id),
+      explanation: `${member.name} presenta doble linaje porque conecta con ${(sources.length ? sources : calculationRow?.sources || []).join(' y ')} por rutas familiares distintas. Revise cada ruta para validar el punto de convergencia y los nodos intermedios.`,
+      tree_href: `/sienna/arbol-genealogico?member=${encodeURIComponent(member.id)}`,
+      edit_href: `/sienna/miembros-arbol?edit=${encodeURIComponent(member.id)}`,
+    };
+  }).filter(Boolean).sort((a, b) => b.complexity_score - a.complexity_score || a.member.name.localeCompare(b.member.name, 'es'));
+
+  const ancestorCrossCounts = new Map();
+  dualCases.forEach((item) => item.shared_ancestors.forEach((ancestor) => {
+    ancestorCrossCounts.set(ancestor.id, {
+      id: ancestor.id,
+      name: ancestor.name,
+      count: (ancestorCrossCounts.get(ancestor.id)?.count || 0) + 1,
+    });
+  }));
+
+  return {
+    generated_at: new Date().toISOString(),
+    summary: {
+      members_total: members.length,
+      dual_lineage_total: dualCases.length,
+      convergence_total: dualCases.filter((item) => item.convergence_point).length,
+      suspicious_total: suspicious.length,
+      critical_total: suspicious.filter((item) => item.severity === 'critical').length,
+      pending_validation_total: suspicious.filter((item) => item.severity !== 'info').length,
+    },
+    root_labels: Array.from(rootIdsByLabel.keys()),
+    dual_cases: dualCases,
+    top_ancestors: Array.from(ancestorCrossCounts.values()).sort((a, b) => b.count - a.count).slice(0, 10),
+    inconsistencies: suspicious,
+    audit_policy: {
+      mode: 'controlled',
+      message: 'Esta consola no modifica relaciones automáticamente. Las correcciones se ejecutan desde Miembros del Árbol y quedan registradas con created_by/updated_by y timestamps.',
+    },
+  };
+};
+
 async function syncMemberFiliation({
   memberId,
   parentId,
@@ -689,6 +886,12 @@ async function ensureSchemaMigrations() {
   await query(
     `INSERT INTO pages (id, name, path, description)
      VALUES (:id, 'Explicación de Herederos Sienna', '/sienna/explicacion-herederos', 'Explicación, simulación y auditoría de herederos Sienna')
+     ON DUPLICATE KEY UPDATE name = VALUES(name), description = VALUES(description)`,
+    { id: randomUUID() }
+  );
+  await query(
+    `INSERT INTO pages (id, name, path, description)
+     VALUES (:id, 'Análisis de Dobles Linajes', '/sienna/dobles-linajes', 'Consola visual de auditoría y validación de dobles linajes')
      ON DUPLICATE KEY UPDATE name = VALUES(name), description = VALUES(description)`,
     { id: randomUUID() }
   );
@@ -1267,6 +1470,10 @@ app.get('/api/sienna-calculation', requireAuth, async (req, res) => {
       lawyerFeePercentage: req.query.lawyer_fee_percentage,
     }),
   });
+});
+
+app.get('/api/sienna-dual-lineage-analysis', requireAuth, async (_req, res) => {
+  res.json({ analysis: await buildSiennaDualLineageAnalysis() });
 });
 
 app.get('/api/sienna-family-members', requireAuth, async (_req, res) => {

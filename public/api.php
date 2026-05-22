@@ -519,6 +519,298 @@ function build_sienna_realtime_calculation($estateAmount = null, $lawyerFeePerce
   ];
 }
 
+function parse_sienna_year_for_analysis($value): ?int {
+  if (preg_match('/(\d{4})/', (string)($value ?? ''), $m)) {
+    return (int)$m[1];
+  }
+  return null;
+}
+
+function parent_ids_for_dual_analysis(array $member, array $membersById, array $links): array {
+  $ids = [];
+  $parentId = normalized_member_id($member['parent_id'] ?? '');
+  if ($parentId !== '' && isset($membersById[$parentId])) {
+    $ids[$parentId] = true;
+  }
+  foreach (get_parent_links_for_child((string)$member['id'], $links) as $link) {
+    $linkedParentId = normalized_member_id($link['parent_member_id'] ?? '');
+    if ($linkedParentId !== '' && isset($membersById[$linkedParentId])) {
+      $ids[$linkedParentId] = true;
+    }
+  }
+  return array_keys($ids);
+}
+
+function enumerate_ancestor_routes_for_dual_analysis(string $memberId, array $membersById, array $links, array $path = [], int $depth = 0): array {
+  if (!isset($membersById[$memberId]) || $depth > 16) return [];
+  if (in_array($memberId, $path, true)) {
+    $cyclePath = array_merge($path, [$memberId]);
+    return [array_values(array_filter(array_map(fn($id) => $membersById[$id] ?? null, $cyclePath)))];
+  }
+  $nextPath = array_merge($path, [$memberId]);
+  $parentIds = parent_ids_for_dual_analysis($membersById[$memberId], $membersById, $links);
+  if (count($parentIds) === 0) {
+    return [array_values(array_filter(array_map(fn($id) => $membersById[$id] ?? null, $nextPath)))];
+  }
+  $routes = [];
+  foreach ($parentIds as $parentId) {
+    foreach (enumerate_ancestor_routes_for_dual_analysis($parentId, $membersById, $links, $nextPath, $depth + 1) as $route) {
+      $routes[] = $route;
+    }
+  }
+  return $routes;
+}
+
+function dual_analysis_route_label(array $route): string {
+  $names = array_map(fn($member) => (string)($member['name'] ?? ''), array_reverse($route));
+  return implode(' -> ', array_values(array_filter($names)));
+}
+
+function build_sienna_dual_lineage_analysis(): array {
+  $family = fetch_sienna_family_bundle();
+  $settings = fetch_app_settings();
+  $calculation = build_sienna_realtime_calculation();
+  $members = $family['members'];
+  $links = $family['parent_links'];
+  $membersById = [];
+  foreach ($members as $member) {
+    $membersById[(string)$member['id']] = $member;
+  }
+
+  $caseConfig = is_array($settings['sienna_case_config'] ?? null) ? $settings['sienna_case_config'] : [];
+  $activeRoots = is_array($caseConfig['active_collateral_roots'] ?? null)
+    ? $caseConfig['active_collateral_roots']
+    : [
+      ['name' => 'Vincenzo (Vicente) Sangiovanni', 'label' => 'Vincenzo/Vicente'],
+      ['name' => 'Paolo (Paulino) Sangiovanni', 'label' => 'Paolo/Paulino'],
+    ];
+
+  $rootIdsByLabel = [];
+  foreach ($activeRoots as $root) {
+    $rootName = normalize_sienna_name($root['name'] ?? '');
+    foreach ($members as $member) {
+      if ($rootName !== '' && normalize_sienna_name($member['name'] ?? '') === $rootName) {
+        $rootIdsByLabel[(string)($root['label'] ?? $root['name'])] = (string)$member['id'];
+      }
+    }
+  }
+
+  $issues = [];
+  $addIssue = function (string $type, string $severity, string $title, string $detail, ?string $memberId = null, ?string $actionHref = null) use (&$issues): void {
+    $issues[] = [
+      'id' => $type . '-' . (count($issues) + 1),
+      'type' => $type,
+      'severity' => $severity,
+      'title' => $title,
+      'detail' => $detail,
+      'member_id' => $memberId,
+      'action_href' => $actionHref,
+    ];
+  };
+
+  $names = [];
+  foreach ($members as $member) {
+    $key = normalize_sienna_name($member['name'] ?? '');
+    if ($key === '') continue;
+    $names[$key][] = $member;
+  }
+  foreach ($names as $items) {
+    if (count($items) > 1) {
+      $addIssue(
+        'duplicate_name',
+        'warning',
+        'Nombre duplicado',
+        ($items[0]['name'] ?? 'Miembro') . ' aparece ' . count($items) . ' veces y puede crear rutas ambiguas.',
+        (string)$items[0]['id'],
+        '/sienna/miembros-arbol?edit=' . rawurlencode((string)$items[0]['id'])
+      );
+    }
+  }
+
+  foreach ($links as $link) {
+    $childId = normalized_member_id($link['child_member_id'] ?? '');
+    $parentId = normalized_member_id($link['parent_member_id'] ?? '');
+    if ($childId === '' || $parentId === '' || !isset($membersById[$childId]) || !isset($membersById[$parentId])) {
+      $addIssue('invalid_link', 'critical', 'Vínculo con miembro inexistente', 'Link ' . ($link['id'] ?? '') . ' referencia child/parent no disponible.', $childId ?: null);
+    }
+    if (!empty($link['is_inconsistent']) || ($link['confidence'] ?? '') === 'baja') {
+      $addIssue(
+        'doubtful_link',
+        'warning',
+        'Relación dudosa',
+        (string)($link['inconsistency_reason'] ?? 'Vínculo marcado con baja confianza.'),
+        $childId ?: null,
+        $childId ? '/sienna/miembros-arbol?edit=' . rawurlencode($childId) : null
+      );
+    }
+  }
+
+  foreach ($family['unions'] as $union) {
+    if (!empty($union['is_inconsistent']) || ($union['confidence'] ?? '') === 'baja') {
+      $memberId = normalized_member_id($union['partner_a_member_id'] ?? '');
+      $addIssue(
+        'doubtful_union',
+        'warning',
+        'Unión por validar',
+        (string)($union['inconsistency_reason'] ?? 'Unión marcada como inconsistente o de baja confianza.'),
+        $memberId ?: null,
+        $memberId ? '/sienna/miembros-arbol?edit=' . rawurlencode($memberId) : null
+      );
+    }
+  }
+
+  foreach ($members as $member) {
+    $birthYear = parse_sienna_year_for_analysis($member['birth'] ?? null);
+    $deathYear = parse_sienna_year_for_analysis($member['death'] ?? null);
+    if ($birthYear && $deathYear && $deathYear < $birthYear) {
+      $addIssue('date_conflict', 'critical', 'Fecha incoherente', ($member['name'] ?? 'Miembro') . ' tiene defunción anterior al nacimiento.', (string)$member['id'], '/sienna/miembros-arbol?edit=' . rawurlencode((string)$member['id']));
+    }
+    foreach (parent_ids_for_dual_analysis($member, $membersById, $links) as $parentId) {
+      $parent = $membersById[$parentId] ?? null;
+      $parentBirth = $parent ? parse_sienna_year_for_analysis($parent['birth'] ?? null) : null;
+      if ($birthYear && $parentBirth && $birthYear - $parentBirth < 12) {
+        $addIssue('impossible_parent_age', 'warning', 'Edad parental sospechosa', ($parent['name'] ?? 'Progenitor') . ' tendría menos de 12 años al nacer ' . ($member['name'] ?? 'miembro') . '.', (string)$member['id'], '/sienna/miembros-arbol?edit=' . rawurlencode((string)$member['id']));
+      }
+    }
+  }
+
+  $calculationByMemberId = [];
+  foreach (($calculation['active_heirs'] ?? []) as $row) {
+    $calculationByMemberId[(string)($row['member_id'] ?? '')] = $row;
+  }
+
+  $dualCases = [];
+  foreach ($members as $member) {
+    $memberId = (string)$member['id'];
+    $routes = enumerate_ancestor_routes_for_dual_analysis($memberId, $membersById, $links);
+    $routesByRoot = [];
+    foreach ($rootIdsByLabel as $label => $rootId) {
+      foreach ($routes as $route) {
+        $routeIds = array_map(fn($item) => (string)($item['id'] ?? ''), $route);
+        if (!in_array($rootId, $routeIds, true)) continue;
+        $path = [];
+        foreach (array_reverse($route) as $item) {
+          $path[] = [
+            'id' => $item['id'],
+            'name' => $item['name'],
+            'birth' => $item['birth'],
+            'death' => $item['death'],
+            'is_deceased' => is_deceased_member($item),
+          ];
+        }
+        $routesByRoot[] = [
+          'source' => $label,
+          'root_id' => $rootId,
+          'path' => $path,
+          'label' => dual_analysis_route_label($route),
+          'depth' => max(0, count($route) - 1),
+        ];
+      }
+    }
+
+    $sources = array_values(array_unique(array_map(fn($route) => $route['source'], $routesByRoot)));
+    $ancestorCounts = [];
+    foreach ($routesByRoot as $route) {
+      foreach ($route['path'] as $node) {
+        if (($node['id'] ?? '') === $memberId) continue;
+        $ancestorCounts[(string)$node['id']] = ($ancestorCounts[(string)$node['id']] ?? 0) + 1;
+      }
+    }
+    $sharedAncestors = [];
+    foreach ($ancestorCounts as $id => $count) {
+      if ($count > 1 && isset($membersById[$id])) {
+        $ancestor = $membersById[$id];
+        $ancestor['route_count'] = $count;
+        $sharedAncestors[] = $ancestor;
+      }
+    }
+
+    $calculationRow = $calculationByMemberId[$memberId] ?? null;
+    $calculationSources = is_array($calculationRow['sources'] ?? null) ? $calculationRow['sources'] : [];
+    $isDualByCalculation = count($calculationSources) > 1;
+    if (count($sources) < 2 && !$isDualByCalculation && count($sharedAncestors) < 2) continue;
+
+    $memberIssues = array_values(array_filter($issues, fn($issue) => ($issue['member_id'] ?? null) === $memberId));
+    $complexityScore = min(100, count($sources) * 26 + count($routesByRoot) * 8 + count($sharedAncestors) * 6 + count($memberIssues) * 10);
+    $effectiveSources = count($sources) ? $sources : $calculationSources;
+    $caseRoutes = [];
+    foreach ($routesByRoot as $route) {
+      $caseRoutes[] = $route;
+    }
+    $caseSharedAncestors = [];
+    foreach (array_slice($sharedAncestors, 0, 8) as $ancestor) {
+      $caseSharedAncestors[] = [
+        'id' => $ancestor['id'],
+        'name' => $ancestor['name'],
+        'birth' => $ancestor['birth'],
+        'death' => $ancestor['death'],
+        'route_count' => $ancestor['route_count'],
+        'is_deceased' => is_deceased_member($ancestor),
+      ];
+    }
+
+    $dualCases[] = [
+      'member' => [
+        'id' => $member['id'],
+        'name' => $member['name'],
+        'birth' => $member['birth'],
+        'death' => $member['death'],
+        'is_deceased' => is_deceased_member($member),
+        'inheritance_status' => $member['inheritance_status'],
+      ],
+      'sources' => $effectiveSources,
+      'route_count' => count($routesByRoot) ?: array_reduce(($calculationRow['source_breakdown'] ?? []), fn($sum, $item) => $sum + count($item['routes'] ?? []), 0),
+      'generation_depth' => count($routesByRoot) ? max(array_map(fn($route) => (int)$route['depth'], $routesByRoot)) : 0,
+      'complexity_score' => $complexityScore,
+      'complexity_level' => $complexityScore >= 70 ? 'alta' : ($complexityScore >= 42 ? 'media' : 'baja'),
+      'convergence_point' => isset($sharedAncestors[0]) ? ['id' => $sharedAncestors[0]['id'], 'name' => $sharedAncestors[0]['name']] : null,
+      'shared_ancestors' => $caseSharedAncestors,
+      'routes' => $caseRoutes,
+      'calculation_routes' => $calculationRow['source_breakdown'] ?? [],
+      'issues' => $memberIssues,
+      'explanation' => ($member['name'] ?? 'Esta persona') . ' presenta doble linaje porque conecta con ' . implode(' y ', $effectiveSources) . ' por rutas familiares distintas. Revise cada ruta para validar el punto de convergencia y los nodos intermedios.',
+      'tree_href' => '/sienna/arbol-genealogico?member=' . rawurlencode($memberId),
+      'edit_href' => '/sienna/miembros-arbol?edit=' . rawurlencode($memberId),
+    ];
+  }
+
+  usort($dualCases, fn($a, $b) => (($b['complexity_score'] ?? 0) <=> ($a['complexity_score'] ?? 0)) ?: strcoll($a['member']['name'] ?? '', $b['member']['name'] ?? ''));
+
+  $ancestorCrossCounts = [];
+  foreach ($dualCases as $item) {
+    foreach (($item['shared_ancestors'] ?? []) as $ancestor) {
+      $id = (string)$ancestor['id'];
+      $ancestorCrossCounts[$id] = [
+        'id' => $id,
+        'name' => $ancestor['name'],
+        'count' => ($ancestorCrossCounts[$id]['count'] ?? 0) + 1,
+      ];
+    }
+  }
+  $topAncestors = array_values($ancestorCrossCounts);
+  usort($topAncestors, fn($a, $b) => ($b['count'] ?? 0) <=> ($a['count'] ?? 0));
+
+  return [
+    'generated_at' => gmdate('c'),
+    'summary' => [
+      'members_total' => count($members),
+      'dual_lineage_total' => count($dualCases),
+      'convergence_total' => count(array_filter($dualCases, fn($item) => !empty($item['convergence_point']))),
+      'suspicious_total' => count($issues),
+      'critical_total' => count(array_filter($issues, fn($item) => ($item['severity'] ?? '') === 'critical')),
+      'pending_validation_total' => count(array_filter($issues, fn($item) => ($item['severity'] ?? '') !== 'info')),
+    ],
+    'root_labels' => array_keys($rootIdsByLabel),
+    'dual_cases' => $dualCases,
+    'top_ancestors' => array_slice($topAncestors, 0, 10),
+    'inconsistencies' => $issues,
+    'audit_policy' => [
+      'mode' => 'controlled',
+      'message' => 'Esta consola no modifica relaciones automáticamente. Las correcciones se ejecutan desde Miembros del Árbol y quedan registradas con created_by/updated_by y timestamps.',
+    ],
+  ];
+}
+
 function ensure_schema(): void {
   static $initialized = false;
   if ($initialized) {
@@ -1350,6 +1642,11 @@ try {
       $_GET['estate_amount'] ?? null,
       $_GET['lawyer_fee_percentage'] ?? null
     )]);
+  }
+
+  if ($method === 'GET' && $path === '/sienna-dual-lineage-analysis') {
+    require_user();
+    json_response(['analysis' => build_sienna_dual_lineage_analysis()]);
   }
 
   if ($method === 'GET' && $path === '/sienna-family-members') {

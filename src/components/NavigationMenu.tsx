@@ -72,6 +72,9 @@ const NavigationMenu = () => {
                 <Link to="/sienna/arbol-genealogico">Árbol Sienna</Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
+                <Link to="/sienna/dobles-linajes">Dobles Linajes</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
                 <Link to="/sienna/miembros-arbol">Miembros del Árbol</Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>

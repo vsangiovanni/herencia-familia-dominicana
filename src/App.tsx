@@ -29,6 +29,7 @@ const CalculoFiliacion = lazy(() => import('./pages/CalculoFiliacion'));
 const ArbolGenealogicoSienna = lazy(() => import('./pages/ArbolGenealogicoSienna'));
 const MiembrosArbolSienna = lazy(() => import('./pages/MiembrosArbolSienna'));
 const ExplicacionHerederosSienna = lazy(() => import('./pages/ExplicacionHerederosSienna'));
+const AnalisisDoblesLinajesSienna = lazy(() => import('./pages/AnalisisDoblesLinajesSienna'));
 const DocumentosProbatorios = lazy(() => import('./pages/DocumentosProbatorios'));
 
 const queryClient = new QueryClient({
@@ -179,6 +180,14 @@ function App() {
                       element={
                         <ProtectedRoute>
                           <ExplicacionHerederosSienna />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/sienna/dobles-linajes"
+                      element={
+                        <ProtectedRoute>
+                          <AnalisisDoblesLinajesSienna />
                         </ProtectedRoute>
                       }
                     />
