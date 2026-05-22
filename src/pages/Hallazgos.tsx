@@ -4,7 +4,7 @@ import BackButton from '@/components/BackButton';
 import DocumentHeader from '@/components/DocumentHeader';
 import SoftLoadingIndicator from '@/components/SoftLoadingIndicator';
 import { IssueDraft, MemberIssueFixPanel } from '@/components/sienna/MemberIssueFixPanel';
-import { useSiennaFamily, invalidateSiennaData } from '@/hooks/useSiennaData';
+import { useSiennaCalculation, useSiennaWorkspace, invalidateSiennaData } from '@/hooks/useSiennaData';
 import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -27,7 +27,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { api } from '@/lib/api';
-import { buildDominicanInheritancePlan } from '@/lib/dominicanInheritance';
+import { applySiennaCaseConfig, buildDominicanInheritancePlan } from '@/lib/dominicanInheritance';
 import { buildMemberSavePayload } from '@/lib/siennaFindings';
 import {
   buildMemberIssueRows,
@@ -46,15 +46,20 @@ const kindBadgeClass: Record<MemberIssueKind, string> = {
 
 const Hallazgos = () => {
   const queryClient = useQueryClient();
-  const { data: familyData, isLoading, isFetching, refetch } = useSiennaFamily();
-  const members = familyData?.members ?? [];
-  const unions = familyData?.unions ?? [];
-  const parentLinks = familyData?.parent_links ?? [];
+  const { data: workspace, isLoading, isFetching, refetch } = useSiennaWorkspace(false);
+  const members = workspace?.members ?? [];
+  const unions = workspace?.unions ?? [];
+  const parentLinks = workspace?.parent_links ?? [];
+  const { data: realtimeCalculationData } = useSiennaCalculation(
+    workspace?.settings?.estate_amount,
+    workspace?.settings?.lawyer_fee_percentage
+  );
   const [loadingMessage, setLoadingMessage] = useState('Analizando miembros...');
   const [search, setSearch] = useState('');
   const [kindFilter, setKindFilter] = useState<MemberIssueKind | 'all'>('all');
   const [drafts, setDrafts] = useState<Record<string, IssueDraft>>({});
   const [savingRowId, setSavingRowId] = useState<string | null>(null);
+  const [caseConfigRevision, setCaseConfigRevision] = useState(0);
 
   const loadData = useCallback(async () => {
     await refetch();
@@ -72,10 +77,19 @@ const Hallazgos = () => {
     }
   }, [isFetching, isLoading]);
 
+  useEffect(() => {
+    if (!workspace) return;
+    applySiennaCaseConfig(workspace.settings?.sienna_case_config);
+    setCaseConfigRevision((current) => current + 1);
+  }, [workspace]);
+
   const distributedPercent = useMemo(() => {
+    if (realtimeCalculationData?.calculation) {
+      return realtimeCalculationData.calculation.total_share;
+    }
     const plan = buildDominicanInheritancePlan(members, { unions, parent_links: parentLinks });
     return plan.activeHeirs.reduce((sum, share) => sum + share.share, 0);
-  }, [members, parentLinks, unions]);
+  }, [caseConfigRevision, members, parentLinks, realtimeCalculationData?.calculation, unions]);
 
   const { rows, summary } = useMemo(
     () => buildMemberIssueRows(members, unions, parentLinks, distributedPercent),

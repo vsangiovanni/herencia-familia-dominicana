@@ -151,9 +151,18 @@ export const buildMemberLifeTimeline = (
 
 export const buildWhyIInheritText = (share: InheritanceShare, simulatedShare: number, simulatedAmount: number) => {
   const branches = share.sources.length ? share.sources.join(' y ') : 'rama documentada';
+  const lineageBreakdown =
+    share.sourceBreakdown.length > 1
+      ? ' En este caso hay doble linaje: ' +
+        share.sourceBreakdown
+          .map((segment) => `${segment.source}: ${formatPercent(segment.share)}`)
+          .join('; ') +
+        '.'
+      : '';
   return [
     `Usted hereda porque está llamado dentro de la ${branches}, siguiendo la cadena familiar desde ${caseCausanteName}.`,
     share.reason,
+    lineageBreakdown,
     `Su participación estimada es ${formatPercent(simulatedShare)} del neto explicado, equivalente a ${formatMoney(simulatedAmount)}.`,
     share.paymentBasis,
   ].join(' ');
@@ -349,32 +358,92 @@ export const downloadHeirBriefPdf = async (brief: HeirBriefExport, netAmount: nu
     pdf.text(badgeText, x + 2, y + 2.6);
   };
 
+  const drawDeceasedMarker = (x: number, markerY: number) => {
+    if (!brief.share.member.death?.trim()) return;
+    pdf.setFillColor(31, 31, 31);
+    pdf.setDrawColor(31, 31, 31);
+    pdf.circle(x + 2, markerY + 2.4, 2, 'F');
+    pdf.circle(x + 6.2, markerY + 2.4, 2, 'F');
+    pdf.setFillColor(31, 31, 31);
+    pdf.triangle(x + 4.1, markerY + 3, x + 1.2, markerY + 10, x + 4.1, markerY + 7, 'F');
+    pdf.triangle(x + 4.1, markerY + 3, x + 7, markerY + 10, x + 4.1, markerY + 7, 'F');
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(8);
+    pdf.setTextColor(45, 45, 45);
+    pdf.text('Fallecido', x + 11, markerY + 5.2);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(105, 105, 105);
+    pdf.text(`m. ${brief.share.member.death}`, x + 11, markerY + 9.2);
+  };
+
   const drawRouteTreeCopy = () => {
-    const steps = routeSteps(brief.share);
-    const nodes = steps.length > 0 ? steps : [brief.share.member.name];
-    drawSectionTitle('Copia del arbol Sienna (ruta del heredero)');
+    const lineageRoutes =
+      brief.share.sourceBreakdown.length > 0
+        ? brief.share.sourceBreakdown.flatMap((segment) =>
+            segment.routes.map((route) => ({
+              source: segment.source,
+              share: segment.share,
+              route,
+            }))
+          )
+        : [
+            {
+              source: brief.share.sources.join(' + ') || 'Ruta sucesoral',
+              share: brief.share.share,
+              route: brief.share.route,
+            },
+          ];
 
-    nodes.forEach((step, index) => {
-      ensureSpace(16);
-      const nodeWidth = contentWidth - 18;
-      const nodeX = margin + 10;
-      pdf.setFillColor(250, 251, 253);
-      pdf.setDrawColor(214, 224, 238);
-      pdf.roundedRect(nodeX, y, nodeWidth, 9, 2, 2, 'FD');
-      pdf.setFont('helvetica', 'normal');
+    drawSectionTitle(
+      lineageRoutes.length > 1
+        ? 'Copia del arbol Sienna (rutas de doble linaje)'
+        : 'Copia del arbol Sienna (ruta del heredero)'
+    );
+
+    lineageRoutes.forEach((lineage, lineageIndex) => {
+      const nodes = lineage.route
+        .split('->')
+        .map((item) => item.trim())
+        .filter(Boolean);
+      const routeNodes = nodes.length > 0 ? nodes : [brief.share.member.name];
+
+      ensureSpace(13);
+      pdf.setFillColor(245, 248, 252);
+      pdf.setDrawColor(194, 210, 230);
+      pdf.roundedRect(margin + 4, y, contentWidth - 8, 9, 2, 2, 'FD');
+      pdf.setFont('helvetica', 'bold');
       pdf.setFontSize(9);
-      pdf.setTextColor(33, 58, 96);
-      const text = pdf.splitTextToSize(step, nodeWidth - 5);
-      pdf.text(text, nodeX + 2.5, y + 5.8);
+      pdf.setTextColor(26, 62, 108);
+      pdf.text(lineage.source + ' - ' + formatPercent(lineage.share), margin + 7, y + 5.8);
+      y += 12;
 
-      if (index < nodes.length - 1) {
-        const centerX = nodeX + nodeWidth / 2;
-        pdf.setDrawColor(179, 194, 214);
-        pdf.line(centerX, y + 9.2, centerX, y + 12.2);
-        pdf.setFillColor(179, 194, 214);
-        pdf.triangle(centerX - 1.3, y + 12.2, centerX + 1.3, y + 12.2, centerX, y + 13.6, 'F');
+      routeNodes.forEach((step, index) => {
+        ensureSpace(16);
+        const nodeWidth = contentWidth - 22;
+        const nodeX = margin + 12;
+        pdf.setFillColor(250, 251, 253);
+        pdf.setDrawColor(214, 224, 238);
+        pdf.roundedRect(nodeX, y, nodeWidth, 9, 2, 2, 'FD');
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(9);
+        pdf.setTextColor(33, 58, 96);
+        const text = pdf.splitTextToSize(step, nodeWidth - 5);
+        pdf.text(text, nodeX + 2.5, y + 5.8);
+
+        if (index < routeNodes.length - 1) {
+          const centerX = nodeX + nodeWidth / 2;
+          pdf.setDrawColor(179, 194, 214);
+          pdf.line(centerX, y + 9.2, centerX, y + 12.2);
+          pdf.setFillColor(179, 194, 214);
+          pdf.triangle(centerX - 1.3, y + 12.2, centerX + 1.3, y + 12.2, centerX, y + 13.6, 'F');
+        }
+        y += 14;
+      });
+
+      if (lineageIndex < lineageRoutes.length - 1) {
+        y += 3;
       }
-      y += 14;
     });
   };
 
@@ -484,6 +553,7 @@ export const downloadHeirBriefPdf = async (brief: HeirBriefExport, netAmount: nu
   pdf.setFontSize(16);
   pdf.setTextColor(29, 64, 106);
   pdf.text(brief.share.member.name, margin, y + 2);
+  drawDeceasedMarker(pageWidth - margin - 48, y - 3);
   y += 8;
 
   if (brief.photoData?.startsWith('data:image')) {

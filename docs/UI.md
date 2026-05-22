@@ -61,6 +61,15 @@ No deja espacio vacío cuando está oculto (`return null`).
 - Se usa un único selector **Miembro titular (árbol)** para evitar duplicidad entre “titular” y “relacionado”.
 - El botón **Recalcular parentescos automáticos** completa padre, madre y cónyuge desde el árbol actual.
 - La ayuda contextual de `documentos-probatorios` refleja este flujo.
+- Los PDF individuales de explicación muestran imágenes de actas cuando el documento es imagen o base64 compatible; PDF y otros formatos conservan resumen textual.
+
+## Árbol Sienna
+
+- El zoom del árbol se aplica al canvas completo (`tree-world`), no a cada tarjeta por separado.
+- La vista permite pan con mouse/dedo, pinch zoom en móvil, ajuste automático **Fit**, reset al 100% y pantalla completa.
+- El botón **Imprimir árbol** abre una salida A3 horizontal que ajusta el árbol completo al ancho imprimible.
+- Los miembros con fecha de defunción muestran lacito negro y etiqueta **Fallecido** sin tapar la foto.
+- El doble linaje se explica con badges, rutas separadas y conectores visuales de cruce.
 
 ## Miembros del árbol (tabla)
 
@@ -77,3 +86,9 @@ No deja espacio vacío cuando está oculto (`return null`).
 
 - La página `hallazgos` consume datos en tiempo real y no texto fijo.
 - El usuario ve hallazgos actuales según el estado del expediente en la base de datos.
+
+## Explicación para herederos
+
+- Usa el mismo cálculo en vivo que el árbol para porcentajes, montos y neto después de honorarios.
+- Muestra doble linaje desglosado por rama cuando un heredero participa por más de una fuente.
+- El PDF individual incluye ruta sucesoral, soporte documental, marcador de fallecido si aplica y monto estimado.

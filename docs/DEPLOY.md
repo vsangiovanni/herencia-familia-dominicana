@@ -8,16 +8,16 @@ El subdominio apunta al mismo directorio que la raíz FTP de la cuenta (`index.h
 ## Resumen rápido
 
 ```sh
-npm run build
-npm run deploy          # sube dist/ por FTP
-npm run check:prod      # verifica health y rutas Sienna
+pnpm run build
+pnpm run deploy          # sube dist/ por FTP
+pnpm run check:prod      # verifica health y rutas Sienna
 ```
 
 Despliegue alterno por MCP Hostinger (recomendado cuando FTP esté lento o inestable):
 
 1. Compilar y empaquetar **con** `.env` de producción:
    ```sh
-   npm run build
+   pnpm run build
    python3 scripts/build-prod-deploy-zip.py
    ```
    Genera `herenciard_deploy_full.zip` (`dist/` + `.env` desde `.env.prod.working`).
@@ -29,7 +29,7 @@ Despliegue alterno por MCP Hostinger (recomendado cuando FTP esté lento o inest
 
 3. Verificar:
    ```sh
-   npm run check:prod
+   pnpm run check:prod
    ```
 
 **Importante:** un zip **sin** `.env` deja el backend en **503** hasta ejecutar `npm run deploy:env`. Preferir `herenciard_deploy_full.zip` en deploys MCP.
@@ -37,14 +37,14 @@ Despliegue alterno por MCP Hostinger (recomendado cuando FTP esté lento o inest
 Solo cambió el backend PHP:
 
 ```sh
-npm run build
-npm run deploy:api
+pnpm run build
+pnpm run deploy:api
 ```
 
 Pipeline todo-en-uno (build + FTP + verificación HTTP):
 
 ```sh
-npm run release
+pnpm run release
 # equivalente: bash scripts/run-release.sh
 ```
 
@@ -54,7 +54,7 @@ Flujo recomendado con Git:
 git add -A
 git commit -m "descripción del cambio"
 git push origin main
-npm run release
+pnpm run release
 ```
 
 ## Migración de filiación (uniones + vínculos parentales)
@@ -63,11 +63,11 @@ Después de desplegar código con tablas `family_unions` y `member_parent_links`
 
 1. **Local (opcional, ya hecho en desarrollo):**
    ```sh
-   npm run migrate:genealogy
+   pnpm run migrate:genealogy
    ```
 2. **Producción (obligatorio la primera vez):** con credenciales en `.env.prod.working` (no versionar):
    ```sh
-   npm run migrate:genealogy:prod
+   pnpm run migrate:genealogy:prod
    ```
    El script crea tablas si faltan, repuebla uniones y `member_parent_links` desde `parent_id` / `spouse_member_id` sin borrar campos legacy. Marca inconsistencias (p. ej. cónyuge solo en texto).
 
@@ -77,7 +77,7 @@ Las tablas también se crean al primer request si `api.php` arranca migraciones 
 
 ## Checklist manual
 
-1. `npm run build` — genera `dist/` (HTML, assets, `api.php`, `.htaccess`, favicon).
+1. `pnpm run build` — genera `dist/` (HTML, assets, `api.php`, `.htaccess`, favicon).
 2. `python3 scripts/deploy-dist.py` — sube todo `dist/` por FTP **sin** sobrescribir `.env` remoto.
 3. `npm run migrate:genealogy:prod` — migración de filiación en MySQL de producción (solo cuando el release lo incluya).
 4. `bash scripts/post-deploy-check.sh` — health + rutas Sienna en HTTP 200.
@@ -99,6 +99,8 @@ Si usas MCP para static deploy:
 | `scripts/upload-prod-env.py` | Sube `.env.prod.working` como `.env` remoto (FTP) |
 
 | `scripts/run-release.sh` | Build + deploy-dist + check |
+
+El pipeline usa `pnpm` para build/release; mantener `npm` solo si un entorno externo lo exige.
 
 Los scripts de deploy **nunca** suben ni sobrescriben `.env` en el servidor vía FTP.
 El despliegue estático por MCP depende de lo que vaya dentro del zip; use `build-prod-deploy-zip.py` para incluir credenciales.

@@ -211,6 +211,314 @@ function fetch_app_settings(): array {
   return $settings;
 }
 
+function normalize_sienna_name($value): string {
+  $text = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', (string)($value ?? ''));
+  $text = strtolower($text ?: (string)($value ?? ''));
+  $text = preg_replace('/[^a-z0-9 ]/', '', $text);
+  $text = preg_replace('/\s+/', ' ', $text);
+  return trim($text ?? '');
+}
+
+function normalized_member_id($value): string {
+  return trim((string)($value ?? ''));
+}
+
+function round_money($value): float {
+  return round((float)($value ?? 0), 2);
+}
+
+function resolve_estate_amounts($grossInput, $lawyerFeeInput): array {
+  $grossAmount = max(0, (float)($grossInput ?? 0));
+  $lawyerFeePercentage = min(100, max(0, (float)($lawyerFeeInput ?? 0)));
+  $lawyerFeeAmount = $grossAmount > 0 ? round_money($grossAmount * ($lawyerFeePercentage / 100)) : 0.0;
+  $distributableAmount = $grossAmount > 0 ? round_money(max(0, $grossAmount - $lawyerFeeAmount)) : 0.0;
+  return [
+    'grossAmount' => $grossAmount,
+    'lawyerFeePercentage' => $lawyerFeePercentage,
+    'lawyerFeeAmount' => $lawyerFeeAmount,
+    'distributableAmount' => $distributableAmount,
+  ];
+}
+
+function is_child_relationship(array $member): bool {
+  $relationship = $member['relationship_to_parent'] ?? null;
+  return $relationship === 'hijo' || $relationship === 'hija' || $relationship === 'otro' || !$relationship;
+}
+
+function is_deceased_member(array $member): bool {
+  return trim((string)($member['death'] ?? '')) !== '';
+}
+
+function unique_members(array $members): array {
+  $seen = [];
+  $result = [];
+  foreach ($members as $member) {
+    $id = (string)($member['id'] ?? '');
+    if ($id === '' || isset($seen[$id])) continue;
+    $seen[$id] = true;
+    $result[] = $member;
+  }
+  return $result;
+}
+
+function get_parent_links_for_child(string $childId, array $links): array {
+  return array_values(array_filter($links, fn($link) => normalized_member_id($link['child_member_id'] ?? '') === normalized_member_id($childId)));
+}
+
+function get_parent_links_for_parent(string $parentId, array $links): array {
+  return array_values(array_filter($links, fn($link) => normalized_member_id($link['parent_member_id'] ?? '') === normalized_member_id($parentId)));
+}
+
+function get_child_ids_from_links(string $parentId, array $links): array {
+  $ids = [];
+  foreach (get_parent_links_for_parent($parentId, $links) as $link) {
+    $id = normalized_member_id($link['child_member_id'] ?? '');
+    if ($id !== '') $ids[$id] = true;
+  }
+  return array_keys($ids);
+}
+
+function find_union_between($memberAId, $memberBId, array $unions): ?array {
+  $a = normalized_member_id($memberAId);
+  $b = normalized_member_id($memberBId);
+  if ($a === '' || $b === '') return null;
+  foreach ($unions as $union) {
+    $pa = normalized_member_id($union['partner_a_member_id'] ?? '');
+    $pb = normalized_member_id($union['partner_b_member_id'] ?? '');
+    if (($pa === $a && $pb === $b) || ($pa === $b && $pb === $a)) return $union;
+  }
+  return null;
+}
+
+function resolve_spouse_partner_for_calculation(array $member, array $members, array $unions): ?array {
+  $membersById = [];
+  foreach ($members as $item) $membersById[$item['id']] = $item;
+  $memberId = normalized_member_id($member['id'] ?? '');
+  $spouseId = normalized_member_id($member['spouse_member_id'] ?? '');
+  if ($spouseId !== '' && isset($membersById[$spouseId])) return $membersById[$spouseId];
+  foreach ($unions as $union) {
+    $partnerA = normalized_member_id($union['partner_a_member_id'] ?? '');
+    $partnerB = normalized_member_id($union['partner_b_member_id'] ?? '');
+    if ($partnerA === $memberId && $partnerB !== '' && isset($membersById[$partnerB])) return $membersById[$partnerB];
+    if ($partnerB === $memberId && $partnerA !== '' && isset($membersById[$partnerA])) return $membersById[$partnerA];
+  }
+  foreach ($members as $candidate) {
+    if (($candidate['id'] ?? '') !== ($member['id'] ?? '') && normalized_member_id($candidate['spouse_member_id'] ?? '') === $memberId) {
+      return $candidate;
+    }
+  }
+  return null;
+}
+
+function get_children_by_union_id(string $unionId, array $members, array $links): array {
+  $membersById = [];
+  foreach ($members as $member) $membersById[$member['id']] = $member;
+  $childIds = [];
+  foreach ($links as $link) {
+    if (normalized_member_id($link['union_id'] ?? '') === normalized_member_id($unionId)) {
+      $id = normalized_member_id($link['child_member_id'] ?? '');
+      if ($id !== '') $childIds[$id] = true;
+    }
+  }
+  $children = [];
+  foreach (array_keys($childIds) as $id) {
+    if (isset($membersById[$id]) && is_child_relationship($membersById[$id])) $children[] = $membersById[$id];
+  }
+  return $children;
+}
+
+function get_direct_children_of_member(string $parentId, array $members, array $genealogy): array {
+  $childMap = [];
+  $pid = normalized_member_id($parentId);
+  foreach ($members as $item) {
+    if (normalized_member_id($item['parent_id'] ?? '') === $pid && is_child_relationship($item)) {
+      $childMap[$item['id']] = $item;
+    }
+  }
+  $links = $genealogy['parent_links'] ?? [];
+  foreach (get_child_ids_from_links($pid, $links) as $childId) {
+    foreach ($members as $item) {
+      if (($item['id'] ?? '') === $childId && is_child_relationship($item)) $childMap[$item['id']] = $item;
+    }
+  }
+  return array_values($childMap);
+}
+
+function get_descendants_for_representation(array $member, array $members, array $genealogy): array {
+  $membersById = [];
+  foreach ($members as $item) $membersById[$item['id']] = $item;
+  $unions = $genealogy['unions'] ?? [];
+  $links = $genealogy['parent_links'] ?? [];
+  $spousePartner = resolve_spouse_partner_for_calculation($member, $members, $unions);
+  $union = $spousePartner ? find_union_between($member['id'], $spousePartner['id'], $unions) : null;
+  $childMap = [];
+
+  if ($union) {
+    foreach (get_children_by_union_id($union['id'], $members, $links) as $child) $childMap[$child['id']] = $child;
+  }
+
+  foreach (get_child_ids_from_links($member['id'], $links) as $childId) {
+    if (!isset($membersById[$childId]) || !is_child_relationship($membersById[$childId])) continue;
+    $unionIds = [];
+    foreach (get_parent_links_for_child($childId, $links) as $link) {
+      if (normalized_member_id($link['parent_member_id'] ?? '') === normalized_member_id($member['id'])) {
+        $uid = normalized_member_id($link['union_id'] ?? '');
+        if ($uid !== '') $unionIds[] = $uid;
+      }
+    }
+    if ($union && in_array($union['id'], $unionIds, true)) continue;
+    if (count($unionIds) === 0) $childMap[$childId] = $membersById[$childId];
+  }
+
+  foreach ($members as $item) {
+    if (normalized_member_id($item['parent_id'] ?? '') === normalized_member_id($member['id']) && is_child_relationship($item)) {
+      $childMap[$item['id']] = $item;
+    }
+  }
+
+  return array_values($childMap);
+}
+
+function has_representable_heirs(array $member, array $members, array $genealogy): bool {
+  if (!is_deceased_member($member)) return true;
+  foreach (get_descendants_for_representation($member, $members, $genealogy) as $descendant) {
+    if (has_representable_heirs($descendant, $members, $genealogy)) return true;
+  }
+  return false;
+}
+
+function format_percent_for_calculation(float $value): string {
+  $text = number_format($value, 6, '.', '');
+  $text = rtrim(rtrim($text, '0'), '.');
+  return $text === '' ? '0' : $text;
+}
+
+function add_calculation_share(array &$shares, array $member, float $share, string $source, string $route): void {
+  $id = $member['id'];
+  if (!isset($shares[$id])) {
+    $shares[$id] = [
+      'member' => $member,
+      'share' => 0.0,
+      'role' => 'Heredero final por representación',
+      'reason' => 'Recibe por representación dentro de la estirpe sucesoral activa.',
+      'route' => $route,
+      'paymentBasis' => '',
+      'sources' => [],
+      'sourceBreakdown' => [],
+    ];
+  }
+  $shares[$id]['share'] += $share;
+  if (!in_array($source, $shares[$id]['sources'], true)) $shares[$id]['sources'][] = $source;
+  $shares[$id]['sourceBreakdown'][] = ['source' => $source, 'share' => $share, 'routes' => [$route]];
+  $shares[$id]['paymentBasis'] = format_percent_for_calculation($shares[$id]['share']) . '% del caudal neto distribuible.';
+}
+
+function distribute_by_representation(array $root, array $members, array $genealogy, array &$shares, float $share, string $source, string $route): void {
+  if (!is_deceased_member($root)) {
+    add_calculation_share($shares, $root, $share, $source, $route);
+    return;
+  }
+  $descendants = array_values(array_filter(
+    get_descendants_for_representation($root, $members, $genealogy),
+    fn($descendant) => has_representable_heirs($descendant, $members, $genealogy)
+  ));
+  if (count($descendants) === 0) return;
+  $nextShare = $share / count($descendants);
+  foreach ($descendants as $descendant) {
+    distribute_by_representation($descendant, $members, $genealogy, $shares, $nextShare, $source, $route . ' -> ' . $descendant['name']);
+  }
+}
+
+function build_api_inheritance_plan(array $members, array $genealogy, array $settings): array {
+  $membersByName = [];
+  foreach ($members as $member) $membersByName[normalize_sienna_name($member['name'] ?? '')] = $member;
+  $caseConfig = is_array($settings['sienna_case_config'] ?? null) ? $settings['sienna_case_config'] : [];
+  $causanteName = $caseConfig['causante_name'] ?? 'Alessandro de Paola Sangiovanni';
+  $activeRoots = $caseConfig['active_collateral_roots'] ?? [
+    ['name' => 'Vincenzo (Vicente) Sangiovanni', 'label' => 'Vincenzo/Vicente'],
+    ['name' => 'Paolo (Paulino) Sangiovanni', 'label' => 'Paolo/Paulino'],
+  ];
+  $causante = $membersByName[normalize_sienna_name($causanteName)] ?? null;
+  $shares = [];
+
+  if ($causante) {
+    $directDescendants = array_values(array_filter(
+      get_direct_children_of_member($causante['id'], $members, $genealogy),
+      fn($descendant) => has_representable_heirs($descendant, $members, $genealogy)
+    ));
+    if (count($directDescendants) > 0) {
+      $share = 100 / count($directDescendants);
+      foreach ($directDescendants as $child) {
+        distribute_by_representation($child, $members, $genealogy, $shares, $share, 'Descendencia directa', $causante['name'] . ' -> ' . $child['name']);
+      }
+    }
+  }
+
+  if (count($shares) === 0) {
+    $roots = [];
+    foreach ($activeRoots as $root) {
+      $member = $membersByName[normalize_sienna_name($root['name'] ?? '')] ?? null;
+      if ($member) $roots[] = ['member' => $member, 'label' => $root['label'] ?? ($root['name'] ?? 'Rama')];
+    }
+    $rootShare = count($roots) > 0 ? 100 / count($roots) : 0;
+    foreach ($roots as $root) {
+      distribute_by_representation($root['member'], $members, $genealogy, $shares, $rootShare, $root['label'], $root['member']['name']);
+    }
+  }
+
+  $activeHeirs = array_values($shares);
+  usort($activeHeirs, fn($a, $b) => ($b['share'] <=> $a['share']) ?: strcoll($a['member']['name'], $b['member']['name']));
+  $totalShare = round(array_reduce($activeHeirs, fn($sum, $item) => $sum + (float)$item['share'], 0.0), 6);
+  return ['activeHeirs' => $activeHeirs, 'totalShare' => $totalShare];
+}
+
+function build_calculation_rows(array $activeHeirs, float $distributableAmount): array {
+  $rows = [];
+  foreach ($activeHeirs as $share) {
+    $rows[] = [
+      'member_id' => $share['member']['id'],
+      'heir_name' => $share['member']['name'],
+      'share_percent' => (float)$share['share'],
+      'amount' => round_money($distributableAmount * ((float)$share['share'] / 100)),
+      'route' => $share['route'],
+      'payment_basis' => $share['paymentBasis'],
+      'reason' => $share['reason'],
+      'sources' => array_values($share['sources']),
+      'source_breakdown' => array_values($share['sourceBreakdown']),
+    ];
+  }
+  $total = round_money(array_reduce($rows, fn($sum, $row) => $sum + (float)$row['amount'], 0.0));
+  $delta = round_money($distributableAmount - $total);
+  if (count($rows) > 0 && abs($delta) >= 0.01) {
+    $targetIndex = 0;
+    foreach ($rows as $index => $row) {
+      if ((float)$row['amount'] > (float)$rows[$targetIndex]['amount']) $targetIndex = $index;
+    }
+    $rows[$targetIndex]['amount'] = round_money((float)$rows[$targetIndex]['amount'] + $delta);
+  }
+  return $rows;
+}
+
+function build_sienna_realtime_calculation($estateAmount = null, $lawyerFeePercentage = null): array {
+  $family = fetch_sienna_family_bundle();
+  $settings = fetch_app_settings();
+  $grossInput = $estateAmount ?? ($settings['estate_amount'] ?? 0);
+  $feeInput = $lawyerFeePercentage ?? ($settings['lawyer_fee_percentage'] ?? 0);
+  $estate = resolve_estate_amounts($grossInput, $feeInput);
+  $genealogy = ['unions' => $family['unions'], 'parent_links' => $family['parent_links']];
+  $plan = build_api_inheritance_plan($family['members'], $genealogy, $settings);
+  $rows = build_calculation_rows($plan['activeHeirs'], (float)$estate['distributableAmount']);
+  $caseConfig = is_array($settings['sienna_case_config'] ?? null) ? $settings['sienna_case_config'] : [];
+  return [
+    'estate' => $estate,
+    'causante_name' => $caseConfig['causante_name'] ?? 'Alessandro de Paola Sangiovanni',
+    'total_share' => $plan['totalShare'],
+    'active_heirs' => $rows,
+    'active_heir_count' => count($rows),
+    'generated_at' => gmdate('c'),
+  ];
+}
+
 function ensure_schema(): void {
   static $initialized = false;
   if ($initialized) {
@@ -772,6 +1080,18 @@ try {
     $request = body();
     $resultSettings = [];
 
+    if (array_key_exists('estate_amount', $request)) {
+      $rawAmount = (float)($request['estate_amount'] ?? 0);
+      $estateAmount = max(0, $rawAmount);
+      exec_sql(
+        "INSERT INTO app_settings (setting_key, setting_value, updated_by)
+         VALUES ('estate_amount', :value, :updatedBy)
+         ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_by = VALUES(updated_by)",
+        ['value' => (string)$estateAmount, 'updatedBy' => $user['id']]
+      );
+      $resultSettings['estate_amount'] = $estateAmount;
+    }
+
     if (array_key_exists('lawyer_fee_percentage', $request)) {
       $rawFee = (float)($request['lawyer_fee_percentage'] ?? 0);
       $fee = min(100, max(0, $rawFee));
@@ -1013,7 +1333,7 @@ try {
       'unions' => $family['unions'],
       'parent_links' => $family['parent_links'],
       'heirs' => fetch_confirmed_heirs($includeMedia),
-      'documents' => fetch_evidence_documents(false),
+      'documents' => fetch_evidence_documents($includeMedia),
       'settings' => fetch_app_settings(),
       'snapshot' => query_one(
         'SELECT id, estate_amount, lawyer_fee_percentage, distributable_amount, members_hash, payload_json, created_by, created_at
@@ -1022,6 +1342,14 @@ try {
          LIMIT 1'
       ),
     ]);
+  }
+
+  if ($method === 'GET' && $path === '/sienna-calculation') {
+    require_user();
+    json_response(['calculation' => build_sienna_realtime_calculation(
+      $_GET['estate_amount'] ?? null,
+      $_GET['lawyer_fee_percentage'] ?? null
+    )]);
   }
 
   if ($method === 'GET' && $path === '/sienna-family-members') {
@@ -1137,11 +1465,44 @@ try {
   if (preg_match('#^/sienna-family-members/([^/]+)$#', $path, $m) && $method === 'DELETE') {
     $user = require_user();
     require_admin($user);
-    exec_sql('DELETE FROM member_parent_links WHERE child_member_id = :id OR parent_member_id = :id', ['id' => $m[1]]);
-    exec_sql('DELETE FROM family_unions WHERE partner_a_member_id = :id OR partner_b_member_id = :id', ['id' => $m[1]]);
-    exec_sql('UPDATE sienna_family_members SET parent_id = NULL WHERE parent_id = :id', ['id' => $m[1]]);
-    exec_sql('UPDATE sienna_family_members SET spouse_member_id = NULL WHERE spouse_member_id = :id', ['id' => $m[1]]);
-    exec_sql('DELETE FROM sienna_family_members WHERE id = :id', ['id' => $m[1]]);
+    $memberId = $m[1];
+    exec_sql(
+      'DELETE FROM member_parent_links WHERE child_member_id = :childId OR parent_member_id = :parentId',
+      ['childId' => $memberId, 'parentId' => $memberId]
+    );
+    exec_sql(
+      'DELETE FROM family_unions WHERE partner_a_member_id = :partnerAId OR partner_b_member_id = :partnerBId',
+      ['partnerAId' => $memberId, 'partnerBId' => $memberId]
+    );
+    exec_sql('UPDATE confirmed_heirs SET sienna_member_id = NULL WHERE sienna_member_id = :id', ['id' => $memberId]);
+    exec_sql(
+      'UPDATE evidence_documents
+       SET primary_member_id = IF(primary_member_id = :primaryId, NULL, primary_member_id),
+           father_member_id = IF(father_member_id = :fatherId, NULL, father_member_id),
+           mother_member_id = IF(mother_member_id = :motherId, NULL, mother_member_id),
+           spouse_member_id = IF(spouse_member_id = :spouseId, NULL, spouse_member_id),
+           related_member_id = IF(related_member_id = :relatedId, NULL, related_member_id)
+       WHERE primary_member_id = :primaryWhere
+          OR father_member_id = :fatherWhere
+          OR mother_member_id = :motherWhere
+          OR spouse_member_id = :spouseWhere
+          OR related_member_id = :relatedWhere',
+      [
+        'primaryId' => $memberId,
+        'fatherId' => $memberId,
+        'motherId' => $memberId,
+        'spouseId' => $memberId,
+        'relatedId' => $memberId,
+        'primaryWhere' => $memberId,
+        'fatherWhere' => $memberId,
+        'motherWhere' => $memberId,
+        'spouseWhere' => $memberId,
+        'relatedWhere' => $memberId,
+      ]
+    );
+    exec_sql('UPDATE sienna_family_members SET parent_id = NULL WHERE parent_id = :id', ['id' => $memberId]);
+    exec_sql('UPDATE sienna_family_members SET spouse_member_id = NULL WHERE spouse_member_id = :id', ['id' => $memberId]);
+    exec_sql('DELETE FROM sienna_family_members WHERE id = :id', ['id' => $memberId]);
     json_response(['ok' => true]);
   }
 
@@ -1243,9 +1604,9 @@ try {
     $id = uuid();
     exec_sql(
       'INSERT INTO sienna_calculation_snapshots
-       (id, estate_amount, lawyer_fee_percentage, distributable_amount, members_hash, payload_json, created_by)
+       (id, estate_amount, lawyer_fee_percentage, distributable_amount, members_hash, payload_json, created_by, created_at)
        VALUES
-       (:id, :estateAmount, :lawyerFeePercentage, :distributableAmount, :membersHash, :payloadJson, :createdBy)',
+       (:id, :estateAmount, :lawyerFeePercentage, :distributableAmount, :membersHash, :payloadJson, :createdBy, UTC_TIMESTAMP())',
       [
         'id' => $id,
         'estateAmount' => (float)($data['estate_amount'] ?? 0),

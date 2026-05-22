@@ -299,33 +299,11 @@ export const getDescendantsForRepresentation = (
       if (!unionIds.length) childMap.set(child.id, child);
     });
 
-    if (spousePartner) {
-      getChildIdsFromLinks(spousePartner.id, bundle.parent_links).forEach((childId) => {
-        const child = membersById.get(childId);
-        if (!child || !isChildRelationship(child)) return;
-        const unionIds = getParentLinksForChild(childId, bundle.parent_links)
-          .filter((link) => normalizedId(link.parent_member_id) === normalizedId(spousePartner.id))
-          .map((link) => link.union_id)
-          .filter(Boolean);
-        if (union && unionIds.includes(union.id)) return;
-        if (!unionIds.length) childMap.set(child.id, child);
-      });
-    }
-
     members
       .filter(
         (item) => normalizedId(item.parent_id) === normalizedId(member.id) && isChildRelationship(item)
       )
       .forEach((child) => childMap.set(child.id, child));
-
-    if (spousePartner) {
-      members
-        .filter(
-          (item) =>
-            normalizedId(item.parent_id) === normalizedId(spousePartner.id) && isChildRelationship(item)
-        )
-        .forEach((child) => childMap.set(child.id, child));
-    }
 
     if (childMap.size > 0) return Array.from(childMap.values());
   }

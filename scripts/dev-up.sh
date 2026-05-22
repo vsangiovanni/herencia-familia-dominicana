@@ -18,7 +18,7 @@ STATUS="$ROOT/dev-status.log"
   sleep 2
   curl -fsS http://127.0.0.1:3001/api/health && echo " API_OK" || { echo " API_FAIL"; tail -10 server-dev.log; exit 1; }
 
-  nohup npm run dev -- --host 0.0.0.0 --port 8080 >> vite-dev.log 2>&1 &
+  nohup pnpm run dev -- --host 0.0.0.0 --port 8080 >> vite-dev.log 2>&1 &
   echo "VITE_PID=$!"
 
   sleep 5

@@ -48,6 +48,24 @@ export const resolveEstateAmounts = (
 export const calculateHeirAmount = (sharePercent: number, distributableAmount: number) =>
   roundMoney(distributableAmount * (sharePercent / 100));
 
+const adjustRowsToDistributableTotal = <T extends { amount: number }>(
+  rows: T[],
+  distributableAmount: number
+) => {
+  if (!rows.length || distributableAmount <= 0) return rows;
+  const total = roundMoney(rows.reduce((sum, row) => sum + row.amount, 0));
+  const delta = roundMoney(distributableAmount - total);
+  if (Math.abs(delta) < 0.01) return rows;
+
+  const targetIndex = rows.reduce(
+    (bestIndex, row, index) => (row.amount > rows[bestIndex].amount ? index : bestIndex),
+    0
+  );
+  return rows.map((row, index) =>
+    index === targetIndex ? { ...row, amount: roundMoney(row.amount + delta) } : row
+  );
+};
+
 /** Reparto proporcional al caudal; solo renormaliza si hay herederos excluidos en la simulación. */
 export const resolveHeirSimulatedShare = (
   rawShare: number,
@@ -68,16 +86,19 @@ export const buildHeirCalculationRows = (
   plan: InheritancePlan,
   distributableAmount: number
 ): SiennaHeirCalculationRow[] =>
-  plan.activeHeirs.map((share: InheritanceShare) => ({
-    member_id: share.member.id,
-    heir_name: share.member.name,
-    share_percent: share.share,
-    amount: calculateHeirAmount(share.share, distributableAmount),
-    route: share.route,
-    payment_basis: share.paymentBasis,
-    reason: share.reason,
-    sources: share.sources,
-  }));
+  adjustRowsToDistributableTotal(
+    plan.activeHeirs.map((share: InheritanceShare) => ({
+      member_id: share.member.id,
+      heir_name: share.member.name,
+      share_percent: share.share,
+      amount: calculateHeirAmount(share.share, distributableAmount),
+      route: share.route,
+      payment_basis: share.paymentBasis,
+      reason: share.reason,
+      sources: share.sources,
+    })),
+    distributableAmount
+  );
 
 export const buildCalculationPayload = (
   plan: InheritancePlan,

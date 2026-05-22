@@ -890,7 +890,7 @@ const DocumentosProbatorios = () => {
                           variant="outline"
                           size="sm"
                           onClick={() => setViewerDocumentId(document.id || null)}
-                          disabled={!document.file_data}
+                          disabled={!document.file_data && !document.has_file && !document.has_extracted_text && !document.notes}
                         >
                           <Eye className="mr-1 h-4 w-4" />
                           Ver

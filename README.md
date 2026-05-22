@@ -22,9 +22,9 @@ Requisitos: Node.js 18+ y MySQL.
 git clone https://github.com/vsangiovanni/herencia-familia-dominicana.git
 cd herencia-familia-dominicana
 cp .env.example .env
-npm install
+pnpm install
 node server/index.js
-npm run dev
+pnpm run dev
 ```
 
 | Servicio | URL |
@@ -49,6 +49,14 @@ Documentación: [docs/SIENNA.md](docs/SIENNA.md)
 | `/admin/settings` | Configuración central del caso Sienna (solo administradores) |
 
 Lógica compartida: `src/lib/dominicanInheritance.ts`, `src/lib/siennaGenealogy.ts`, `src/lib/siennaHeirExplain.ts`.
+
+Estado actual del flujo Sienna:
+
+- El zoom del Árbol Sienna escala el canvas completo y permite pan, pinch zoom, Fit y reset.
+- El botón **Imprimir árbol** genera una vista A3 horizontal con todo el árbol ajustado.
+- Los miembros fallecidos se marcan con lacito negro discreto y etiqueta **Fallecido** en árbol, vistas reutilizables y PDF.
+- La explicación para herederos usa cálculo en vivo, muestra doble linaje por ruta y genera PDF con mosaico de documentos soporte.
+- Las imágenes de actas se normalizan antes de insertarse en PDF para evitar soportes invisibles.
 
 ## Interfaz (ayuda y navegación)
 
@@ -84,14 +92,14 @@ Guía completa: [docs/DEPLOY.md](docs/DEPLOY.md)
 
 | Comando | Acción |
 |---------|--------|
-| `npm run build` | Genera `dist/` |
-| `npm run deploy` | Sube `dist/` por FTP (no toca `.env` remoto) |
-| `npm run deploy:api` | Solo `api.php` (cambios de backend) |
-| `npm run check:prod` | Verifica health y rutas Sienna en producción |
-| `npm run release` | Build + deploy + check (script bash) |
-| `npm run migrate:genealogy` | Poblar uniones y vínculos parentales (local) |
-| `npm run deploy:env` | Sube `.env.prod.working` al servidor (FTP) |
-| `npm run deploy:zip` | Genera `herenciard_deploy_full.zip` para deploy MCP |
+| `pnpm run build` | Genera `dist/` |
+| `pnpm run deploy` | Sube `dist/` por FTP (no toca `.env` remoto) |
+| `pnpm run deploy:api` | Solo `api.php` (cambios de backend) |
+| `pnpm run check:prod` | Verifica health y rutas Sienna en producción |
+| `pnpm run release` | Build + deploy + check (script bash) |
+| `pnpm run migrate:genealogy` | Poblar uniones y vínculos parentales (local) |
+| `pnpm run deploy:env` | Sube `.env.prod.working` al servidor (FTP) |
+| `pnpm run deploy:zip` | Genera `herenciard_deploy_full.zip` para deploy MCP |
 
 Plantilla de variables en servidor: [`.env.production.example`](.env.production.example)
 

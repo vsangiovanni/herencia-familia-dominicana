@@ -1,9 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import BackButton from '@/components/BackButton';
 import DocumentHeader from '@/components/DocumentHeader';
-import { ConfirmedHeir, SiennaFamilyMember } from '@/lib/api';
-import { useConfirmedHeirs, useSiennaFamily } from '@/hooks/useSiennaData';
-import { buildDominicanInheritancePlan, normalizeName } from '@/lib/dominicanInheritance';
+import { useSiennaCalculation, useSiennaWorkspace } from '@/hooks/useSiennaData';
+import { applySiennaCaseConfig, buildDominicanInheritancePlan, normalizeName } from '@/lib/dominicanInheritance';
 import { countGenealogyInconsistencies } from '@/lib/siennaGenealogy';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -60,41 +59,83 @@ const prettyRoute = (routes: string[]) =>
     .join(' | ');
 
 const CalculoFiliacion = () => {
-  const { data: familyData } = useSiennaFamily();
-  const { data: heirsData } = useConfirmedHeirs(false);
-  const members = familyData?.members ?? [];
-  const unions = familyData?.unions ?? [];
-  const parentLinks = familyData?.parent_links ?? [];
+  const { data: workspace } = useSiennaWorkspace(false);
+  const members = workspace?.members ?? [];
+  const unions = workspace?.unions ?? [];
+  const parentLinks = workspace?.parent_links ?? [];
   const [estateAmount, setEstateAmount] = useState(0);
-  const confirmedHeirs = heirsData?.heirs ?? [];
+  const [caseConfigRevision, setCaseConfigRevision] = useState(0);
+  const confirmedHeirs = workspace?.heirs ?? [];
+  const lawyerFeePercentage = Number(workspace?.settings?.lawyer_fee_percentage || 0);
+  const { data: realtimeCalculationData, isFetching: isFetchingCalculation } = useSiennaCalculation(
+    estateAmount,
+    lawyerFeePercentage
+  );
+  const realtimeCalculation = realtimeCalculationData?.calculation;
 
   const genealogy = useMemo(
     () => ({ unions, parent_links: parentLinks }),
     [parentLinks, unions]
   );
 
+  useEffect(() => {
+    if (!workspace) return;
+    applySiennaCaseConfig(workspace.settings?.sienna_case_config);
+    setEstateAmount(Number(workspace.settings?.estate_amount || 0));
+    setCaseConfigRevision((current) => current + 1);
+  }, [workspace]);
+
   const inheritancePlan = useMemo(
     () => buildDominicanInheritancePlan(members, genealogy),
-    [genealogy, members]
+    [caseConfigRevision, genealogy, members]
   );
 
   const genealogyIssues = useMemo(() => countGenealogyInconsistencies(genealogy), [genealogy]);
 
   const distributionLines = useMemo<DistributionLine[]>(
-    () =>
-      inheritancePlan.activeHeirs
-        .flatMap((share) =>
-          share.sourceBreakdown.map((segment) => ({
-            line: segment.source,
-            branch: extractBranch(segment.routes),
-            memberId: share.member.id,
-            heir: share.member.name,
-            route: prettyRoute(segment.routes),
-            percentage: segment.share,
-          }))
-        )
-        .sort((left, right) => right.percentage - left.percentage || left.line.localeCompare(right.line, 'es')),
-    [inheritancePlan.activeHeirs]
+    () => {
+      if (realtimeCalculation?.active_heirs.length) {
+        return realtimeCalculation.active_heirs
+          .flatMap((row) => {
+            const breakdown = row.source_breakdown?.length
+              ? row.source_breakdown
+              : [{ source: row.sources.join(' + ') || 'Sin línea', share: row.share_percent, routes: [row.route] }];
+            return breakdown.map((segment) => ({
+              line: segment.source,
+              branch: extractBranch(segment.routes),
+              memberId: row.member_id,
+              heir: row.heir_name,
+              route: prettyRoute(segment.routes),
+              percentage: segment.share,
+            }));
+          })
+          .sort(
+            (left, right) =>
+              left.heir.localeCompare(right.heir, 'es') ||
+              left.line.localeCompare(right.line, 'es') ||
+              right.percentage - left.percentage
+          );
+      }
+
+      return inheritancePlan.activeHeirs
+          .flatMap((share) =>
+            share.sourceBreakdown.map((segment) => ({
+              line: segment.source,
+              branch: extractBranch(segment.routes),
+              memberId: share.member.id,
+              heir: share.member.name,
+              route: prettyRoute(segment.routes),
+              percentage: segment.share,
+            }))
+          )
+          .sort(
+            (left, right) =>
+              left.heir.localeCompare(right.heir, 'es') ||
+              left.line.localeCompare(right.line, 'es') ||
+              right.percentage - left.percentage
+          );
+    },
+    [inheritancePlan.activeHeirs, realtimeCalculation?.active_heirs]
   );
 
   const totalsByHeir = useMemo(() => {
@@ -109,13 +150,13 @@ const CalculoFiliacion = () => {
       };
 
       current.percentage += item.percentage;
-      current.amount += estateAmount * (item.percentage / 100);
+      current.amount += Number(realtimeCalculation?.estate.distributableAmount || estateAmount) * (item.percentage / 100);
       current.routes += 1;
       totals.set(item.heir, current);
     });
 
     return Array.from(totals.values()).sort((a, b) => b.percentage - a.percentage || a.heir.localeCompare(b.heir, 'es'));
-  }, [distributionLines, estateAmount]);
+  }, [distributionLines, estateAmount, realtimeCalculation?.estate.distributableAmount]);
 
   const totalsByLine = useMemo(() => {
     const totals = new Map<string, number>();
@@ -128,8 +169,8 @@ const CalculoFiliacion = () => {
       .sort((a, b) => b.percentage - a.percentage || a.line.localeCompare(b.line, 'es'));
   }, [distributionLines]);
 
-  const totalPercentage = totalsByHeir.reduce((sum, item) => sum + item.percentage, 0);
-  const totalAmount = totalsByHeir.reduce((sum, item) => sum + item.amount, 0);
+  const totalPercentage = realtimeCalculation?.total_share ?? totalsByHeir.reduce((sum, item) => sum + item.percentage, 0);
+  const totalAmount = realtimeCalculation?.active_heirs.reduce((sum, item) => sum + Number(item.amount), 0) ?? totalsByHeir.reduce((sum, item) => sum + item.amount, 0);
   const undistributedPercentage = Math.max(0, 100 - totalPercentage);
   const childrenMissingLinks = useMemo(
     () =>
@@ -202,9 +243,8 @@ const CalculoFiliacion = () => {
           </CardHeader>
           <CardContent className="p-6 space-y-4">
             <p className="text-gray-700">
-              Este cálculo usa la misma fuente de verdad del árbol Sienna y separa la herencia por líneas activas
-              detectadas en tiempo real. Si se agregan o ajustan miembros que cambien el reparto, esta tabla se actualiza
-              automáticamente sin reglas quemadas.
+              Este cálculo consulta la API Sienna en vivo y separa la herencia por líneas activas. Si se agrega,
+              modifica o elimina un miembro, la API recalcula y esta tabla refleja la misma realidad que el árbol.
             </p>
 
             <div className="grid md:grid-cols-3 gap-4">
@@ -232,7 +272,7 @@ const CalculoFiliacion = () => {
           <CardContent className="p-6">
             <div className="grid md:grid-cols-2 gap-4 items-end">
               <div>
-                <Label htmlFor="estateAmount">Monto total</Label>
+                <Label htmlFor="estateAmount">Monto bruto del caso</Label>
                 <Input
                   id="estateAmount"
                   type="number"
@@ -244,8 +284,12 @@ const CalculoFiliacion = () => {
                 />
               </div>
               <div className="bg-legal-blue/5 border border-legal-blue/20 rounded-md p-4">
-                <p className="text-sm text-legal-gray">Total calculado</p>
+                <p className="text-sm text-legal-gray">Total neto calculado</p>
                 <p className="text-2xl font-bold text-legal-blue">{formatMoney(totalAmount)}</p>
+                <p className="text-xs text-legal-gray">
+                  Firma: {formatPercent(lawyerFeePercentage)}
+                  {isFetchingCalculation ? ' · recalculando...' : ''}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -291,7 +335,7 @@ const CalculoFiliacion = () => {
                         <Badge variant="outline">{formatPercent(item.percentage)}</Badge>
                       </TableCell>
                       <TableCell className="text-right font-medium">
-                        {formatMoney(estateAmount * (item.percentage / 100))}
+                        {formatMoney(Number(realtimeCalculation?.estate.distributableAmount || estateAmount) * (item.percentage / 100))}
                       </TableCell>
                     </TableRow>
                   );

@@ -203,44 +203,6 @@ INSERT INTO app_settings (setting_key, setting_value)
 VALUES ('lawyer_fee_percentage', '0')
 ON DUPLICATE KEY UPDATE setting_key = setting_key;
 
-INSERT INTO confirmed_heirs (
-  id,
-  heir_name,
-  relationship_summary,
-  line_vincenzo,
-  line_paolo,
-  status,
-  notes
-)
-VALUES
-  (UUID(), 'Víctor Manuel Martín Sangiovanni Rodríguez', 'Heredero por doble vocación sucesoral: línea Vincenzo/Vicente vía María Rosa y línea Paolo/Paulino vía Pedro Pablo.', TRUE, TRUE, 'mencionado', 'No requiere acta para figurar en el cálculo inicial; puede anexarse evidencia cuando se tenga.'),
-  (UUID(), 'Perla Rosa Brea Sangiovanni', 'Heredera con doble línea familiar en la estructura analítica actual.', TRUE, TRUE, 'mencionado', 'No requiere acta para figurar en el cálculo inicial; puede anexarse evidencia cuando se tenga.'),
-  (UUID(), 'Bernardo Martín Lizardo Sangiovanni', 'Heredero por la línea Vincenzo/Vicente, rama Domingo Ramón.', TRUE, FALSE, 'mencionado', 'No requiere acta para figurar en el cálculo inicial; puede anexarse evidencia cuando se tenga.'),
-  (UUID(), 'Jocelyn del Jesús Sangiovanni Báez', 'Heredera por la línea Vincenzo/Vicente, rama Domingo Ramón / José Vicente.', TRUE, FALSE, 'mencionado', 'No requiere acta para figurar en el cálculo inicial; puede anexarse evidencia cuando se tenga.'),
-  (UUID(), 'Mayra Josefina Sangiovanni Báez', 'Heredera por la línea Vincenzo/Vicente, rama Domingo Ramón / José Vicente.', TRUE, FALSE, 'mencionado', 'No requiere acta para figurar en el cálculo inicial; puede anexarse evidencia cuando se tenga.')
-ON DUPLICATE KEY UPDATE
-  heir_name = heir_name;
-
-INSERT INTO sienna_family_members (
-  id, parent_id, name, birth, death, spouse_member_id, spouse, spouse_birth, is_highlighted_ancestor, sort_order
-)
-VALUES
-  ('domenico', NULL, 'Domenico (Domingo) Sangiovanni', '17/12/1845', NULL, NULL, 'María Rosa Grisolia', '18/07/1852', FALSE, 10),
-  ('maria-magdalena', 'domenico', 'María Magdalena Sangiovanni', '27/04/1874', '07/05/1935', NULL, 'Vincenzo de Paola', NULL, FALSE, 10),
-  ('vincenzo', 'domenico', 'Vincenzo (Vicente) Sangiovanni', '13/08/1880', '07/02/1958', NULL, 'María Balbina Pérez Álvarez', NULL, FALSE, 20),
-  ('paolo', 'domenico', 'Paolo (Paulino) Sangiovanni', '17/01/1885', '31/03/1936', NULL, 'Simona Simo', NULL, FALSE, 30),
-  ('alessandro', 'maria-magdalena', 'Alessandro de Paola Sangiovanni', '18/10/1911', '14/01/1998', NULL, NULL, NULL, TRUE, 10),
-  ('maria-rosa', 'vincenzo', 'María Rosa Sangiovanni Pérez', '18/02/1906', '07/08/1981', 'pedro-pablo', 'Pedro Pablo Sangiovanni Simo', NULL, FALSE, 10),
-  ('domingo-ramon', 'vincenzo', 'Domingo Ramón Sangiovanni Pérez', '11/07/1907', '03/09/1981', NULL, 'María Francisca Gesualdo', NULL, FALSE, 20),
-  ('pedro-pablo', 'paolo', 'Pedro Pablo Sangiovanni Simo', '29/10/1906', '04/10/1986', 'maria-rosa', NULL, NULL, FALSE, 10),
-  ('victor-manuel', 'maria-rosa', 'Víctor Manuel Sangiovanni Sangiovanni', '29/10/1932', '21/10/2007', NULL, 'Ana Julia Rodríguez', NULL, FALSE, 10),
-  ('maria-amparo', 'domingo-ramon', 'María Amparo Sangiovanni Gesualdo', '30/10/1929', '15/01/2004', NULL, 'Bernardo Edmundo Lizardo Fernández', NULL, FALSE, 10),
-  ('jose-vicente', 'domingo-ramon', 'José Vicente Sangiovanni Gesualdo', '19/04/1932', '24/04/1976', NULL, 'Ozema Báez', NULL, FALSE, 20),
-  ('rosa-julia', 'victor-manuel', 'Rosa Julia Sangiovanni Rodríguez', '15/04/1963', '04/10/2024', NULL, 'Francisco Brea', NULL, FALSE, 10),
-  ('victor-manuel-martin', 'victor-manuel', 'Víctor Manuel Martín Sangiovanni Rodríguez', '08/11/1966', NULL, NULL, NULL, NULL, FALSE, 20),
-  ('bernardo-martin', 'maria-amparo', 'Bernardo Martín Lizardo Sangiovanni', '28/10/1966', NULL, NULL, NULL, NULL, FALSE, 10),
-  ('jocelyn', 'jose-vicente', 'Jocelyn del Jesús Sangiovanni Báez', '06/10/1963', NULL, NULL, NULL, NULL, FALSE, 10),
-  ('mayra', 'jose-vicente', 'Mayra Josefina Sangiovanni Báez', '20/11/1965', NULL, NULL, NULL, NULL, FALSE, 20),
-  ('perla-rosa', 'rosa-julia', 'Perla Rosa Brea Sangiovanni', '30/04/1989', NULL, NULL, NULL, NULL, FALSE, 10)
-ON DUPLICATE KEY UPDATE
-  id = id;
+INSERT INTO app_settings (setting_key, setting_value)
+VALUES ('estate_amount', '0')
+ON DUPLICATE KEY UPDATE setting_key = setting_key;

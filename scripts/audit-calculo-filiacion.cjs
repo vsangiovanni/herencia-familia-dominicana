@@ -124,27 +124,9 @@ const getDescendantsForRepresentation = (member, members, bundle) => {
       if (union && unionIds.includes(union.id)) return;
       if (!unionIds.length) childMap.set(child.id, child);
     });
-    if (spousePartner) {
-      getChildIdsFromLinks(spousePartner.id, bundle.parent_links).forEach((childId) => {
-        const child = membersById.get(childId);
-        if (!child || !isChildRelationship(child)) return;
-        const unionIds = getParentLinksForChild(childId, bundle.parent_links)
-          .filter((l) => normalizedId(l.parent_member_id) === normalizedId(spousePartner.id))
-          .map((l) => l.union_id)
-          .filter(Boolean);
-        if (union && unionIds.includes(union.id)) return;
-        if (!unionIds.length) childMap.set(child.id, child);
-      });
-    }
-
     members
       .filter((m) => normalizedId(m.parent_id) === normalizedId(member.id) && isChildRelationship(m))
       .forEach((child) => childMap.set(child.id, child));
-    if (spousePartner) {
-      members
-        .filter((m) => normalizedId(m.parent_id) === normalizedId(spousePartner.id) && isChildRelationship(m))
-        .forEach((child) => childMap.set(child.id, child));
-    }
 
     if (childMap.size > 0) return Array.from(childMap.values());
   }
@@ -207,6 +189,16 @@ const descendantsForRepresentation = (member, members, membersByName, membersByI
   return uniqueMembers([...ownChildren, ...spouseChildren]);
 };
 
+const hasRepresentableHeirs = (member, members, membersByName, membersById, genealogy, visited = new Set()) => {
+  if (!isDeceased(member)) return true;
+  if (visited.has(member.id)) return false;
+  visited.add(member.id);
+
+  return descendantsForRepresentation(member, members, membersByName, membersById, genealogy).some((descendant) =>
+    hasRepresentableHeirs(descendant, members, membersByName, membersById, genealogy, new Set(visited))
+  );
+};
+
 const distributeByRepresentation = (
   member,
   members,
@@ -227,9 +219,12 @@ const distributeByRepresentation = (
     return;
   }
   const descendants = descendantsForRepresentation(member, members, membersByName, membersById, genealogy);
-  if (!descendants.length) return;
-  const childShare = share / descendants.length;
-  descendants.forEach((child) => {
+  const eligibleDescendants = descendants.filter((descendant) =>
+    hasRepresentableHeirs(descendant, members, membersByName, membersById, genealogy)
+  );
+  if (!eligibleDescendants.length) return;
+  const childShare = share / eligibleDescendants.length;
+  eligibleDescendants.forEach((child) => {
     distributeByRepresentation(
       child,
       members,
@@ -253,9 +248,12 @@ const buildPlan = (members, genealogy) => {
 
   if (causante) {
     const directDescendants = directChildrenOf(members, causante.id);
-    if (directDescendants.length) {
-      const share = 100 / directDescendants.length;
-      directDescendants.forEach((child) => {
+    const eligibleDirectDescendants = directDescendants.filter((descendant) =>
+      hasRepresentableHeirs(descendant, members, membersByName, membersById, genealogy)
+    );
+    if (eligibleDirectDescendants.length) {
+      const share = 100 / eligibleDirectDescendants.length;
+      eligibleDirectDescendants.forEach((child) => {
         distributeByRepresentation(
           child,
           members,

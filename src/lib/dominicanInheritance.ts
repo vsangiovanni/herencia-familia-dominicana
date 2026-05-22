@@ -126,9 +126,12 @@ const rebuildDerivedConfig = () => {
 
 export const applySiennaCaseConfig = (raw: unknown) => {
   const parsed = parseCaseConfig(raw);
+  const definedParsed = Object.fromEntries(
+    Object.entries(parsed).filter(([, value]) => value !== undefined)
+  ) as Partial<SiennaCaseConfig>;
   currentCaseConfig = {
     ...currentCaseConfig,
-    ...parsed,
+    ...definedParsed,
   };
   rebuildDerivedConfig();
 };
@@ -240,6 +243,23 @@ const descendantsForRepresentation = (
   return uniqueMembers([...ownChildren, ...spouseChildren]);
 };
 
+const hasRepresentableHeirs = (
+  member: SiennaFamilyMember,
+  members: SiennaFamilyMember[],
+  membersByName: Map<string, SiennaFamilyMember>,
+  membersById: Map<string, SiennaFamilyMember>,
+  genealogy: SiennaGenealogyBundle | undefined,
+  visited = new Set<string>()
+): boolean => {
+  if (!isDeceased(member)) return true;
+  if (visited.has(member.id)) return false;
+  visited.add(member.id);
+
+  return descendantsForRepresentation(member, members, membersByName, membersById, genealogy).some((descendant) =>
+    hasRepresentableHeirs(descendant, members, membersByName, membersById, genealogy, new Set(visited))
+  );
+};
+
 const distributeByRepresentation = (
   member: SiennaFamilyMember,
   members: SiennaFamilyMember[],
@@ -262,10 +282,13 @@ const distributeByRepresentation = (
   }
 
   const descendants = descendantsForRepresentation(member, members, membersByName, membersById, genealogy);
-  if (!descendants.length) return;
+  const eligibleDescendants = descendants.filter((descendant) =>
+    hasRepresentableHeirs(descendant, members, membersByName, membersById, genealogy)
+  );
+  if (!eligibleDescendants.length) return;
 
-  const childShare = share / descendants.length;
-  descendants.forEach((child) => {
+  const childShare = share / eligibleDescendants.length;
+  eligibleDescendants.forEach((child) => {
     distributeByRepresentation(
       child,
       members,
@@ -292,9 +315,12 @@ export const buildDominicanInheritancePlan = (
 
   if (causante) {
     const directDescendants = directChildrenOf(members, causante.id, genealogy);
-    if (directDescendants.length) {
-      const share = 100 / directDescendants.length;
-      directDescendants.forEach((child) => {
+    const eligibleDirectDescendants = directDescendants.filter((descendant) =>
+      hasRepresentableHeirs(descendant, members, membersByName, membersById, genealogy)
+    );
+    if (eligibleDirectDescendants.length) {
+      const share = 100 / eligibleDirectDescendants.length;
+      eligibleDirectDescendants.forEach((child) => {
         distributeByRepresentation(
           child,
           members,
@@ -427,4 +453,3 @@ export const summarizeInheritanceStatuses = (
     storedPending: members.filter((member) => member.inheritance_status === 'requiere_revision').length,
   };
 };
-

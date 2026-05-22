@@ -49,7 +49,8 @@ Ver también [docs/UI.md](UI.md).
 
 - Contenedor base: `app-shell` (en `src/index.css`) — ancho máximo 1700px y padding lateral optimizado para móvil y desktop.
 - Contenedor Sienna: `SiennaPageLayout` usa `app-shell` para mantener consistencia visual entre módulos.
-- Árbol: scroll horizontal en desktop; en móvil las ramas se apilan (`src/index.css`).
+- Árbol: canvas completo (`tree-world`) con pan, zoom, pinch zoom, Fit, reset y pantalla completa. El zoom escala el árbol entero, no tarjetas aisladas.
+- Impresión del árbol: botón **Imprimir árbol** genera vista A3 horizontal, ajusta el árbol completo y conserva fotos, montos, doble linaje e indicadores.
 - Pestañas de explicación: `.sienna-tabs-scroll` — scroll horizontal en móvil, grid en `md+`.
 - Tabla de miembros: scroll horizontal; columna auditoría oculta en pantallas pequeñas.
 
@@ -78,10 +79,18 @@ Ayuda en pantalla: icono **?** (`sienna-miembros`, `sienna-miembros-agregar`) e 
 - El árbol detecta herederos con concurrencia de ramas (`Vincenzo/Vicente` y `Paolo/Paulino`) y los marca con badge **Doble linaje**.
 - Cada nodo puede mostrar:
   - **Padre/Madre base** (desde `parent_id`)
-  - **Otro vínculo parental** (inferido por pareja `spouse`, incluso en referencia inversa).
+  - **Otro vínculo parental** (inferido desde `member_parent_links` y `family_unions` cuando existe filiación formal).
 - La foto del heredero puede mostrarse en la esquina superior derecha del nodo con borde redondeado para lectura rápida en reuniones.
 - En nodos de cruce se muestra un bloque visual con **línea punteada transversal** para exposición.
 - Además se genera la tarjeta **Cruces de ramas (doble linaje)** para resumen narrativo frente a familia/abogados.
+- La página de explicación y el PDF individual separan las rutas por fuente para que el doble linaje no quede escondido en una sola línea.
+
+## Indicador de fallecido
+
+- Todo miembro con fecha de defunción (`death`) se marca visualmente como fallecido.
+- En tarjetas del árbol y componentes reutilizables se muestra un lacito negro discreto en una esquina y etiqueta **Fallecido**.
+- El indicador evita tapar la foto cuando existe imagen del heredero.
+- El PDF individual de explicación también imprime **Fallecido** junto a la fecha de defunción.
 
 ## Modo exposición y pantalla completa
 
@@ -115,8 +124,8 @@ Ayuda en pantalla: icono **?** (`sienna-miembros`, `sienna-miembros-agregar`) e 
   - Firma = bruto × (% / 100)
   - Neto repartible = bruto − firma
 - **Árbol Sienna** y **Explicación a herederos** usan la misma función; los montos por heredero = neto × % sucesorio real.
-- Al abrir cada pantalla: se lee Settings y, si existe, el **último snapshot** (restaura bruto y % del snapshot).
-- Guardar montos (árbol) o snapshot (explicación, admin) persiste bruto, % y neto en `sienna_calculation_snapshots`.
+- Al abrir cada pantalla se leen Settings y el cálculo vigente desde la API.
+- Guardar montos en el árbol persiste los pagos calculados sobre los herederos confirmados; Explicación refresca la vista sin alterar Settings globales.
 
 ## Hallazgos — corrección por miembro
 
@@ -133,10 +142,13 @@ Ayuda en pantalla: icono **?** (`sienna-miembros`, `sienna-miembros-agregar`) e 
   - base64 crudo con detección de mime (`jpeg/png/gif/webp`),
   - fallback textual para PDF u otros formatos.
 - El render usa normalización proporcional para evitar imágenes deformadas o invisibles.
+- Si el heredero tiene doble linaje, el PDF imprime las rutas separadas por fuente y porcentaje.
+- Si el miembro está fallecido, el PDF imprime marcador de fallecido con fecha.
 
 ## Pruebas manuales recomendadas
 
 1. Abrir cada ruta en viewport 375px y 1920px.
 2. Verificar scroll de pestañas y tabla sin solapamiento.
 3. Árbol: zoom/scroll y nodos legibles en móvil.
-4. Imprimir desde Explicación (`Imprimir reunión`).
+4. Imprimir árbol completo desde Árbol Sienna.
+5. Imprimir desde Explicación (`Imprimir reunión`) y generar PDF individual de un heredero con soporte documental.

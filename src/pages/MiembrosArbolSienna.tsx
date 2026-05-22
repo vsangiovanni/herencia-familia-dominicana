@@ -27,7 +27,7 @@ import {
 } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/use-toast';
-import { buildDominicanInheritancePlan, classifyMemberByDominicanLaw, normalizeName, summarizeInheritanceStatuses } from '@/lib/dominicanInheritance';
+import { applySiennaCaseConfig, buildDominicanInheritancePlan, classifyMemberByDominicanLaw, normalizeName, summarizeInheritanceStatuses } from '@/lib/dominicanInheritance';
 import { invalidateSiennaData, useSiennaWorkspace } from '@/hooks/useSiennaData';
 import { ConfirmedHeir, EvidenceDocument } from '@/lib/api';
 import {
@@ -208,6 +208,8 @@ const MiembrosArbolSienna = () => {
   const [search, setSearch] = useState('');
   const [viewerMemberId, setViewerMemberId] = useState<string | null>(null);
   const [viewerDocumentId, setViewerDocumentId] = useState<string | null>(null);
+  const [caseConfigRevision, setCaseConfigRevision] = useState(0);
+  const [deletingMemberId, setDeletingMemberId] = useState<string | null>(null);
 
   const loadMembers = async () => {
     setLoadingMessage('Actualizando miembros del árbol...');
@@ -227,6 +229,12 @@ const MiembrosArbolSienna = () => {
     }
     setLoadingMessage('Vinculando documentos y herederos al árbol...');
   }, [isFetching, isLoading]);
+
+  useEffect(() => {
+    if (!workspace) return;
+    applySiennaCaseConfig(workspace.settings?.sienna_case_config);
+    setCaseConfigRevision((current) => current + 1);
+  }, [workspace]);
 
   const ensureDocumentMedia = useCallback(async (document: EvidenceDocument | null | undefined) => {
     if (!document?.id || document.file_data) return;
@@ -263,7 +271,7 @@ const MiembrosArbolSienna = () => {
     [parentLinks, unions]
   );
 
-  const evaluation = useMemo(() => determineInheritance(form, members, genealogy), [form, genealogy, members]);
+  const evaluation = useMemo(() => determineInheritance(form, members, genealogy), [caseConfigRevision, form, genealogy, members]);
   const resolvedInheritanceStatus =
     form.inheritance_status === 'requiere_revision' ? evaluation.inheritance_status : form.inheritance_status;
   const manualInheritanceOverride = form.inheritance_status !== 'requiere_revision';
@@ -273,7 +281,7 @@ const MiembrosArbolSienna = () => {
 
   const inheritancePlan = useMemo(
     () => buildDominicanInheritancePlan(members, genealogy),
-    [genealogy, members]
+    [caseConfigRevision, genealogy, members]
   );
 
   const sortedMembers = useMemo(
@@ -468,10 +476,23 @@ const MiembrosArbolSienna = () => {
       });
       return;
     }
-    await api.deleteSiennaFamilyMember(member.id);
-    invalidateSiennaData(queryClient);
-    await loadMembers();
-    toast({ title: 'Miembro eliminado', description: 'Si tenía descendientes, quedaron como raíz temporal.' });
+    if (!window.confirm(`Eliminar a ${member.name}? Esta accion no se puede deshacer.`)) return;
+
+    setDeletingMemberId(member.id);
+    try {
+      await api.deleteSiennaFamilyMember(member.id);
+      invalidateSiennaData(queryClient);
+      await loadMembers();
+      toast({ title: 'Miembro eliminado', description: 'Si tenía descendientes, quedaron como raíz temporal.' });
+    } catch (error) {
+      toast({
+        title: 'No se pudo eliminar',
+        description: error instanceof Error ? error.message : 'Error desconocido',
+        variant: 'destructive',
+      });
+    } finally {
+      setDeletingMemberId(null);
+    }
   };
 
   const stats = useMemo(() => {
@@ -1193,6 +1214,7 @@ const MiembrosArbolSienna = () => {
                                 variant="ghost"
                                 size="sm"
                                 className="text-red-600 hover:text-red-700"
+                                disabled={deletingMemberId === member.id}
                                 onClick={() => deleteMember(member)}
                               >
                                 <Trash2 className="h-4 w-4" />

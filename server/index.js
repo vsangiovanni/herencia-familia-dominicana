@@ -96,6 +96,383 @@ async function loadGenealogyBundle() {
   };
 }
 
+async function loadSiennaFamilyBundle() {
+  const members = await query(
+    `SELECT sfm.id, sfm.parent_id, sfm.relationship_to_parent, sfm.name, sfm.birth, sfm.death, sfm.spouse_member_id, sfm.spouse, sfm.spouse_birth,
+            sfm.inheritance_status, sfm.inheritance_reason, sfm.is_highlighted_ancestor, sfm.sort_order,
+            sfm.created_by, sfm.updated_by, sfm.created_at, sfm.updated_at,
+            creator.email AS created_by_email, creator.full_name AS created_by_name,
+            updater.email AS updated_by_email, updater.full_name AS updated_by_name
+     FROM sienna_family_members sfm
+     LEFT JOIN profiles creator ON creator.id = sfm.created_by
+     LEFT JOIN profiles updater ON updater.id = sfm.updated_by
+     ORDER BY COALESCE(parent_id, ''), sort_order, name`
+  );
+  const genealogy = await loadGenealogyBundle();
+
+  return {
+    members: members.map((member) => ({
+      ...member,
+      is_highlighted_ancestor: Boolean(member.is_highlighted_ancestor),
+      sort_order: Number(member.sort_order || 0),
+    })),
+    ...genealogy,
+  };
+}
+
+async function loadAppSettings() {
+  const rows = await query('SELECT setting_key, setting_value FROM app_settings');
+  return rows.reduce((acc, row) => {
+    if (row.setting_key === 'sienna_case_config' && row.setting_value) {
+      try {
+        acc[row.setting_key] = JSON.parse(row.setting_value);
+      } catch {
+        acc[row.setting_key] = null;
+      }
+    } else {
+      acc[row.setting_key] = row.setting_value;
+    }
+    return acc;
+  }, {});
+}
+
+async function loadConfirmedHeirs(includeMedia = false) {
+  const photoSelect = includeMedia
+    ? 'h.photo_data'
+    : '(CASE WHEN h.photo_data IS NOT NULL AND CHAR_LENGTH(h.photo_data) > 0 THEN 1 ELSE 0 END) AS has_photo';
+  const heirs = await query(
+    `SELECT h.id, h.sienna_member_id, h.heir_name, h.relationship_summary, h.line_vincenzo, h.line_paolo,
+            h.status, h.notes, h.photo_file_name, h.photo_file_type,
+            h.inheritance_amount, h.created_by, h.updated_by, h.created_at, h.updated_at,
+            ${photoSelect},
+            creator.email AS created_by_email, creator.full_name AS created_by_name,
+            updater.email AS updated_by_email, updater.full_name AS updated_by_name,
+            COUNT(ed.id) AS evidence_count
+     FROM confirmed_heirs h
+     LEFT JOIN evidence_documents ed ON ed.related_heir_name = h.heir_name OR ed.related_member_id = h.sienna_member_id
+     LEFT JOIN profiles creator ON creator.id = h.created_by
+     LEFT JOIN profiles updater ON updater.id = h.updated_by
+     GROUP BY h.id
+     ORDER BY h.heir_name`
+  );
+
+  return heirs.map((heir) => ({
+    ...heir,
+    line_vincenzo: Boolean(heir.line_vincenzo),
+    line_paolo: Boolean(heir.line_paolo),
+    has_photo: includeMedia ? undefined : Boolean(heir.has_photo),
+    inheritance_amount: Number(heir.inheritance_amount || 0),
+    evidence_count: Number(heir.evidence_count || 0),
+  }));
+}
+
+async function loadEvidenceDocuments(includeMedia = false) {
+  const select = includeMedia
+    ? `SELECT *`
+    : `SELECT id, title, document_type, primary_member_id, primary_person, event_date, event_place,
+              father_member_id, father_name, mother_member_id, mother_name, spouse_member_id, spouse_name,
+              related_member_id, related_heir_name, confirms_heir, people_involved, notes, file_name, file_type,
+              created_by, updated_by, created_at, updated_at,
+              (CASE WHEN file_data IS NOT NULL AND CHAR_LENGTH(file_data) > 0 THEN 1 ELSE 0 END) AS has_file,
+              (CASE WHEN extracted_text IS NOT NULL AND CHAR_LENGTH(extracted_text) > 0 THEN 1 ELSE 0 END) AS has_extracted_text`;
+  const documents = await query(`${select} FROM evidence_documents ORDER BY created_at DESC`);
+
+  return documents.map((document) => ({
+    ...document,
+    confirms_heir: Boolean(document.confirms_heir),
+    people_involved: (() => {
+      if (!document.people_involved) return [];
+      try {
+        const parsed = JSON.parse(document.people_involved);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    })(),
+    has_file: includeMedia ? undefined : Boolean(document.has_file),
+    has_extracted_text: includeMedia ? undefined : Boolean(document.has_extracted_text),
+  }));
+}
+
+async function loadEvidenceDocumentById(id) {
+  const documents = await query('SELECT * FROM evidence_documents WHERE id = :id LIMIT 1', { id });
+  if (!documents[0]) return null;
+
+  const document = documents[0];
+  return {
+    ...document,
+    confirms_heir: Boolean(document.confirms_heir),
+    people_involved: (() => {
+      if (!document.people_involved) return [];
+      try {
+        const parsed = JSON.parse(document.people_involved);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    })(),
+  };
+}
+
+const normalizeSiennaName = (value) =>
+  String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const roundMoney = (value) => Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
+
+const resolveEstateAmounts = (grossInput, lawyerFeeInput) => {
+  const grossAmount = Math.max(0, Number(grossInput || 0));
+  const lawyerFeePercentage = Math.min(100, Math.max(0, Number(lawyerFeeInput || 0)));
+  const lawyerFeeAmount = grossAmount > 0 ? roundMoney(grossAmount * (lawyerFeePercentage / 100)) : 0;
+  const distributableAmount = grossAmount > 0 ? roundMoney(Math.max(0, grossAmount - lawyerFeeAmount)) : 0;
+  return { grossAmount, lawyerFeePercentage, lawyerFeeAmount, distributableAmount };
+};
+
+const isChildRelationship = (member) =>
+  member.relationship_to_parent === 'hijo' ||
+  member.relationship_to_parent === 'hija' ||
+  member.relationship_to_parent === 'otro' ||
+  !member.relationship_to_parent;
+const isDeceasedMember = (member) => Boolean(String(member.death || '').trim());
+
+const uniqueMembers = (members) => {
+  const seen = new Set();
+  return members.filter((member) => {
+    if (seen.has(member.id)) return false;
+    seen.add(member.id);
+    return true;
+  });
+};
+
+const getParentLinksForChild = (childId, links) =>
+  links.filter((link) => normalizedMemberId(link.child_member_id) === normalizedMemberId(childId));
+const getParentLinksForParent = (parentId, links) =>
+  links.filter((link) => normalizedMemberId(link.parent_member_id) === normalizedMemberId(parentId));
+const getChildIdsFromLinks = (parentId, links) =>
+  Array.from(new Set(getParentLinksForParent(parentId, links).map((link) => normalizedMemberId(link.child_member_id)).filter(Boolean)));
+
+const findUnionBetween = (memberAId, memberBId, unions) => {
+  const a = normalizedMemberId(memberAId);
+  const b = normalizedMemberId(memberBId);
+  if (!a || !b) return null;
+  return unions.find((union) => {
+    const pa = normalizedMemberId(union.partner_a_member_id);
+    const pb = normalizedMemberId(union.partner_b_member_id);
+    return (pa === a && pb === b) || (pa === b && pb === a);
+  }) || null;
+};
+
+const resolveSpousePartnerForCalculation = (member, members, unions) => {
+  const membersById = new Map(members.map((item) => [item.id, item]));
+  const memberId = normalizedMemberId(member.id);
+  if (member.spouse_member_id && membersById.has(normalizedMemberId(member.spouse_member_id))) {
+    return membersById.get(normalizedMemberId(member.spouse_member_id));
+  }
+  for (const union of unions) {
+    const partnerA = normalizedMemberId(union.partner_a_member_id);
+    const partnerB = normalizedMemberId(union.partner_b_member_id);
+    if (partnerA === memberId && partnerB && membersById.has(partnerB)) return membersById.get(partnerB);
+    if (partnerB === memberId && partnerA && membersById.has(partnerA)) return membersById.get(partnerA);
+  }
+  return members.find((candidate) => candidate.id !== member.id && normalizedMemberId(candidate.spouse_member_id) === memberId) || null;
+};
+
+const getChildrenByUnionId = (unionId, members, links) => {
+  const membersById = new Map(members.map((member) => [member.id, member]));
+  const childIds = Array.from(new Set(
+    links
+      .filter((link) => normalizedMemberId(link.union_id) === normalizedMemberId(unionId))
+      .map((link) => normalizedMemberId(link.child_member_id))
+      .filter(Boolean)
+  ));
+  return childIds.map((id) => membersById.get(id)).filter((member) => member && isChildRelationship(member));
+};
+
+const getDirectChildrenOfMember = (parentId, members, genealogy) => {
+  const childMap = new Map();
+  const pid = normalizedMemberId(parentId);
+  members
+    .filter((item) => normalizedMemberId(item.parent_id) === pid && isChildRelationship(item))
+    .forEach((child) => childMap.set(child.id, child));
+  if (genealogy?.parent_links?.length) {
+    getChildIdsFromLinks(pid, genealogy.parent_links).forEach((childId) => {
+      const child = members.find((item) => item.id === childId);
+      if (child && isChildRelationship(child)) childMap.set(child.id, child);
+    });
+  }
+  return Array.from(childMap.values());
+};
+
+const getDescendantsForRepresentation = (member, members, genealogy) => {
+  const membersById = new Map(members.map((item) => [item.id, item]));
+  const spousePartner = resolveSpousePartnerForCalculation(member, members, genealogy.unions || []);
+  const union = spousePartner ? findUnionBetween(member.id, spousePartner.id, genealogy.unions || []) : null;
+  const links = genealogy.parent_links || [];
+
+  if (links.length > 0) {
+    const childMap = new Map();
+    if (union) getChildrenByUnionId(union.id, members, links).forEach((child) => childMap.set(child.id, child));
+
+    getChildIdsFromLinks(member.id, links).forEach((childId) => {
+      const child = membersById.get(childId);
+      if (!child || !isChildRelationship(child)) return;
+      const unionIds = getParentLinksForChild(childId, links)
+        .filter((link) => normalizedMemberId(link.parent_member_id) === normalizedMemberId(member.id))
+        .map((link) => link.union_id)
+        .filter(Boolean);
+      if (union && unionIds.includes(union.id)) return;
+      if (!unionIds.length) childMap.set(child.id, child);
+    });
+
+    members.filter((item) => normalizedMemberId(item.parent_id) === normalizedMemberId(member.id) && isChildRelationship(item))
+      .forEach((child) => childMap.set(child.id, child));
+    if (childMap.size > 0) return uniqueMembers(Array.from(childMap.values()));
+  }
+
+  const ownChildren = members.filter((item) => normalizedMemberId(item.parent_id) === normalizedMemberId(member.id) && isChildRelationship(item));
+  const spouseChildren = spousePartner
+    ? members.filter((item) => normalizedMemberId(item.parent_id) === normalizedMemberId(spousePartner.id) && isChildRelationship(item))
+    : [];
+  return uniqueMembers([...ownChildren, ...spouseChildren]);
+};
+
+const hasRepresentableHeirs = (member, members, genealogy, visited = new Set()) => {
+  if (!isDeceasedMember(member)) return true;
+  if (visited.has(member.id)) return false;
+  visited.add(member.id);
+  return getDescendantsForRepresentation(member, members, genealogy).some((descendant) =>
+    hasRepresentableHeirs(descendant, members, genealogy, new Set(visited))
+  );
+};
+
+const formatPercentForCalculation = (value) =>
+  `${new Intl.NumberFormat('es-DO', { maximumFractionDigits: 2 }).format(value)}%`;
+
+const addCalculationShare = (shares, member, share, source, route) => {
+  const roundedShare = Math.round(share * 1000000) / 1000000;
+  const existing = shares.get(member.id);
+  const sourceBreakdown = new Map((existing?.sourceBreakdown || []).map((item) => [item.source, { ...item }]));
+  const currentSource = sourceBreakdown.get(source);
+  sourceBreakdown.set(source, {
+    source,
+    share: Math.round(((currentSource?.share || 0) + roundedShare) * 1000000) / 1000000,
+    routes: Array.from(new Set([...(currentSource?.routes || []), route])),
+  });
+  const sources = existing ? Array.from(new Set([...existing.sources, source])) : [source];
+  const nextShare = Math.round(((existing?.share || 0) + roundedShare) * 1000000) / 1000000;
+  const sourceText = sources.join(' y ');
+  shares.set(member.id, {
+    member,
+    share: nextShare,
+    sources,
+    role: 'Heredero final',
+    reason: sources.length > 1
+      ? `Heredero por representación con vocación acumulada en las ramas ${sourceText}.`
+      : `Heredero por representación dentro de la rama ${sourceText}.`,
+    route: existing?.route ? `${existing.route} | ${route}` : route,
+    paymentBasis: sources.length > 1
+      ? `Acumula ${formatPercentForCalculation(nextShare)} por concurrencia de ramas sucesorales calculadas conforme al árbol.`
+      : `Recibe ${formatPercentForCalculation(nextShare)} por la rama ${sourceText}.`,
+    sourceBreakdown: Array.from(sourceBreakdown.values()).sort((left, right) => left.source.localeCompare(right.source, 'es')),
+  });
+};
+
+const distributeByRepresentation = (member, members, genealogy, shares, share, source, route, visited = new Set()) => {
+  const visitKey = `${source}:${member.id}`;
+  if (visited.has(visitKey)) return;
+  visited.add(visitKey);
+  if (!isDeceasedMember(member)) {
+    addCalculationShare(shares, member, share, source, route);
+    return;
+  }
+  const eligibleDescendants = getDescendantsForRepresentation(member, members, genealogy)
+    .filter((descendant) => hasRepresentableHeirs(descendant, members, genealogy));
+  if (!eligibleDescendants.length) return;
+  const childShare = share / eligibleDescendants.length;
+  eligibleDescendants.forEach((child) =>
+    distributeByRepresentation(child, members, genealogy, shares, childShare, source, `${route} -> ${child.name}`, new Set(visited))
+  );
+};
+
+const buildApiInheritancePlan = (members, genealogy, settings) => {
+  const membersByName = new Map(members.map((member) => [normalizeSiennaName(member.name), member]));
+  const causanteName = settings?.sienna_case_config?.causante_name || 'Alessandro de Paola Sangiovanni';
+  const activeRoots = settings?.sienna_case_config?.active_collateral_roots || [
+    { name: 'Vincenzo (Vicente) Sangiovanni', label: 'Vincenzo/Vicente' },
+    { name: 'Paolo (Paulino) Sangiovanni', label: 'Paolo/Paulino' },
+  ];
+  const causante = membersByName.get(normalizeSiennaName(causanteName));
+  const shares = new Map();
+
+  if (causante) {
+    const directDescendants = getDirectChildrenOfMember(causante.id, members, genealogy)
+      .filter((descendant) => hasRepresentableHeirs(descendant, members, genealogy));
+    if (directDescendants.length) {
+      const share = 100 / directDescendants.length;
+      directDescendants.forEach((child) =>
+        distributeByRepresentation(child, members, genealogy, shares, share, 'Descendencia directa', `${causante.name} -> ${child.name}`)
+      );
+    }
+  }
+
+  if (!shares.size) {
+    const roots = activeRoots
+      .map((root) => ({ ...root, member: membersByName.get(normalizeSiennaName(root.name)) }))
+      .filter((root) => root.member);
+    const rootShare = roots.length ? 100 / roots.length : 0;
+    roots.forEach((root) =>
+      distributeByRepresentation(root.member, members, genealogy, shares, rootShare, root.label, root.member.name)
+    );
+  }
+
+  const activeHeirs = Array.from(shares.values()).sort((a, b) => b.share - a.share || a.member.name.localeCompare(b.member.name, 'es'));
+  return { activeHeirs, totalShare: Math.round(activeHeirs.reduce((sum, item) => sum + item.share, 0) * 1000000) / 1000000 };
+};
+
+const buildCalculationRows = (activeHeirs, distributableAmount) => {
+  const rows = activeHeirs.map((share) => ({
+    member_id: share.member.id,
+    heir_name: share.member.name,
+    share_percent: share.share,
+    amount: roundMoney(distributableAmount * (share.share / 100)),
+    route: share.route,
+    payment_basis: share.paymentBasis,
+    reason: share.reason,
+    sources: share.sources,
+    source_breakdown: share.sourceBreakdown,
+  }));
+  const total = roundMoney(rows.reduce((sum, row) => sum + row.amount, 0));
+  const delta = roundMoney(distributableAmount - total);
+  if (rows.length && Math.abs(delta) >= 0.01) {
+    const targetIndex = rows.reduce((best, row, index) => (row.amount > rows[best].amount ? index : best), 0);
+    rows[targetIndex].amount = roundMoney(rows[targetIndex].amount + delta);
+  }
+  return rows;
+};
+
+async function buildSiennaRealtimeCalculation({ estateAmount, lawyerFeePercentage } = {}) {
+  const family = await loadSiennaFamilyBundle();
+  const settings = await loadAppSettings();
+  const grossInput = estateAmount ?? settings.estate_amount ?? 0;
+  const feeInput = lawyerFeePercentage ?? settings.lawyer_fee_percentage ?? 0;
+  const estate = resolveEstateAmounts(grossInput, feeInput);
+  const plan = buildApiInheritancePlan(family.members, { unions: family.unions, parent_links: family.parent_links }, settings);
+  const rows = buildCalculationRows(plan.activeHeirs, estate.distributableAmount);
+  return {
+    estate,
+    causante_name: settings?.sienna_case_config?.causante_name || 'Alessandro de Paola Sangiovanni',
+    total_share: plan.totalShare,
+    active_heirs: rows,
+    active_heir_count: rows.length,
+    generated_at: new Date().toISOString(),
+  };
+}
+
 async function syncMemberFiliation({
   memberId,
   parentId,
@@ -320,6 +697,11 @@ async function ensureSchemaMigrations() {
      VALUES ('lawyer_fee_percentage', '0')
      ON DUPLICATE KEY UPDATE setting_key = setting_key`
   );
+  await query(
+    `INSERT INTO app_settings (setting_key, setting_value)
+     VALUES ('estate_amount', '0')
+     ON DUPLICATE KEY UPDATE setting_key = setting_key`
+  );
 
   await query(
     `CREATE TABLE IF NOT EXISTS sienna_family_members (
@@ -433,7 +815,7 @@ async function ensureSchemaMigrations() {
 
   const existingMembers = await query('SELECT COUNT(*) AS count FROM sienna_family_members');
   const existingHeirs = await query('SELECT COUNT(*) AS count FROM confirmed_heirs');
-  const seedCaseData = ['1', 'true', 'yes', 'on'].includes(String(process.env.SEED_CASE_DATA || 'false').toLowerCase());
+  const seedCaseData = String(process.env.SEED_CASE_DATA || '').toLowerCase() === 'force-empty-case-seed';
   if (seedCaseData && Number(existingMembers[0]?.count || 0) === 0 && Number(existingHeirs[0]?.count || 0) === 0) {
     const members = [
       ['domenico', null, 'Domenico (Domingo) Sangiovanni', '17/12/1845', null, null, 'María Rosa Grisolia', '18/07/1852', false, 10],
@@ -556,25 +938,22 @@ app.get('/api/pages', requireAuth, async (_req, res) => {
 });
 
 app.get('/api/settings', requireAuth, async (_req, res) => {
-  const rows = await query('SELECT setting_key, setting_value FROM app_settings');
-  res.json({
-    settings: rows.reduce((acc, row) => {
-      if (row.setting_key === 'sienna_case_config' && row.setting_value) {
-        try {
-          acc[row.setting_key] = JSON.parse(row.setting_value);
-        } catch {
-          acc[row.setting_key] = null;
-        }
-      } else {
-        acc[row.setting_key] = row.setting_value;
-      }
-      return acc;
-    }, {}),
-  });
+  res.json({ settings: await loadAppSettings() });
 });
 
 app.put('/api/settings', requireAuth, requireAdmin, async (req, res) => {
   const resultSettings = {};
+  if ('estate_amount' in (req.body || {})) {
+    const rawAmount = Number(req.body?.estate_amount || 0);
+    const estateAmount = Math.max(0, rawAmount);
+    await query(
+      `INSERT INTO app_settings (setting_key, setting_value, updated_by)
+       VALUES ('estate_amount', :value, :updatedBy)
+       ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_by = VALUES(updated_by)`,
+      { value: String(estateAmount), updatedBy: req.user.id }
+    );
+    resultSettings.estate_amount = estateAmount;
+  }
   if ('lawyer_fee_percentage' in (req.body || {})) {
     const rawFee = Number(req.body?.lawyer_fee_percentage || 0);
     const lawyerFeePercentage = Math.min(100, Math.max(0, rawFee));
@@ -727,31 +1106,26 @@ app.get('/api/page-visits', requireAuth, requireAdmin, async (_req, res) => {
   res.json({ visits });
 });
 
-app.get('/api/confirmed-heirs', requireAuth, async (_req, res) => {
-  const heirs = await query(
-    `SELECT h.id, h.sienna_member_id, h.heir_name, h.relationship_summary, h.line_vincenzo, h.line_paolo,
-            h.status, h.notes, h.photo_file_name, h.photo_file_type, h.photo_data,
-            h.inheritance_amount, h.created_by, h.updated_by, h.created_at, h.updated_at,
-            creator.email AS created_by_email, creator.full_name AS created_by_name,
-            updater.email AS updated_by_email, updater.full_name AS updated_by_name,
-            COUNT(ed.id) AS evidence_count
-     FROM confirmed_heirs h
-     LEFT JOIN evidence_documents ed ON ed.related_heir_name = h.heir_name OR ed.related_member_id = h.sienna_member_id
-     LEFT JOIN profiles creator ON creator.id = h.created_by
-     LEFT JOIN profiles updater ON updater.id = h.updated_by
-     GROUP BY h.id
-     ORDER BY h.heir_name`
-  );
+app.get('/api/confirmed-heirs', requireAuth, async (req, res) => {
+  res.json({ heirs: await loadConfirmedHeirs(req.query.includeMedia === '1') });
+});
 
-  res.json({
-    heirs: heirs.map((heir) => ({
-      ...heir,
-      line_vincenzo: Boolean(heir.line_vincenzo),
-      line_paolo: Boolean(heir.line_paolo),
-      inheritance_amount: Number(heir.inheritance_amount || 0),
-      evidence_count: Number(heir.evidence_count || 0),
-    })),
-  });
+app.post('/api/confirmed-heirs/bulk-amounts', requireAuth, async (req, res) => {
+  const items = Array.isArray(req.body?.items) ? req.body.items : [];
+  for (const item of items) {
+    if (!item || typeof item !== 'object') continue;
+    const id = String(item.id || '').trim();
+    if (!id) continue;
+    await query(
+      'UPDATE confirmed_heirs SET inheritance_amount = :amount, updated_by = :updatedBy WHERE id = :id',
+      {
+        id,
+        amount: Number(item.inheritance_amount || 0),
+        updatedBy: req.user.id,
+      }
+    );
+  }
+  res.json({ ok: true });
 });
 
 app.put('/api/confirmed-heirs/:id', requireAuth, async (req, res) => {
@@ -867,29 +1241,36 @@ app.post('/api/confirmed-heirs', requireAuth, async (req, res) => {
   res.status(201).json({ ok: true });
 });
 
-app.get('/api/sienna-family-members', requireAuth, async (_req, res) => {
-  const members = await query(
-    `SELECT sfm.id, sfm.parent_id, sfm.relationship_to_parent, sfm.name, sfm.birth, sfm.death, sfm.spouse_member_id, sfm.spouse, sfm.spouse_birth,
-            sfm.inheritance_status, sfm.inheritance_reason, sfm.is_highlighted_ancestor, sfm.sort_order,
-            sfm.created_by, sfm.updated_by, sfm.created_at, sfm.updated_at,
-            creator.email AS created_by_email, creator.full_name AS created_by_name,
-            updater.email AS updated_by_email, updater.full_name AS updated_by_name
-     FROM sienna_family_members sfm
-     LEFT JOIN profiles creator ON creator.id = sfm.created_by
-     LEFT JOIN profiles updater ON updater.id = sfm.updated_by
-     ORDER BY COALESCE(parent_id, ''), sort_order, name`
+app.get('/api/sienna-workspace', requireAuth, async (req, res) => {
+  const includeMedia = req.query.includeMedia === '1';
+  const family = await loadSiennaFamilyBundle();
+  const snapshotRows = await query(
+    `SELECT id, estate_amount, lawyer_fee_percentage, distributable_amount, members_hash, payload_json, created_by, created_at
+     FROM sienna_calculation_snapshots
+     ORDER BY created_at DESC
+     LIMIT 1`
   );
-  const genealogy = await loadGenealogyBundle();
 
   res.json({
-    members: members.map((member) => ({
-      ...member,
-      is_highlighted_ancestor: Boolean(member.is_highlighted_ancestor),
-      sort_order: Number(member.sort_order || 0),
-    })),
-    unions: genealogy.unions,
-    parent_links: genealogy.parent_links,
+    ...family,
+    heirs: await loadConfirmedHeirs(includeMedia),
+    documents: await loadEvidenceDocuments(includeMedia),
+    settings: await loadAppSettings(),
+    snapshot: snapshotRows[0] || null,
   });
+});
+
+app.get('/api/sienna-calculation', requireAuth, async (req, res) => {
+  res.json({
+    calculation: await buildSiennaRealtimeCalculation({
+      estateAmount: req.query.estate_amount,
+      lawyerFeePercentage: req.query.lawyer_fee_percentage,
+    }),
+  });
+});
+
+app.get('/api/sienna-family-members', requireAuth, async (_req, res) => {
+  res.json(await loadSiennaFamilyBundle());
 });
 
 app.post('/api/sienna-family-members', requireAuth, async (req, res) => {
@@ -1009,32 +1390,16 @@ app.delete('/api/sienna-family-members/:id', requireAuth, requireAdmin, async (r
   res.json({ ok: true });
 });
 
-app.get('/api/evidence-documents', requireAuth, async (_req, res) => {
-  const documents = await query(
-    `SELECT id, title, document_type, primary_member_id, primary_person, event_date, event_place,
-            father_member_id, father_name, mother_member_id, mother_name, spouse_member_id, spouse_name,
-            related_member_id, related_heir_name, confirms_heir,
-            people_involved, extracted_text, notes, file_name, file_type, file_data,
-            created_by, created_at, updated_at
-     FROM evidence_documents
-     ORDER BY created_at DESC`
-  );
+app.get('/api/evidence-documents', requireAuth, async (req, res) => {
+  res.json({ documents: await loadEvidenceDocuments(req.query.includeMedia === '1') });
+});
 
-  res.json({
-    documents: documents.map((document) => ({
-      ...document,
-      confirms_heir: Boolean(document.confirms_heir),
-      people_involved: (() => {
-        if (!document.people_involved) return [];
-        try {
-          const parsed = JSON.parse(document.people_involved);
-          return Array.isArray(parsed) ? parsed : [];
-        } catch {
-          return [];
-        }
-      })(),
-    })),
-  });
+app.get('/api/evidence-documents/:id', requireAuth, async (req, res) => {
+  const document = await loadEvidenceDocumentById(req.params.id);
+  if (!document) {
+    return res.status(404).json({ message: 'Documento no encontrado' });
+  }
+  res.json({ document });
 });
 
 app.post('/api/evidence-documents', requireAuth, async (req, res) => {
@@ -1147,10 +1512,10 @@ app.post('/api/sienna-calculation-snapshots', requireAuth, async (req, res) => {
   const snapshotId = randomUUID();
   await query(
     `INSERT INTO sienna_calculation_snapshots (
-       id, estate_amount, lawyer_fee_percentage, distributable_amount, members_hash, payload_json, created_by
+       id, estate_amount, lawyer_fee_percentage, distributable_amount, members_hash, payload_json, created_by, created_at
      )
      VALUES (
-       :id, :estateAmount, :lawyerFeePercentage, :distributableAmount, :membersHash, :payloadJson, :createdBy
+       :id, :estateAmount, :lawyerFeePercentage, :distributableAmount, :membersHash, :payloadJson, :createdBy, UTC_TIMESTAMP()
      )`,
     {
       id: snapshotId,

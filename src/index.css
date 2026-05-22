@@ -168,9 +168,27 @@
 
 /* Sienna: arbol clasico responsivo (movil y pantallas grandes) */
 .classic-family-tree {
-  width: 100%;
-  max-width: 100%;
   -webkit-overflow-scrolling: touch;
+}
+
+.tree-viewport {
+  position: relative;
+  height: min(74vh, 780px);
+  min-height: 520px;
+  overflow: hidden;
+  touch-action: none;
+  overscroll-behavior: contain;
+}
+
+.tree-world {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: max-content;
+  max-width: none;
+  padding: 2rem;
+  transform-origin: 0 0;
+  will-change: transform;
 }
 
 .classic-tree-root {
@@ -227,6 +245,57 @@
   width: 3px;
   transform: translateX(-50%);
   background: #0a2463;
+}
+
+.deceased-ribbon-badge {
+  position: absolute;
+  z-index: 20;
+  display: inline-flex;
+  height: 24px;
+  width: 24px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 1px solid rgb(31 41 55 / 0.35);
+  background: rgb(255 255 255 / 0.94);
+  box-shadow: 0 1px 3px rgb(15 23 42 / 0.18);
+}
+
+.deceased-ribbon {
+  position: relative;
+  display: block;
+  height: 18px;
+  width: 16px;
+}
+
+.deceased-ribbon::before,
+.deceased-ribbon::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  height: 9px;
+  width: 7px;
+  border-radius: 9999px 9999px 5px 5px;
+  background: #111827;
+}
+
+.deceased-ribbon::before {
+  left: 2px;
+  transform: rotate(-34deg);
+}
+
+.deceased-ribbon::after {
+  right: 2px;
+  transform: rotate(34deg);
+}
+
+.deceased-ribbon {
+  background:
+    linear-gradient(61deg, transparent 0 43%, #111827 45% 58%, transparent 60%),
+    linear-gradient(119deg, transparent 0 43%, #111827 45% 58%, transparent 60%);
+  background-position: center 8px;
+  background-repeat: no-repeat;
+  background-size: 16px 10px;
 }
 
 .sienna-tabs-scroll {

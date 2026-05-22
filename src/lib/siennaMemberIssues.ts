@@ -141,7 +141,7 @@ export const buildMemberIssueRows = (
     if (!isChildMember(child) || !child.parent_id) return;
 
     const links = getParentLinksForChild(child.id, parentLinks);
-    if (!links.length || links.some((link) => link.union_id)) return;
+    if (!links.length) return;
 
     const parent = membersById.get(child.parent_id);
     if (!parent) return;
@@ -149,6 +149,36 @@ export const buildMemberIssueRows = (
     const unionOptions = buildUnionOptionsForParent(parent.id, unions, membersById).filter(
       (option) => !option.label.includes('inconsistente')
     );
+
+    const inconsistentUnion = links
+      .map((link) => unions.find((union) => union.id === link.union_id))
+      .find((union): union is FamilyUnion => Boolean(union?.is_inconsistent));
+    if (inconsistentUnion) {
+      const defaultUnion = unionOptions[0]?.id || '';
+      const secondParentOptions = buildSecondParentOptions(parent.id, defaultUnion, members, unions);
+
+      rows.push({
+        id: `inconsistent-filiation-${child.id}`,
+        memberId: child.id,
+        memberName: child.name,
+        kind: 'complete_filiation',
+        severity: 'Alta prioridad',
+        problem: 'Su filiación usa una unión marcada como inconsistente.',
+        solution: 'Seleccione una unión formal válida y el segundo progenitor, luego guarde la filiación.',
+        context: inconsistentUnion.inconsistency_reason || `Unión actual: ${formatUnionLabel(inconsistentUnion, membersById)}`,
+        defaults: {
+          spouseMemberId: '',
+          filiationUnionId: defaultUnion,
+          secondParentId: secondParentOptions[0]?.id || '',
+        },
+        spouseOptions: [],
+        unionOptions,
+        secondParentOptions,
+      });
+      return;
+    }
+
+    if (links.some((link) => link.union_id)) return;
     if (!unionOptions.length) return;
 
     const defaultUnion = unionOptions[0].id;

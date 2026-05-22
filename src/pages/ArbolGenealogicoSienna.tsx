@@ -4,8 +4,8 @@ import BackButton from '@/components/BackButton';
 import DocumentHeader from '@/components/DocumentHeader';
 import SoftLoadingIndicator from '@/components/SoftLoadingIndicator';
 import { api, ConfirmedHeir, MemberParentLink, SiennaFamilyMember } from '@/lib/api';
-import { invalidateSiennaData, useSiennaWorkspace } from '@/hooks/useSiennaData';
-import { formatUnionLabel, getParentLinksForChild, resolveSpouseDisplayLabel, resolveSpousePartner, SiennaGenealogyBundle } from '@/lib/siennaGenealogy';
+import { invalidateSiennaData, useSiennaCalculation, useSiennaWorkspace } from '@/hooks/useSiennaData';
+import { formatUnionLabel, getParentLinksForChild, resolveSpouseDisplayLabel, SiennaGenealogyBundle } from '@/lib/siennaGenealogy';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,7 +13,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/components/ui/use-toast';
-import { useAuth } from '@/context/AuthContext';
 import {
   applySiennaCaseConfig,
   buildDominicanInheritancePlan,
@@ -26,7 +25,7 @@ import { cn } from '@/lib/utils';
 import { Calculator, ClipboardCheck, FileText, GitBranch, GitMerge, Landmark, Maximize2, Minimize2, Printer, RotateCcw, Route, Save, Users, ZoomIn, ZoomOut } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { buildWhyIInheritText, formatMoney as formatMoneyExplain, formatPercent as formatPercentExplain } from '@/lib/siennaHeirExplain';
-import { buildCalculationPayload, buildMembersHash, calculateHeirAmount, parseCalculationPayload, resolveEstateAmounts } from '@/lib/siennaCalculation';
+import { calculateHeirAmount, resolveEstateAmounts } from '@/lib/siennaCalculation';
 
 type TreeMember = SiennaFamilyMember & { children: TreeMember[] };
 
@@ -103,6 +102,45 @@ const formatPercent = (value: number) =>
   `${new Intl.NumberFormat('es-DO', { maximumFractionDigits: 2 }).format(value)}%`;
 
 const normalizedMemberId = (value: string | null | undefined) => (value || '').trim();
+const isDeceasedMember = (member: SiennaFamilyMember) => Boolean(member.death?.trim());
+const MIN_TREE_ZOOM = 0.15;
+const MAX_TREE_ZOOM = 2.5;
+const clampTreeZoom = (value: number) => Math.min(MAX_TREE_ZOOM, Math.max(MIN_TREE_ZOOM, value));
+
+const resolveFormalOtherParent = (
+  child: SiennaFamilyMember,
+  baseParent: SiennaFamilyMember | null,
+  membersById: Map<string, SiennaFamilyMember>,
+  genealogy: SiennaGenealogyBundle
+) => {
+  if (!baseParent) return null;
+
+  const baseParentId = normalizedMemberId(baseParent.id);
+  const childLinks = getParentLinksForChild(child.id, genealogy.parent_links);
+  const explicitOtherParent = childLinks
+    .map((link) => normalizedMemberId(link.parent_member_id))
+    .filter((parentId) => parentId && parentId !== baseParentId)
+    .map((parentId) => membersById.get(parentId))
+    .find((parent): parent is SiennaFamilyMember => Boolean(parent));
+
+  if (explicitOtherParent) return explicitOtherParent;
+
+  const baseParentUnionId = childLinks.find(
+    (link) =>
+      normalizedMemberId(link.parent_member_id) === baseParentId &&
+      normalizedMemberId(link.union_id)
+  )?.union_id;
+
+  if (!baseParentUnionId) return null;
+
+  const union = genealogy.unions.find((item) => item.id === baseParentUnionId);
+  if (!union) return null;
+
+  const partnerA = normalizedMemberId(union.partner_a_member_id);
+  const partnerB = normalizedMemberId(union.partner_b_member_id);
+  const otherParentId = partnerA === baseParentId ? partnerB : partnerB === baseParentId ? partnerA : '';
+  return otherParentId ? membersById.get(otherParentId) || null : null;
+};
 
 const ClassicNode = ({
   member,
@@ -140,7 +178,7 @@ const ClassicNode = ({
   const referenceTotal = estateAmount > 0 ? estateAmount : total;
   const share = inheritanceShare?.share || (referenceTotal > 0 && amount > 0 ? (amount / referenceTotal) * 100 : 0);
   const parent = member.parent_id ? membersById.get(normalizedMemberId(member.parent_id)) || null : null;
-  const otherParent = parent ? resolveSpousePartner(parent, allMembers, genealogy, 'calculation') : null;
+  const otherParent = resolveFormalOtherParent(member, parent, membersById, genealogy);
   const spouseLabel = resolveSpouseDisplayLabel(member, allMembers, genealogy);
   const hasDualLineage = (inheritanceShare?.sources.length || 0) > 1;
   const childLinks = getParentLinksForChild(member.id, genealogy.parent_links);
@@ -148,6 +186,7 @@ const ClassicNode = ({
   const filiationUnion = unionLink?.union_id
     ? genealogy.unions.find((union) => union.id === unionLink.union_id) || null
     : null;
+  const isDeceased = isDeceasedMember(member);
 
   return (
     <li className="relative">
@@ -159,6 +198,19 @@ const ClassicNode = ({
             isHeir && 'border-legal-gold bg-legal-gold/5 shadow-md'
           )}
         >
+          {isDeceased && (
+            <div
+              className={cn(
+                'deceased-ribbon-badge',
+                heir?.photo_data ? 'right-12 top-2' : 'right-2 top-2'
+              )}
+              title={member.death ? `Fallecido: ${member.death}` : 'Fallecido'}
+              aria-label={member.death ? `Fallecido: ${member.death}` : 'Fallecido'}
+            >
+              <span className="deceased-ribbon" aria-hidden="true" />
+            </div>
+          )}
+
           {heir?.photo_data && (
             <div className="absolute -right-3 -top-3 z-10">
               <Avatar className="h-14 w-14 rounded-xl border-2 border-legal-gold/60 shadow-lg">
@@ -177,6 +229,14 @@ const ClassicNode = ({
             {member.birth && member.death && <span> - </span>}
             {member.death && <span>m. {member.death}</span>}
           </div>
+
+          {isDeceased && (
+            <div className="mt-2 flex justify-center">
+              <Badge variant="outline" className="border-gray-400 bg-gray-50 text-gray-800">
+                Fallecido
+              </Badge>
+            </div>
+          )}
 
           {spouseLabel && (
             <div className="mt-1 text-xs">
@@ -300,7 +360,6 @@ const ClassicNode = ({
 };
 
 const ArbolGenealogicoSienna = () => {
-  const { isAdmin } = useAuth();
   const queryClient = useQueryClient();
   const { data: workspace, isLoading, isFetching, refetch } = useSiennaWorkspace(true);
   const members = workspace?.members ?? [];
@@ -314,24 +373,30 @@ const ArbolGenealogicoSienna = () => {
   );
   const [estateAmount, setEstateAmount] = useState('');
   const [lawyerFeePercentage, setLawyerFeePercentage] = useState('0');
-  const [snapshotNote, setSnapshotNote] = useState('');
   const [isPresentationMode, setIsPresentationMode] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [isPanningTree, setIsPanningTree] = useState(false);
-  const [lastSnapshotAt, setLastSnapshotAt] = useState<string | null>(null);
   const [workspaceInitialized, setWorkspaceInitialized] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('Cargando árbol y cálculos sucesorales...');
   const [paymentSaving, setPaymentSaving] = useState(false);
-  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [treePan, setTreePan] = useState({ x: 40, y: 40 });
   const treeScreenRef = useRef<HTMLDivElement | null>(null);
   const treeViewportRef = useRef<HTMLDivElement | null>(null);
+  const treeWorldRef = useRef<HTMLDivElement | null>(null);
   const treePanRef = useRef({
     dragging: false,
     startX: 0,
     startY: 0,
-    scrollLeft: 0,
-    scrollTop: 0,
+    startPanX: 0,
+    startPanY: 0,
+  });
+  const treePinchRef = useRef({
+    active: false,
+    distance: 0,
+    zoom: 1,
+    centerX: 0,
+    centerY: 0,
   });
 
   const loadData = async () => {
@@ -343,29 +408,8 @@ const ArbolGenealogicoSienna = () => {
     if (!workspace || workspaceInitialized) return;
 
     applySiennaCaseConfig(workspace.settings.sienna_case_config);
-    if (workspace.snapshot) {
-      const currentMembersHash = buildMembersHash(workspace.members.map((member) => member.id));
-      if (
-        workspace.snapshot.members_hash &&
-        workspace.snapshot.members_hash !== currentMembersHash
-      ) {
-        toast({
-          title: 'Snapshot desactualizado',
-          description: 'El último snapshot no coincide con los miembros actuales de la DB. Revise y regenere el cálculo.',
-          variant: 'destructive',
-        });
-      }
-      const parsedPayload = parseCalculationPayload(workspace.snapshot.payload_json);
-      if (parsedPayload?.notes) {
-        setSnapshotNote(parsedPayload.notes);
-      }
-      setEstateAmount(String(workspace.snapshot.estate_amount ?? 0));
-      setLawyerFeePercentage(String(workspace.snapshot.lawyer_fee_percentage ?? 0));
-      setLastSnapshotAt(workspace.snapshot.created_at || null);
-    } else {
-      setLawyerFeePercentage(String(workspace.settings.lawyer_fee_percentage ?? 0));
-      setLastSnapshotAt(null);
-    }
+    setEstateAmount(String(workspace.settings.estate_amount ?? 0));
+    setLawyerFeePercentage(String(workspace.settings.lawyer_fee_percentage ?? 0));
     setWorkspaceInitialized(true);
   }, [workspace, workspaceInitialized]);
 
@@ -399,6 +443,7 @@ const ArbolGenealogicoSienna = () => {
   useEffect(() => {
     const stopTreePan = () => {
       treePanRef.current.dragging = false;
+      treePinchRef.current.active = false;
       setIsPanningTree(false);
     };
     window.addEventListener('mouseup', stopTreePan);
@@ -406,6 +451,37 @@ const ArbolGenealogicoSienna = () => {
       window.removeEventListener('mouseup', stopTreePan);
     };
   }, []);
+
+  const centerTree = (nextZoom = zoomLevel) => {
+    const viewport = treeViewportRef.current;
+    const world = treeWorldRef.current;
+    if (!viewport || !world) return;
+    const worldWidth = world.scrollWidth;
+    const worldHeight = world.scrollHeight;
+    if (!worldWidth || !worldHeight) return;
+    setTreePan({
+      x: (viewport.clientWidth - worldWidth * nextZoom) / 2,
+      y: Math.max(24, (viewport.clientHeight - worldHeight * nextZoom) / 2),
+    });
+  };
+
+  const fitTreeToScreen = () => {
+    const viewport = treeViewportRef.current;
+    const world = treeWorldRef.current;
+    if (!viewport || !world) return;
+    const worldWidth = world.scrollWidth;
+    const worldHeight = world.scrollHeight;
+    if (!worldWidth || !worldHeight) return;
+    const padding = 56;
+    const nextZoom = clampTreeZoom(
+      Math.min(
+        (viewport.clientWidth - padding) / worldWidth,
+        (viewport.clientHeight - padding) / worldHeight
+      )
+    );
+    setZoomLevel(Number(nextZoom.toFixed(3)));
+    centerTree(nextZoom);
+  };
 
   const total = useMemo(
     () => heirs.reduce((sum, heir) => sum + Number(heir.inheritance_amount || 0), 0),
@@ -421,6 +497,11 @@ const ArbolGenealogicoSienna = () => {
     lawyerFeeAmount,
     distributableAmount: distributableEstateAmount,
   } = estate;
+  const { data: realtimeCalculationData, isFetching: isFetchingCalculation } = useSiennaCalculation(
+    estateAmount,
+    lawyerFeePercentage
+  );
+  const realtimeCalculation = realtimeCalculationData?.calculation;
 
   const heirsByName = useMemo(
     () => new Map(heirs.map((heir) => [normalizeName(heir.heir_name), heir])),
@@ -436,6 +517,11 @@ const ArbolGenealogicoSienna = () => {
   );
 
   const forest = useMemo(() => buildForest(members, genealogy), [genealogy, members]);
+  useEffect(() => {
+    if (loading || !forest.length) return;
+    const frame = window.requestAnimationFrame(() => fitTreeToScreen());
+    return () => window.cancelAnimationFrame(frame);
+  }, [forest.length, loading]);
   const orphanMembers = useMemo(() => {
     const ids = new Set(members.map((member) => member.id));
     return members.filter((member) => member.parent_id && !ids.has(member.parent_id));
@@ -449,30 +535,35 @@ const ArbolGenealogicoSienna = () => {
           const baseParent = share.member.parent_id
             ? membersById.get(normalizedMemberId(share.member.parent_id)) || null
             : null;
-          const linkedParent = baseParent
-            ? resolveSpousePartner(baseParent, members, genealogy, 'calculation')
-            : null;
           return {
             memberId: share.member.id,
             memberName: share.member.name,
             sources: share.sources.join(' + '),
             baseParentName: baseParent?.name || 'No definido',
-            linkedParentName: linkedParent?.name || 'No definido',
+            linkedParentName: resolveFormalOtherParent(share.member, baseParent, membersById, genealogy)?.name || 'No definido',
+            routes: share.sourceBreakdown.flatMap((segment) => segment.routes),
           };
         }),
     [genealogy, inheritancePlan.activeHeirs, members, membersById]
   );
   const calculatedPayments = useMemo(() => {
     const totalEstate = distributableEstateAmount;
+    const calculationRowsByMemberId = new Map(
+      (realtimeCalculation?.active_heirs ?? []).map((row) => [row.member_id, row])
+    );
     return inheritancePlan.activeHeirs.map((share) => {
       const heir = heirsByMemberId.get(share.member.id) || heirsByName.get(normalizeName(share.member.name));
       return {
         heir,
         share,
-        amount: totalEstate > 0 ? calculateHeirAmount(share.share, totalEstate) : Number(heir?.inheritance_amount || 0),
+        amount: totalEstate > 0 ? calculationRowsByMemberId.get(share.member.id)?.amount || 0 : Number(heir?.inheritance_amount || 0),
       };
     });
-  }, [distributableEstateAmount, heirsByMemberId, heirsByName, inheritancePlan]);
+  }, [distributableEstateAmount, heirsByMemberId, heirsByName, inheritancePlan, realtimeCalculation?.active_heirs]);
+  const activePaymentHeirIds = useMemo(
+    () => new Set(calculatedPayments.map(({ heir }) => heir?.id).filter((id): id is string => Boolean(id))),
+    [calculatedPayments]
+  );
   const presentationStats = useMemo(() => {
     const summary = summarizeInheritanceStatuses(members, genealogy, inheritancePlan);
     return {
@@ -497,11 +588,17 @@ const ArbolGenealogicoSienna = () => {
           id: heir!.id,
           inheritance_amount: amount,
         }));
+      const inactiveItems = heirs
+        .filter((heir) => heir.id && !activePaymentHeirIds.has(heir.id) && Number(heir.inheritance_amount || 0) !== 0)
+        .map((heir) => ({
+          id: heir.id,
+          inheritance_amount: 0,
+        }));
 
       const createItems = calculatedPayments.filter(({ heir }) => !heir?.id);
 
-      if (bulkItems.length) {
-        await api.bulkUpdateHeirAmounts(bulkItems);
+      if (bulkItems.length || inactiveItems.length) {
+        await api.bulkUpdateHeirAmounts([...bulkItems, ...inactiveItems]);
       }
 
       await Promise.all(
@@ -518,22 +615,9 @@ const ArbolGenealogicoSienna = () => {
           })
         )
       );
-      await api.saveSiennaCalculationSnapshot({
-        estate_amount: estateAmountNumber,
-        lawyer_fee_percentage: lawyerFeePercentageNumber,
-        distributable_amount: totalEstate,
-        members_hash: buildMembersHash(members.map((member) => member.id)),
-        payload_json: JSON.stringify(
-          buildCalculationPayload(
-            inheritancePlan,
-            totalEstate,
-            snapshotNote || 'Snapshot guardado desde Árbol Sienna (calcular y guardar pagos).'
-          )
-        ),
-      }      );
       invalidateSiennaData(queryClient);
       await loadData();
-      toast({ title: 'Montos calculados', description: 'Los pagos quedaron guardados y el árbol fue actualizado.' });
+      toast({ title: 'Montos calculados', description: 'La API calculó en vivo, guardó los pagos y actualizó el árbol.' });
     } catch (error) {
       toast({
         title: 'No se pudieron guardar los montos',
@@ -542,22 +626,6 @@ const ArbolGenealogicoSienna = () => {
       });
     } finally {
       setPaymentSaving(false);
-    }
-  };
-
-  const saveLawyerFee = async () => {
-    setSettingsSaving(true);
-    try {
-      await api.updateSettings({ lawyer_fee_percentage: lawyerFeePercentageNumber });
-      toast({ title: 'Porcentaje guardado', description: 'La comisión de la firma quedó guardada para el cálculo Sienna.' });
-    } catch (error) {
-      toast({
-        title: 'No se pudo guardar el porcentaje',
-        description: error instanceof Error ? error.message : 'Error desconocido',
-        variant: 'destructive',
-      });
-    } finally {
-      setSettingsSaving(false);
     }
   };
 
@@ -588,14 +656,44 @@ const ArbolGenealogicoSienna = () => {
     }
   };
 
+  const zoomTreeAt = (clientX: number, clientY: number, nextZoom: number) => {
+    const viewport = treeViewportRef.current;
+    if (!viewport) return;
+    const rect = viewport.getBoundingClientRect();
+    const clampedZoom = clampTreeZoom(nextZoom);
+    const worldX = (clientX - rect.left - treePan.x) / zoomLevel;
+    const worldY = (clientY - rect.top - treePan.y) / zoomLevel;
+    setZoomLevel(Number(clampedZoom.toFixed(3)));
+    setTreePan({
+      x: clientX - rect.left - worldX * clampedZoom,
+      y: clientY - rect.top - worldY * clampedZoom,
+    });
+  };
+
+  const nudgeZoom = (delta: number) => {
+    const viewport = treeViewportRef.current;
+    if (!viewport) {
+      setZoomLevel((current) => clampTreeZoom(Number((current + delta).toFixed(3))));
+      return;
+    }
+    const rect = viewport.getBoundingClientRect();
+    zoomTreeAt(rect.left + rect.width / 2, rect.top + rect.height / 2, zoomLevel + delta);
+  };
+
+  const onTreeWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const factor = event.deltaY > 0 ? 0.9 : 1.1;
+    zoomTreeAt(event.clientX, event.clientY, zoomLevel * factor);
+  };
+
   const onTreeMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
     if (event.button !== 0 || !treeViewportRef.current) return;
     treePanRef.current = {
       dragging: true,
       startX: event.clientX,
       startY: event.clientY,
-      scrollLeft: treeViewportRef.current.scrollLeft,
-      scrollTop: treeViewportRef.current.scrollTop,
+      startPanX: treePan.x,
+      startPanY: treePan.y,
     };
     setIsPanningTree(true);
   };
@@ -605,18 +703,79 @@ const ArbolGenealogicoSienna = () => {
     event.preventDefault();
     const deltaX = event.clientX - treePanRef.current.startX;
     const deltaY = event.clientY - treePanRef.current.startY;
-    treeViewportRef.current.scrollLeft = treePanRef.current.scrollLeft - deltaX;
-    treeViewportRef.current.scrollTop = treePanRef.current.scrollTop - deltaY;
+    setTreePan({
+      x: treePanRef.current.startPanX + deltaX,
+      y: treePanRef.current.startPanY + deltaY,
+    });
+  };
+
+  const touchDistance = (touches: React.TouchList) => {
+    if (touches.length < 2) return 0;
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.hypot(dx, dy);
+  };
+
+  const touchCenter = (touches: React.TouchList) => ({
+    x: (touches[0].clientX + touches[1].clientX) / 2,
+    y: (touches[0].clientY + touches[1].clientY) / 2,
+  });
+
+  const onTreeTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
+    if (event.touches.length === 1) {
+      const touch = event.touches[0];
+      treePanRef.current = {
+        dragging: true,
+        startX: touch.clientX,
+        startY: touch.clientY,
+        startPanX: treePan.x,
+        startPanY: treePan.y,
+      };
+      setIsPanningTree(true);
+      return;
+    }
+
+    if (event.touches.length >= 2) {
+      const center = touchCenter(event.touches);
+      treePinchRef.current = {
+        active: true,
+        distance: touchDistance(event.touches),
+        zoom: zoomLevel,
+        centerX: center.x,
+        centerY: center.y,
+      };
+      setIsPanningTree(true);
+    }
+  };
+
+  const onTreeTouchMove = (event: React.TouchEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    if (event.touches.length === 1 && treePanRef.current.dragging) {
+      const touch = event.touches[0];
+      setTreePan({
+        x: treePanRef.current.startPanX + touch.clientX - treePanRef.current.startX,
+        y: treePanRef.current.startPanY + touch.clientY - treePanRef.current.startY,
+      });
+      return;
+    }
+
+    if (event.touches.length >= 2 && treePinchRef.current.active) {
+      const center = touchCenter(event.touches);
+      const distance = touchDistance(event.touches);
+      const ratio = treePinchRef.current.distance ? distance / treePinchRef.current.distance : 1;
+      zoomTreeAt(center.x, center.y, treePinchRef.current.zoom * ratio);
+    }
   };
 
   const stopTreePan = () => {
     treePanRef.current.dragging = false;
+    treePinchRef.current.active = false;
     setIsPanningTree(false);
   };
 
   const printTree = () => {
-    const treeVisual = treeViewportRef.current?.querySelector('.classic-family-tree');
-    if (!treeVisual) {
+    const treeWorld = treeWorldRef.current;
+    if (!treeWorld) {
       toast({
         title: 'No se pudo preparar impresión',
         description: 'No se encontró el área visual del árbol.',
@@ -635,6 +794,16 @@ const ArbolGenealogicoSienna = () => {
       return;
     }
 
+    const printableTree = treeWorld.cloneNode(true) as HTMLElement;
+    printableTree.removeAttribute('style');
+    printableTree.style.transform = 'none';
+    printableTree.style.position = 'relative';
+    printableTree.style.left = 'auto';
+    printableTree.style.top = 'auto';
+    printableTree.style.width = 'max-content';
+    printableTree.style.maxWidth = 'none';
+    printableTree.style.overflow = 'visible';
+
     const styles = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
       .map((node) => node.outerHTML)
       .join('\n');
@@ -647,18 +816,90 @@ const ArbolGenealogicoSienna = () => {
           <title>Árbol Sienna</title>
           ${styles}
           <style>
-            body { margin: 16px; background: #fff; }
-            .classic-family-tree { overflow: visible !important; }
+            @page { size: A3 landscape; margin: 8mm; }
+            html, body { margin: 0; background: #fff; color: #173f73; }
+            body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+            .print-page { width: calc(420mm - 16mm); padding: 0; overflow: visible; }
+            .print-header {
+              display: flex;
+              align-items: flex-end;
+              justify-content: space-between;
+              gap: 12px;
+              margin-bottom: 6mm;
+              border-bottom: 1px solid #d8b45d;
+              padding-bottom: 3mm;
+            }
+            .print-title { margin: 0; font-size: 18px; color: #173f73; }
+            .print-meta { margin: 1mm 0 0; font-size: 10px; color: #5f6f86; }
+            .print-canvas { width: 100%; overflow: visible; }
+            .print-fit { transform-origin: top left; overflow: visible; }
+            .classic-family-tree,
+            .tree-world {
+              position: relative !important;
+              left: auto !important;
+              top: auto !important;
+              width: max-content !important;
+              max-width: none !important;
+              overflow: visible !important;
+              transform: none !important;
+              padding: 0 !important;
+              will-change: auto !important;
+            }
+            .classic-tree-root,
+            .classic-tree-children {
+              min-width: max-content !important;
+              page-break-inside: avoid;
+              break-inside: avoid;
+            }
+            .rounded-md, .shadow-sm, .shadow-md, .shadow-lg { box-shadow: none !important; }
           </style>
         </head>
         <body>
-          <h2 style="margin:0 0 12px 0;color:#173f73;">Árbol Sienna</h2>
-          ${treeVisual.outerHTML}
+          <main class="print-page">
+            <header class="print-header">
+              <div>
+                <h1 class="print-title">Árbol Genealógico Sienna</h1>
+                <p class="print-meta">Vista completa del árbol · ${members.length} miembros · ${presentationStats.finalHeirs} herederos finales</p>
+              </div>
+              <p class="print-meta">${new Date().toLocaleString('es-DO')}</p>
+            </header>
+            <section class="print-canvas">
+              <div class="print-fit">
+                ${printableTree.outerHTML}
+              </div>
+            </section>
+          </main>
           <script>
-            window.onload = () => {
-              window.print();
-              window.close();
+            const preparePrint = async () => {
+              const canvas = document.querySelector('.print-canvas');
+              const fit = document.querySelector('.print-fit');
+              const tree = document.querySelector('.classic-family-tree');
+              if (canvas && fit && tree) {
+                const treeWidth = Math.max(tree.scrollWidth, tree.getBoundingClientRect().width);
+                const treeHeight = Math.max(tree.scrollHeight, tree.getBoundingClientRect().height);
+                const availableWidth = canvas.clientWidth || treeWidth;
+                const scale = Math.min(1, availableWidth / treeWidth);
+                fit.style.transform = 'scale(' + scale + ')';
+                fit.style.width = treeWidth + 'px';
+                canvas.style.height = Math.ceil(treeHeight * scale) + 'px';
+              }
+
+              const images = Array.from(document.images || []);
+              await Promise.allSettled(images.map((image) => {
+                if (image.complete) return Promise.resolve();
+                return new Promise((resolve) => {
+                  image.onload = resolve;
+                  image.onerror = resolve;
+                  setTimeout(resolve, 1200);
+                });
+              }));
+
+              setTimeout(() => {
+                window.focus();
+                window.print();
+              }, 250);
             };
+            window.onload = () => { preparePrint(); };
           </script>
         </body>
       </html>
@@ -733,9 +974,13 @@ const ArbolGenealogicoSienna = () => {
 
         <Card className="border border-legal-gold/20">
           <CardContent className="p-4">
-            <p className="text-xs uppercase tracking-wide text-legal-gray">Último snapshot de cálculo Sienna</p>
+            <p className="text-xs uppercase tracking-wide text-legal-gray">Cálculo Sienna en vivo</p>
             <p className="mt-1 text-sm text-legal-blue">
-              {lastSnapshotAt ? new Date(lastSnapshotAt).toLocaleString('es-DO') : 'Aún no hay snapshots guardados.'}
+              {isFetchingCalculation
+                ? 'La API está recalculando con la data actual...'
+                : realtimeCalculation?.generated_at
+                  ? `API recalculada: ${new Date(realtimeCalculation.generated_at).toLocaleString('es-DO')}`
+                  : 'La API calculará con los miembros actuales al cargar los parámetros.'}
             </p>
           </CardContent>
         </Card>
@@ -751,8 +996,16 @@ const ArbolGenealogicoSienna = () => {
                   <p className="font-semibold text-legal-blue">{row.memberName}</p>
                   <p className="mt-1 text-xs text-legal-gray">Ramas activas: {row.sources}</p>
                   <p className="mt-1 text-xs text-legal-gray">
-                    Padre/Madre base: {row.baseParentName} · Otro vínculo parental: {row.linkedParentName}
+                    Padre/Madre base visual: {row.baseParentName}
+                    {row.linkedParentName !== 'No definido' ? ' · Segundo progenitor formal: ' + row.linkedParentName : ''}
                   </p>
+                  <div className="mt-2 space-y-1">
+                    {row.routes.map((route) => (
+                      <p key={route} className="text-xs leading-relaxed text-legal-gray">
+                        {route}
+                      </p>
+                    ))}
+                  </div>
                 </div>
               ))}
             </CardContent>
@@ -833,21 +1086,13 @@ const ArbolGenealogicoSienna = () => {
                   placeholder="0"
                 />
                 <p className="mt-1 text-xs text-legal-gray">
-                  % sobre el bruto. Persiste en Settings y en el snapshot al guardar montos.
+                  % sobre el bruto. El default global se cambia solo en Settings.
                 </p>
               </div>
-              <Button onClick={applyEstateCalculation} disabled={paymentSaving} className="bg-legal-gold hover:bg-legal-gold/90 text-white">
+              <Button onClick={applyEstateCalculation} disabled={paymentSaving || isFetchingCalculation} className="bg-legal-gold hover:bg-legal-gold/90 text-white">
                 <Save className="mr-2 h-4 w-4" />
-                Calcular y guardar pagos
+                {isFetchingCalculation ? 'Calculando...' : 'Calcular y guardar pagos'}
               </Button>
-            </div>
-            <div>
-              <Label>Nota del snapshot (auditoría de reunión)</Label>
-              <Input
-                value={snapshotNote}
-                onChange={(event) => setSnapshotNote(event.target.value)}
-                placeholder="Ej: Reunión 19/05, excluidos provisionales X e Y."
-              />
             </div>
 
             <div className="grid gap-3 md:grid-cols-3">
@@ -865,12 +1110,6 @@ const ArbolGenealogicoSienna = () => {
                 <p className="font-bold text-legal-blue">{formatMoney(distributableEstateAmount || total)}</p>
               </div>
             </div>
-
-            {isAdmin && (
-              <Button variant="outline" onClick={saveLawyerFee} disabled={settingsSaving}>
-                Guardar % de abogados
-              </Button>
-            )}
 
             <div className="grid gap-3 md:grid-cols-5">
               {calculatedPayments.map(({ heir, share, amount }) => (
@@ -921,7 +1160,7 @@ const ArbolGenealogicoSienna = () => {
                     variant="ghost"
                     size="sm"
                     className="h-7 px-2"
-                    onClick={() => setZoomLevel((current) => Math.max(0.4, Number((current - 0.1).toFixed(2))))}
+                    onClick={() => nudgeZoom(-0.1)}
                   >
                     <ZoomOut className="h-4 w-4" />
                   </Button>
@@ -933,7 +1172,7 @@ const ArbolGenealogicoSienna = () => {
                     variant="ghost"
                     size="sm"
                     className="h-7 px-2"
-                    onClick={() => setZoomLevel((current) => Math.min(1.8, Number((current + 0.1).toFixed(2))))}
+                    onClick={() => nudgeZoom(0.1)}
                   >
                     <ZoomIn className="h-4 w-4" />
                   </Button>
@@ -942,7 +1181,21 @@ const ArbolGenealogicoSienna = () => {
                     variant="ghost"
                     size="sm"
                     className="h-7 px-2"
-                    onClick={() => setZoomLevel(1)}
+                    onClick={fitTreeToScreen}
+                    title="Ajustar a pantalla"
+                  >
+                    Fit
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2"
+                    onClick={() => {
+                      setZoomLevel(1);
+                      window.requestAnimationFrame(() => centerTree(1));
+                    }}
+                    title="Centrar al 100%"
                   >
                     <RotateCcw className="h-4 w-4" />
                   </Button>
@@ -963,50 +1216,49 @@ const ArbolGenealogicoSienna = () => {
 
             <div
               ref={treeViewportRef}
-              className={`w-full overflow-auto rounded-md bg-legal-beige/20 p-4 select-none ${isPanningTree ? 'cursor-grabbing' : 'cursor-grab'}`}
+              className={`tree-viewport w-full rounded-md bg-legal-beige/20 select-none ${isPanningTree ? 'cursor-grabbing' : 'cursor-grab'}`}
+              onWheel={onTreeWheel}
               onMouseDown={onTreeMouseDown}
               onMouseMove={onTreeMouseMove}
               onMouseUp={stopTreePan}
               onMouseLeave={stopTreePan}
+              onTouchStart={onTreeTouchStart}
+              onTouchMove={onTreeTouchMove}
+              onTouchEnd={stopTreePan}
             >
-              <div className="min-w-max">
-                {loading ? (
-                  <div className="p-8 text-center text-legal-gray">Cargando árbol...</div>
-                ) : (
-                  <div className="classic-family-tree overflow-auto p-8">
-                    <div
-                      style={{
-                        zoom: zoomLevel,
-                        transformOrigin: 'top left',
-                        width: 'fit-content',
-                        margin: '0',
-                      }}
-                    >
-                      {forest.length > 1 && (
-                        <p className="mb-3 text-xs text-amber-700">
-                          Hay {forest.length} raíces en el árbol. Revise vínculos parentales en Miembros del Árbol si espera una sola raíz.
-                        </p>
-                      )}
-                      <ul className="classic-tree-root">
-                        {forest.map((root) => (
-                          <ClassicNode
-                            key={root.id}
-                            member={root}
-                            heirsByMemberId={heirsByMemberId}
-                            heirsByName={heirsByName}
-                            inheritancePlan={inheritancePlan}
-                            total={total}
-                            estateAmount={distributableEstateAmount}
-                            membersById={membersById}
-                            allMembers={members}
-                            genealogy={genealogy}
-                          />
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                )}
-              </div>
+              {loading ? (
+                <div className="p-8 text-center text-legal-gray">Cargando árbol...</div>
+              ) : (
+                <div
+                  ref={treeWorldRef}
+                  className="tree-world classic-family-tree"
+                  style={{
+                    transform: `translate(${treePan.x}px, ${treePan.y}px) scale(${zoomLevel})`,
+                  }}
+                >
+                  {forest.length > 1 && (
+                    <p className="mb-3 text-xs text-amber-700">
+                      Hay {forest.length} raíces en el árbol. Revise vínculos parentales en Miembros del Árbol si espera una sola raíz.
+                    </p>
+                  )}
+                  <ul className="classic-tree-root">
+                    {forest.map((root) => (
+                      <ClassicNode
+                        key={root.id}
+                        member={root}
+                        heirsByMemberId={heirsByMemberId}
+                        heirsByName={heirsByName}
+                        inheritancePlan={inheritancePlan}
+                        total={total}
+                        estateAmount={distributableEstateAmount}
+                        membersById={membersById}
+                        allMembers={members}
+                        genealogy={genealogy}
+                      />
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

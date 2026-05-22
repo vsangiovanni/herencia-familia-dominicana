@@ -237,29 +237,42 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
   },
   'sienna-arbol': {
     title: 'Árbol genealógico Sienna',
-    intro: 'Vista principal del reparto: árbol + porcentajes + montos en pesos.',
+    intro: 'Vista principal del reparto: árbol completo, porcentajes, montos, doble linaje e impresión para reunión.',
     sections: [
       {
         title: 'Monto de la herencia',
         items: [
           'Indique el monto total del caudal y el % de firma de abogados (sobre el bruto).',
           'Neto repartible = bruto − firma. Los montos por heredero usan siempre ese neto.',
-          'El % se carga desde Settings o el último snapshot guardado; al guardar montos/snapshot se persiste.',
+          'El % se carga desde Settings. Use Calcular y guardar pagos solo después de revisar el reparto.',
           'Sin monto, verá porcentajes; con monto, cada heredero muestra RD$ calculados.',
         ],
       },
       {
-        title: 'Árbol',
+        title: 'Navegación del árbol',
+        items: [
+          'El zoom ahora escala todo el canvas del árbol, no solo las tarjetas.',
+          'Use +, −, Fit y reset para vista global o detalle por rama.',
+          'Puede arrastrar el canvas con mouse o dedo; en móvil también puede hacer pinch zoom.',
+          'Pantalla completa y modo exposición ayudan para reuniones en monitor o TV.',
+        ],
+      },
+      {
+        title: 'Tarjetas del árbol',
         items: [
           'Cada nodo muestra rol (heredero, enlace), % y monto si hay caudal.',
           'Los colores y badges reflejan el estado sucesoral automático.',
           'En hijos registrados con unión, aparece "Filiación: Matrimonio: …" para distinguir hijos de esa pareja.',
-          'Padre/madre base y otro vínculo parental siguen mostrando la línea visual del árbol.',
+          'Los miembros con fecha de defunción muestran lacito negro y etiqueta "Fallecido".',
+          'Los casos de doble linaje muestran ambas rutas y un bloque visual de cruce de ramas.',
         ],
       },
       {
-        title: 'Guardar montos',
-        items: ['Use el botón de guardar montos tras revisar el reparto para persistir en herederos confirmados.'],
+        title: 'Impresión',
+        items: [
+          'Imprimir árbol abre una vista preparada en A3 horizontal y ajusta el árbol completo al ancho disponible.',
+          'La impresión conserva indicadores de doble linaje, fotos, montos y marcador de fallecido.',
+        ],
       },
     ],
   },
@@ -390,14 +403,15 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
   },
   'sienna-explicacion': {
     title: 'Explicación para herederos',
-    intro: 'Pantalla para reuniones: lenguaje claro, simulador y documentación.',
+    intro: 'Pantalla para reuniones: lenguaje claro, cálculo en vivo, doble linaje, simulador y documentación.',
     sections: [
       {
         title: 'Pestañas',
         items: [
-          'Por qué heredo: texto personalizado por heredero.',
-          'Simulador: excluir herederos hipotéticos y ver impacto en %.',
-          'Semáforo y timeline: soporte documental y pasos del proceso.',
+          'Por qué heredo: texto personalizado por heredero, con doble linaje desglosado cuando aplica.',
+          'Simulador: excluir herederos hipotéticos y ver impacto en % y monto.',
+          'Semáforo: estado documental por heredero y conflictos detectados.',
+          'Línea de tiempo y glosario: contexto para explicar filiación, representación y vocación sucesoral.',
         ],
       },
       {
@@ -405,12 +419,17 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
         items: [
           'Ingrese el caudal bruto y el mismo % de firma de abogados que en Árbol Sienna.',
           'Neto = bruto − (bruto × % abogados). Los montos por heredero se calculan sobre el neto.',
-          'Al guardar snapshot (admin) también actualiza el % global en Settings.',
+          'La pantalla consulta el cálculo en vivo de la API para mantenerse consistente con el árbol.',
+          'Actualizar esta vista refresca datos y cálculo sin cambiar Settings globales.',
         ],
       },
       {
         title: 'PDF',
-        items: ['Genere resumen para entregar en la reunión tras revisar datos y simulación.'],
+        items: [
+          'El PDF individual incluye ruta sucesoral, doble linaje cuando existe, monto estimado y mosaico de documentos soporte.',
+          'Las imágenes de actas se normalizan para que aparezcan visibles; PDF u otros formatos muestran vista resumida.',
+          'Si el heredero o miembro tiene fecha de defunción, el PDF muestra el indicador "Fallecido" con fecha.',
+        ],
       },
     ],
   },

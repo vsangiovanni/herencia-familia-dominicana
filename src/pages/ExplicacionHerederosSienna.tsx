@@ -5,7 +5,7 @@ import BackButton from '@/components/BackButton';
 import DocumentHeader from '@/components/DocumentHeader';
 import SiennaPageLayout from '@/components/sienna/SiennaPageLayout';
 import { api, ConfirmedHeir, EvidenceDocument } from '@/lib/api';
-import { invalidateSiennaData, useSiennaWorkspace } from '@/hooks/useSiennaData';
+import { invalidateSiennaData, useSiennaCalculation, useSiennaWorkspace } from '@/hooks/useSiennaData';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -34,7 +34,7 @@ import {
   heirPhotoByName,
   routeSteps,
 } from '@/lib/siennaHeirExplain';
-import { buildCalculationPayload, buildMembersHash, calculateHeirAmount, parseCalculationPayload, resolveEstateAmounts, resolveHeirSimulatedShare } from '@/lib/siennaCalculation';
+import { calculateHeirAmount, resolveEstateAmounts, resolveHeirSimulatedShare } from '@/lib/siennaCalculation';
 import { useAuth } from '@/context/AuthContext';
 import {
   AlertTriangle,
@@ -43,6 +43,7 @@ import {
   FileDown,
   FileText,
   GitBranch,
+  GitMerge,
   Landmark,
   Loader2,
   Printer,
@@ -60,6 +61,24 @@ type HeirBrief = {
   simulatedAmount: number;
   photo?: ConfirmedHeir | null;
   traffic: ReturnType<typeof evaluateEvidenceSupport>;
+};
+
+const lineageRouteGroups = (share: InheritanceShare) => {
+  if (share.sourceBreakdown.length) {
+    return share.sourceBreakdown.map((segment) => ({
+      source: segment.source,
+      share: segment.share,
+      routes: segment.routes.length ? segment.routes : [share.route],
+    }));
+  }
+
+  return [
+    {
+      source: share.sources.join(' + ') || 'Ruta sucesoral',
+      share: share.share,
+      routes: [share.route],
+    },
+  ];
 };
 
 const initials = (name: string) =>
@@ -87,10 +106,8 @@ const ExplicacionHerederosSienna = () => {
   );
   const [estateAmount, setEstateAmount] = useState('');
   const [lawyerFeePercentage, setLawyerFeePercentage] = useState('0');
-  const [snapshotNote, setSnapshotNote] = useState('');
   const [excludedHeirs, setExcludedHeirs] = useState<string[]>([]);
-  const [snapshotSaving, setSnapshotSaving] = useState(false);
-  const [lastSnapshotAt, setLastSnapshotAt] = useState<string | null>(null);
+  const [settingsSaving, setSettingsSaving] = useState(false);
   const [isPresentationMode, setIsPresentationMode] = useState(false);
   const [workspaceInitialized, setWorkspaceInitialized] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('Cargando datos y cálculos de explicación...');
@@ -99,30 +116,8 @@ const ExplicacionHerederosSienna = () => {
     if (!workspace || workspaceInitialized) return;
 
     applySiennaCaseConfig(workspace.settings.sienna_case_config);
-    if (workspace.snapshot) {
-      const currentMembersHash = buildMembersHash(workspace.members.map((member) => member.id));
-      if (
-        workspace.snapshot.members_hash &&
-        workspace.snapshot.members_hash !== currentMembersHash
-      ) {
-        toast({
-          title: 'Snapshot desactualizado',
-          description: 'El último snapshot no coincide con los miembros actuales. Ajusta y guarda uno nuevo.',
-          variant: 'destructive',
-        });
-      }
-      const parsedPayload = parseCalculationPayload(workspace.snapshot.payload_json);
-      setExcludedHeirs(parsedPayload?.excluded_heir_ids?.length ? parsedPayload.excluded_heir_ids : []);
-      if (parsedPayload?.notes) {
-        setSnapshotNote(parsedPayload.notes);
-      }
-      setEstateAmount(String(workspace.snapshot.estate_amount ?? 0));
-      setLawyerFeePercentage(String(workspace.snapshot.lawyer_fee_percentage ?? 0));
-      setLastSnapshotAt(workspace.snapshot.created_at || null);
-    } else {
-      setLawyerFeePercentage(String(workspace.settings.lawyer_fee_percentage ?? 0));
-      setLastSnapshotAt(null);
-    }
+    setEstateAmount(String(workspace.settings.estate_amount ?? 0));
+    setLawyerFeePercentage(String(workspace.settings.lawyer_fee_percentage ?? 0));
     setWorkspaceInitialized(true);
   }, [workspace, workspaceInitialized]);
 
@@ -148,6 +143,15 @@ const ExplicacionHerederosSienna = () => {
   );
   const { grossAmount, lawyerFeePercentage: feePercentage, lawyerFeeAmount: lawyerFee, distributableAmount: netAmount } =
     estate;
+  const { data: realtimeCalculationData, isFetching: isFetchingCalculation } = useSiennaCalculation(
+    estateAmount,
+    lawyerFeePercentage
+  );
+  const realtimeCalculation = realtimeCalculationData?.calculation;
+  const apiRowsByMemberId = useMemo(
+    () => new Map((realtimeCalculation?.active_heirs ?? []).map((row) => [row.member_id, row])),
+    [realtimeCalculation?.active_heirs]
+  );
   const plan = useMemo(() => buildDominicanInheritancePlan(members, genealogy), [genealogy, members]);
   const photosByName = useMemo(() => heirPhotoByName(heirs), [heirs]);
 
@@ -167,15 +171,26 @@ const ExplicacionHerederosSienna = () => {
 
   const includedTotal = plan.activeHeirs
     .filter((share) => !excludedHeirs.includes(share.member.id))
-    .reduce((sum, share) => sum + share.share, 0);
-  const distributedTotal = plan.activeHeirs.reduce((sum, share) => sum + share.share, 0);
+    .reduce((sum, share) => sum + (apiRowsByMemberId.get(share.member.id)?.share_percent ?? share.share), 0);
+  const distributedTotal = realtimeCalculation?.total_share ?? plan.activeHeirs.reduce((sum, share) => sum + share.share, 0);
   const isRenormalizedSimulation = excludedHeirs.length > 0;
 
   const briefs = useMemo<HeirBrief[]>(
     () =>
       plan.activeHeirs.map((share) => {
+        const apiRow = apiRowsByMemberId.get(share.member.id);
+        const realtimeShare = apiRow?.share_percent ?? share.share;
+        const apiBackedShare: InheritanceShare = {
+          ...share,
+          share: realtimeShare,
+          reason: apiRow?.reason ?? share.reason,
+          route: apiRow?.route ?? share.route,
+          paymentBasis: apiRow?.payment_basis ?? share.paymentBasis,
+          sources: apiRow?.sources ?? share.sources,
+          sourceBreakdown: apiRow?.source_breakdown ?? share.sourceBreakdown,
+        };
         const excluded = excludedHeirs.includes(share.member.id);
-        const simulatedShare = resolveHeirSimulatedShare(share.share, {
+        const simulatedShare = resolveHeirSimulatedShare(realtimeShare, {
           excluded,
           excludedHeirIds: excludedHeirs,
           includedTotal,
@@ -185,15 +200,17 @@ const ExplicacionHerederosSienna = () => {
           documentsByHeir.get(`name:${normalizeName(share.member.name)}`) ||
           [];
         return {
-          share,
+          share: apiBackedShare,
           documents: heirDocs,
           simulatedShare,
-          simulatedAmount: calculateHeirAmount(simulatedShare, netAmount),
+          simulatedAmount: isRenormalizedSimulation || !apiRow
+            ? calculateHeirAmount(simulatedShare, netAmount)
+            : apiRow.amount,
           photo: photosByName.get(normalizeName(share.member.name)) || null,
           traffic: evaluateEvidenceSupport(heirDocs, share.member, members),
         };
       }),
-    [documentsByHeir, excludedHeirs, includedTotal, members, netAmount, photosByName, plan.activeHeirs]
+    [apiRowsByMemberId, documentsByHeir, excludedHeirs, includedTotal, isRenormalizedSimulation, members, netAmount, photosByName, plan.activeHeirs]
   );
 
   const trafficSummary = useMemo(
@@ -211,39 +228,20 @@ const ExplicacionHerederosSienna = () => {
     );
   };
 
-  const saveSnapshot = async () => {
-    setSnapshotSaving(true);
+  const saveCalculationSettings = async () => {
+    setSettingsSaving(true);
     try {
-      if (isAdmin) {
-        await api.updateSettings({ lawyer_fee_percentage: feePercentage });
-      }
-      await api.saveSiennaCalculationSnapshot({
-        estate_amount: grossAmount,
-        lawyer_fee_percentage: feePercentage,
-        distributable_amount: netAmount,
-        members_hash: buildMembersHash(members.map((member) => member.id)),
-        payload_json: JSON.stringify(
-          buildCalculationPayload(
-            plan,
-            netAmount,
-            snapshotNote || `Snapshot guardado desde Explicación Sienna. Excluidos: ${excludedHeirs.join(', ') || 'ninguno'}.`,
-            excludedHeirs
-          )
-        ),
-      });
-      const latest = await api.getLatestSiennaCalculationSnapshot();
-      setLastSnapshotAt(latest.snapshot?.created_at || null);
       invalidateSiennaData(queryClient);
       await refetch();
-      toast({ title: 'Snapshot guardado', description: 'La explicación y el reparto quedaron auditables para futuras reuniones.' });
+      toast({ title: 'Cálculo actualizado', description: 'La explicación usa estos parámetros solo para esta pantalla.' });
     } catch (error) {
       toast({
-        title: 'No se pudo guardar el snapshot',
+        title: 'No se pudo actualizar el cálculo',
         description: error instanceof Error ? error.message : 'Error desconocido',
         variant: 'destructive',
       });
     } finally {
-      setSnapshotSaving(false);
+      setSettingsSaving(false);
     }
   };
 
@@ -359,7 +357,7 @@ const ExplicacionHerederosSienna = () => {
                   onChange={(event) => setLawyerFeePercentage(event.target.value)}
                 />
                 <p className="mt-1 text-xs text-legal-gray">
-                  Sobre el bruto. Mismo valor en Árbol Sienna y Settings.
+                  Sobre el bruto. El default global se cambia solo en Settings.
                 </p>
               </div>
               <div className="rounded-md border border-legal-blue/15 bg-white p-3">
@@ -367,20 +365,16 @@ const ExplicacionHerederosSienna = () => {
                 <p className="font-bold text-legal-blue">{formatMoney(netAmount)}</p>
                 <p className="text-xs text-legal-gray">Firma: {formatMoney(lawyerFee)}</p>
               </div>
-              <Button variant="outline" onClick={saveSnapshot} disabled={snapshotSaving}>
-                {snapshotSaving ? 'Guardando...' : 'Guardar snapshot Sienna'}
+              <Button variant="outline" onClick={saveCalculationSettings} disabled={settingsSaving || isFetchingCalculation}>
+                {settingsSaving ? 'Actualizando...' : 'Actualizar esta vista'}
               </Button>
             </div>
-            <div>
-              <Label>Nota del snapshot (auditoría de reunión)</Label>
-              <Input
-                value={snapshotNote}
-                onChange={(event) => setSnapshotNote(event.target.value)}
-                placeholder="Ej: Escenario presentado a primos con exclusión temporal."
-              />
-            </div>
             <p className="text-xs text-legal-gray">
-              Último snapshot: {lastSnapshotAt ? new Date(lastSnapshotAt).toLocaleString('es-DO') : 'sin registro'}
+              Cálculo en vivo: {isFetchingCalculation
+                ? 'actualizando desde la API...'
+                : realtimeCalculation?.generated_at
+                  ? new Date(realtimeCalculation.generated_at).toLocaleString('es-DO')
+                  : 'pendiente de respuesta de la API'}
             </p>
             {isRenormalizedSimulation && (
               <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">
@@ -474,6 +468,11 @@ const ExplicacionHerederosSienna = () => {
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="font-serif text-xl font-bold text-legal-blue">{brief.share.member.name}</h3>
+                        {brief.share.member.death && (
+                          <Badge variant="outline" className="border-gray-400 bg-gray-50 text-gray-800">
+                            Fallecido
+                          </Badge>
+                        )}
                         <Badge variant="outline">{formatPercent(brief.simulatedShare)}</Badge>
                         <Badge className={brief.traffic.className}>{brief.traffic.label}</Badge>
                       </div>
@@ -484,17 +483,47 @@ const ExplicacionHerederosSienna = () => {
                     </div>
                     <div>
                       <p className="flex items-center gap-2 text-sm font-semibold text-legal-blue">
-                        <Route className="h-4 w-4" />
-                        Ruta genealógica
+                        {(brief.share.sourceBreakdown.length > 1 || brief.share.sources.length > 1) ? (
+                          <GitMerge className="h-4 w-4" />
+                        ) : (
+                          <Route className="h-4 w-4" />
+                        )}
+                        {(brief.share.sourceBreakdown.length > 1 || brief.share.sources.length > 1)
+                          ? 'Doble linaje confirmado'
+                          : 'Ruta genealógica'}
                       </p>
-                      <ul className="mt-2 space-y-1">
-                        {routeSteps(brief.share).map((step, index) => (
-                          <li key={`${brief.share.member.id}-route-${index}`} className="flex gap-2 text-sm text-gray-700">
-                            <GitBranch className="mt-0.5 h-4 w-4 shrink-0 text-legal-gold" />
-                            {step}
-                          </li>
+                      <div className="mt-2 space-y-3">
+                        {lineageRouteGroups(brief.share).map((group, groupIndex) => (
+                          <div
+                            key={`${brief.share.member.id}-lineage-${group.source}-${groupIndex}`}
+                            className={brief.share.sourceBreakdown.length > 1 ? 'rounded-md border border-legal-gold/30 bg-legal-gold/5 p-2' : ''}
+                          >
+                            {(brief.share.sourceBreakdown.length > 1 || brief.share.sources.length > 1) && (
+                              <div className="mb-2 flex flex-wrap items-center gap-2">
+                                <Badge variant={groupIndex === 0 ? 'default' : 'outline'}>{group.source}</Badge>
+                                <Badge variant="outline">{formatPercent(group.share)}</Badge>
+                              </div>
+                            )}
+                            {group.routes.map((route, routeIndex) => (
+                              <ul key={`${brief.share.member.id}-lineage-route-${groupIndex}-${routeIndex}`} className="space-y-1">
+                                {route
+                                  .split('->')
+                                  .map((step) => step.trim())
+                                  .filter(Boolean)
+                                  .map((step, stepIndex) => (
+                                    <li
+                                      key={`${brief.share.member.id}-lineage-step-${groupIndex}-${routeIndex}-${stepIndex}`}
+                                      className="flex gap-2 text-sm text-gray-700"
+                                    >
+                                      <GitBranch className="mt-0.5 h-4 w-4 shrink-0 text-legal-gold" />
+                                      {step}
+                                    </li>
+                                  ))}
+                              </ul>
+                            ))}
+                          </div>
                         ))}
-                      </ul>
+                      </div>
                     </div>
                     <div className="space-y-3 rounded-md border border-legal-blue/15 bg-white p-4">
                       <div>

@@ -15,6 +15,7 @@
     "deploy:api": "python3 scripts/deploy-api-php.py",
     "release": "bash scripts/run-release.sh",
     "check:prod": "bash scripts/post-deploy-check.sh",
+    "test:sienna": "node scripts/test-sienna-inheritance.mjs",
     "migrate:genealogy": "node scripts/migrate-sienna-genealogy.cjs",
     "migrate:genealogy:prod": "ENV_FILE=.env.prod.working node scripts/migrate-sienna-genealogy.cjs",
     "deploy:env": "python3 scripts/upload-prod-env.py",

@@ -12,7 +12,7 @@ echo "=== BRAND ASSETS ==="
 bash scripts/copy-brand-assets.sh
 
 echo "=== BUILD ==="
-npm run build
+pnpm run build
 
 echo "=== DEPLOY dist/ (FTP, no toca .env remoto) ==="
 python3 scripts/deploy-dist.py

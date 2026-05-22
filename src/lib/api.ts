@@ -73,6 +73,32 @@ export interface SiennaCalculationSnapshot {
   created_at?: string | null;
 }
 
+export interface SiennaRealtimeCalculationRow {
+  member_id: string;
+  heir_name: string;
+  share_percent: number;
+  amount: number;
+  route: string;
+  payment_basis: string;
+  reason: string;
+  sources: string[];
+  source_breakdown?: Array<{ source: string; share: number; routes: string[] }>;
+}
+
+export interface SiennaRealtimeCalculation {
+  estate: {
+    grossAmount: number;
+    lawyerFeePercentage: number;
+    lawyerFeeAmount: number;
+    distributableAmount: number;
+  };
+  causante_name: string;
+  total_share: number;
+  active_heirs: SiennaRealtimeCalculationRow[];
+  active_heir_count: number;
+  generated_at: string;
+}
+
 export interface SiennaFamilyMember {
   id: string;
   parent_id?: string | null;
@@ -218,7 +244,7 @@ export const api = {
     request<{ visits: any[] }>("/api/page-visits"),
   getSettings: () =>
     request<{ settings: Record<string, string | number | boolean | SiennaCaseConfig | null> }>("/api/settings"),
-  updateSettings: (data: { lawyer_fee_percentage?: number; sienna_case_config?: SiennaCaseConfig }) =>
+  updateSettings: (data: { estate_amount?: number; lawyer_fee_percentage?: number; sienna_case_config?: SiennaCaseConfig }) =>
     request<{ ok: boolean; settings: Record<string, string | number | boolean | SiennaCaseConfig | null> }>("/api/settings", {
       method: "PUT",
       body: JSON.stringify(data),
@@ -271,6 +297,13 @@ export const api = {
       settings: Record<string, string | number | boolean | SiennaCaseConfig | null>;
       snapshot: SiennaCalculationSnapshot | null;
     }>(`/api/sienna-workspace${options?.includeMedia ? "?includeMedia=1" : ""}`),
+  getSiennaCalculation: (options?: { estateAmount?: number | string; lawyerFeePercentage?: number | string }) => {
+    const params = new URLSearchParams();
+    if (options?.estateAmount !== undefined) params.set("estate_amount", String(options.estateAmount));
+    if (options?.lawyerFeePercentage !== undefined) params.set("lawyer_fee_percentage", String(options.lawyerFeePercentage));
+    const query = params.toString();
+    return request<{ calculation: SiennaRealtimeCalculation }>("/api/sienna-calculation" + (query ? "?" + query : ""));
+  },
   saveSiennaFamilyMember: (
     data: Omit<SiennaFamilyMember, "created_at" | "updated_at"> & { filiation?: MemberFiliationPayload }
   ) =>
