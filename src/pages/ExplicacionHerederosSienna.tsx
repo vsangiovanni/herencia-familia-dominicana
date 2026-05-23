@@ -468,12 +468,12 @@ const ExplicacionHerederosSienna = () => {
             {!loading &&
               briefs.map((brief) => (
                 <Card key={brief.share.member.id} className="border border-legal-gold/20">
-                  <CardContent className="grid gap-5 p-4 sm:p-5 sm:grid-cols-2 xl:grid-cols-[auto_1.2fr_1fr_minmax(0,220px)]">
+                  <CardContent className="grid gap-4 p-4 md:grid-cols-[auto_1fr_auto]">
                     <MemberPhoto
                       name={brief.share.member.name}
                       memberId={brief.share.member.id}
                       photoData={brief.photo?.photo_data}
-                      size="xl"
+                      size="lg"
                       className="border-2 border-legal-gold/40"
                     />
                     <div>
@@ -487,23 +487,15 @@ const ExplicacionHerederosSienna = () => {
                         <Badge variant="outline">{formatPercent(brief.simulatedShare)}</Badge>
                         <Badge className={brief.traffic.className}>{brief.traffic.label}</Badge>
                       </div>
-                      <p className="mt-3 rounded-md bg-legal-gold/10 p-3 text-sm leading-relaxed text-gray-800">
+                      <p className="mt-3 line-clamp-3 rounded-md bg-legal-gold/10 p-3 text-sm leading-relaxed text-gray-800">
                         {buildWhyIInheritText(brief.share, brief.simulatedShare, brief.simulatedAmount)}
                       </p>
-                      <p className="mt-2 text-xs text-legal-gray">{brief.share.paymentBasis}</p>
-                    </div>
-                    <div>
-                      <p className="flex items-center gap-2 text-sm font-semibold text-legal-blue">
-                        {(brief.share.sourceBreakdown.length > 1 || brief.share.sources.length > 1) ? (
-                          <GitMerge className="h-4 w-4" />
-                        ) : (
-                          <Route className="h-4 w-4" />
-                        )}
-                        {(brief.share.sourceBreakdown.length > 1 || brief.share.sources.length > 1)
-                          ? 'Doble linaje confirmado'
-                          : 'Ruta genealógica'}
-                      </p>
-                      <div className="mt-2 space-y-3">
+                      <details className="mt-2">
+                        <summary className="cursor-pointer text-xs font-semibold text-legal-blue">
+                          Ver ruta genealógica y base
+                        </summary>
+                        <p className="mt-2 text-xs text-legal-gray">{brief.share.paymentBasis}</p>
+                        <div className="mt-2 space-y-3">
                         {lineageRouteGroups(brief.share).map((group, groupIndex) => (
                           <div
                             key={`${brief.share.member.id}-lineage-${group.source}-${groupIndex}`}
@@ -534,9 +526,10 @@ const ExplicacionHerederosSienna = () => {
                             ))}
                           </div>
                         ))}
-                      </div>
+                        </div>
+                      </details>
                     </div>
-                    <div className="space-y-3 rounded-md border border-legal-blue/15 bg-white p-4">
+                    <div className="space-y-3 rounded-md border border-legal-blue/15 bg-white p-4 md:min-w-[190px]">
                       <div>
                         <p className="text-xs uppercase text-legal-gray">Monto estimado</p>
                         <p className="text-lg font-bold text-legal-blue">{formatMoney(brief.simulatedAmount)}</p>

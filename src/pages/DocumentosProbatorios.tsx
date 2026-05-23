@@ -743,14 +743,15 @@ const DocumentosProbatorios = () => {
           </CardContent>
         </Card>
 
-        <Card className="border border-legal-gold/20 shadow-md">
-          <CardHeader className="bg-legal-blue/5 border-b">
-            <CardTitle className="flex items-center gap-2 text-legal-blue">
-              <UserCheck className="h-5 w-5" />
-              Herederos para el Cálculo
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6 overflow-x-auto">
+        <details className="rounded-md border border-legal-gold/20 bg-white shadow-sm">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-legal-blue">
+            <span className="inline-flex items-center gap-2">
+              <UserCheck className="h-4 w-4" />
+              Presentación de herederos
+            </span>
+            <span className="text-xs font-normal text-legal-gray">Fotos y montos manuales bajo demanda</span>
+          </summary>
+          <div className="overflow-x-auto border-t border-legal-blue/10 p-4">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -838,8 +839,8 @@ const DocumentosProbatorios = () => {
                 })}
               </TableBody>
             </Table>
-          </CardContent>
-        </Card>
+          </div>
+        </details>
 
         <Card className="border border-legal-gold/20 shadow-md">
           <CardHeader className="bg-legal-blue/5 border-b">

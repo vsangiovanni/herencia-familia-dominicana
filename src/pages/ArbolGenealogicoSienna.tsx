@@ -977,14 +977,16 @@ const ArbolGenealogicoSienna = () => {
       </div>
 
       <div className="space-y-6">
-        <Card className="border border-legal-gold/20">
-          <CardContent className="p-5">
-            <h3 className="mb-2 font-serif text-lg font-bold text-legal-blue">Criterio automático del caso Alessandro</h3>
+        <details className="rounded-md border border-legal-gold/20 bg-white">
+          <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-legal-blue">
+            Criterio automático del caso Alessandro
+          </summary>
+          <div className="border-t border-legal-blue/10 p-4">
             <p className="text-sm leading-relaxed text-gray-700">
               {legalCriterionText}
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </details>
 
         {orphanMembers.length > 0 && (
           <Card className="border border-amber-300 bg-amber-50">
@@ -999,25 +1001,23 @@ const ArbolGenealogicoSienna = () => {
           </Card>
         )}
 
-        <Card className="border border-legal-gold/20">
-          <CardContent className="p-4">
-            <p className="text-xs uppercase tracking-wide text-legal-gray">Cálculo Sienna en vivo</p>
-            <p className="mt-1 text-sm text-legal-blue">
+        <div className="rounded-md border border-legal-blue/10 bg-white px-4 py-3">
+          <p className="text-xs uppercase tracking-wide text-legal-gray">Cálculo Sienna en vivo</p>
+          <p className="mt-1 text-sm text-legal-blue">
               {isFetchingCalculation
                 ? 'La API está recalculando con la data actual...'
                 : realtimeCalculation?.generated_at
                   ? `API recalculada: ${new Date(realtimeCalculation.generated_at).toLocaleString('es-DO')}`
                   : 'La API calculará con los miembros actuales al cargar los parámetros.'}
-            </p>
-          </CardContent>
-        </Card>
+          </p>
+        </div>
 
         {dualLineageRows.length > 0 && (
-          <Card className="border border-legal-blue/20">
-            <CardHeader className="bg-legal-blue/5 border-b">
-              <CardTitle className="text-base text-legal-blue">Cruces de ramas (doble linaje)</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
+          <details className="rounded-md border border-legal-blue/20 bg-white">
+            <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-legal-blue">
+              Cruces de ramas ({dualLineageRows.length})
+            </summary>
+            <div className="grid gap-3 border-t border-legal-blue/10 p-4 sm:grid-cols-2 xl:grid-cols-3">
               {dualLineageRows.map((row) => (
                 <div key={row.memberId} className="rounded-md border border-legal-blue/15 bg-white p-3">
                   <p className="font-semibold text-legal-blue">{row.memberName}</p>
@@ -1035,8 +1035,8 @@ const ArbolGenealogicoSienna = () => {
                   </div>
                 </div>
               ))}
-            </CardContent>
-          </Card>
+            </div>
+          </details>
         )}
 
         <div className="grid gap-4 md:grid-cols-4">

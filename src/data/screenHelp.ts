@@ -346,12 +346,11 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
         ],
       },
       {
-        title: 'Al guardar (qué persiste)',
+        title: 'Después de guardar',
         items: [
-          'Tabla sienna_family_members: nombre, fechas, parent_id, cónyuge, estado hereditario, etc.',
-          'family_unions: pareja cuando hay cónyuge enlazado o unión elegida para el hijo.',
-          'member_parent_links: vínculos hijo↔progenitor con union_id cuando corresponde.',
-          'Tras guardar, el panel lateral muestra "Hijos por filiación" agrupados por unión u otra relación.',
+          'El miembro queda conectado al árbol, a su pareja si aplica y a su filiación familiar.',
+          'La ficha del miembro concentra el detalle para no sobrecargar la tabla principal.',
+          'Si falta algo importante, Hallazgos lo mostrará como pendiente de corrección.',
         ],
       },
       {

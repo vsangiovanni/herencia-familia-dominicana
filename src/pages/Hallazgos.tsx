@@ -240,20 +240,27 @@ const Hallazgos = () => {
             </div>
           </div>
         </TableCell>
-        <TableCell className="min-w-[14rem]">
-          <p className="text-sm text-gray-900">{row.problem}</p>
-          <p className="mt-1 text-xs leading-relaxed text-legal-gray">{row.solution}</p>
+        <TableCell className="min-w-[14rem] max-w-[28rem]">
+          <p className="line-clamp-2 text-sm text-gray-900">{row.problem}</p>
+          <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-legal-gray">{row.solution}</p>
         </TableCell>
         <TableCell className="min-w-[15rem]">
-          <MemberIssueFixPanel
-            row={row}
-            draft={draft}
-            members={members}
-            unions={unions}
-            saving={savingRowId === row.id}
-            onDraftChange={(patch) => updateDraft(row.id, patch)}
-            onSave={() => saveRow(row)}
-          />
+          <details>
+            <summary className="cursor-pointer text-sm font-semibold text-legal-blue">
+              Resolver
+            </summary>
+            <div className="mt-3">
+              <MemberIssueFixPanel
+                row={row}
+                draft={draft}
+                members={members}
+                unions={unions}
+                saving={savingRowId === row.id}
+                onDraftChange={(patch) => updateDraft(row.id, patch)}
+                onSave={() => saveRow(row)}
+              />
+            </div>
+          </details>
         </TableCell>
         <TableCell>
           <Badge
@@ -352,7 +359,7 @@ const Hallazgos = () => {
         {rows.length > 0 && (
           <Card className="border border-legal-gold/20 shadow-md">
             <CardHeader className="border-b bg-legal-blue/5">
-              <CardTitle className="text-legal-blue">Tabla de corrección — caso por caso</CardTitle>
+            <CardTitle className="text-legal-blue">Bandeja de corrección</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 p-4 sm:p-6">
               <div className="flex flex-col gap-3 sm:flex-row">

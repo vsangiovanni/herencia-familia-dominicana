@@ -320,7 +320,9 @@ const CalculoFiliacion = () => {
                           {evidence?.status || 'sin confirmar'}
                         </Badge>
                       </TableCell>
-                      <TableCell className="min-w-[280px] text-sm text-gray-600">{item.route || 'Ruta pendiente en árbol'}</TableCell>
+                      <TableCell className="min-w-[220px] max-w-[360px] text-sm text-gray-600">
+                        <p className="line-clamp-2">{item.route || 'Ruta pendiente en árbol'}</p>
+                      </TableCell>
                       <TableCell className="text-right">
                         <Badge variant="outline">{formatPercent(item.percentage)}</Badge>
                       </TableCell>
@@ -379,18 +381,18 @@ const CalculoFiliacion = () => {
           </CardContent>
         </Card>
 
-        <Card className="border border-legal-gold/20 shadow-md">
-          <CardContent className="p-6">
-            <h3 className="text-lg font-serif font-bold text-legal-blue mb-2">
-              Nota de Validación
-            </h3>
-            <p className="text-gray-700">
+        <details className="rounded-md border border-legal-gold/20 bg-white shadow-sm">
+          <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-legal-blue">
+            Nota de validación jurídica
+          </summary>
+          <div className="border-t border-legal-blue/10 p-4">
+            <p className="text-sm leading-relaxed text-gray-700">
               Esta vista ya no usa supuestos fijos: refleja en tiempo real la misma estructura y cálculo sucesoral del
               módulo Sienna. El porcentaje final siempre debe validarse con criterio jurídico, actas y estrategia procesal
               antes de emitir una distribución definitiva.
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </details>
       </div>
     </div>
   );

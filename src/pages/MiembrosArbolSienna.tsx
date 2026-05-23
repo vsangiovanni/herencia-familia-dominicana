@@ -549,6 +549,7 @@ const MiembrosArbolSienna = () => {
       };
     }).sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
   }, [draftMembers, genealogy, members]);
+  const shouldShowSaveSimulator = Boolean(form.id || form.name.trim());
 
   const filiationUnionOptions = useMemo(() => {
     if (form.parent_id === 'root') return [];
@@ -764,35 +765,35 @@ const MiembrosArbolSienna = () => {
           </Card>
         )}
 
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <Card><CardContent className="p-5"><p className="text-sm text-legal-gray">Miembros</p><p className="text-2xl font-bold text-legal-blue">{stats.total}</p></CardContent></Card>
           <Card><CardContent className="p-5"><p className="text-sm text-legal-gray">Herederos</p><p className="text-2xl font-bold text-legal-blue">{stats.heirs}</p></CardContent></Card>
-          <Card><CardContent className="p-5"><p className="text-sm text-legal-gray">Enlaces</p><p className="text-2xl font-bold text-legal-blue">{stats.connectors}</p></CardContent></Card>
           <Card>
             <CardContent className="p-5">
               <p className="text-sm text-legal-gray">Pendientes</p>
               <p className="text-2xl font-bold text-legal-blue">{stats.pending}</p>
-              <p className="mt-1 text-xs text-legal-gray">Sin clasificar tras autodetectar (según cálculo vigente)</p>
             </CardContent>
           </Card>
-          <Card><CardContent className="p-5"><p className="text-sm text-legal-gray">Uniones</p><p className="text-2xl font-bold text-legal-blue">{stats.unions}</p></CardContent></Card>
-          <Card><CardContent className="p-5"><p className="text-sm text-legal-gray">Vínculos filiación</p><p className="text-2xl font-bold text-legal-blue">{stats.parentLinks}</p></CardContent></Card>
+          <Card><CardContent className="p-5"><p className="text-sm text-legal-gray">Documentos</p><p className="text-2xl font-bold text-legal-blue">{documents.length}</p></CardContent></Card>
         </div>
 
-        <Card className="border border-legal-blue/25 bg-legal-blue/[0.03]">
-          <CardHeader className="border-b border-legal-blue/15 py-3">
-            <CardTitle className="flex flex-wrap items-center gap-2 text-base text-legal-blue">
-              <GitMerge className="h-5 w-5" />
-              Uniones matrimoniales y filiación
-              {stats.inconsistentUnions > 0 && (
-                <Badge variant="outline" className="border-amber-500/50 text-amber-800">
-                  <AlertTriangle className="mr-1 h-3 w-3" />
-                  {stats.inconsistentUnions} unión(es) por revisar
-                </Badge>
-              )}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 p-4 text-sm text-gray-700">
+        <details className="rounded-md border border-legal-blue/15 bg-white">
+          <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm font-semibold text-legal-blue">
+            <span className="inline-flex items-center gap-2">
+              <GitMerge className="h-4 w-4" />
+              Detalles técnicos de uniones y filiación
+            </span>
+            <span className="text-xs font-normal text-legal-gray">
+              {stats.connectors} enlaces · {stats.unions} uniones · {stats.parentLinks} vínculos
+            </span>
+          </summary>
+          <div className="space-y-3 border-t border-legal-blue/10 p-4 text-sm text-gray-700">
+            {stats.inconsistentUnions > 0 && (
+              <Badge variant="outline" className="border-amber-500/50 text-amber-800">
+                <AlertTriangle className="mr-1 h-3 w-3" />
+                {stats.inconsistentUnions} unión(es) por revisar
+              </Badge>
+            )}
             <p>
               <strong>No hay una pantalla aparte.</strong> Las uniones se crean al guardar un adulto con{' '}
               <strong>Cónyuge enlazado</strong> (miembro del árbol). La filiación del hijo se define al guardar un{' '}
@@ -821,8 +822,8 @@ const MiembrosArbolSienna = () => {
             ) : (
               <p className="text-legal-gray">Aún no hay uniones cargadas. Enlace cónyuges al guardar adultos.</p>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </details>
 
         <Card ref={formSectionRef} className="scroll-mt-24 border border-legal-gold/20">
           <CardHeader className="bg-legal-blue/5 border-b">
@@ -1129,14 +1130,18 @@ const MiembrosArbolSienna = () => {
           </CardContent>
         </Card>
 
-        <Card className="border border-legal-gold/20">
-          <CardHeader className="border-b bg-legal-blue/5">
-            <CardTitle className="flex items-center gap-2 text-legal-blue">
+        {shouldShowSaveSimulator && (
+        <details className="rounded-md border border-legal-gold/20 bg-white">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-legal-blue">
+            <span className="flex items-center gap-2">
               <SlidersHorizontal className="h-5 w-5" />
               Simulador antes de guardar
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4 p-6">
+            </span>
+            <span className="text-xs font-normal text-legal-gray">
+              {form.id ? 'Editando miembro' : 'Nuevo miembro en proceso'}
+            </span>
+          </summary>
+          <div className="space-y-4 border-t border-legal-blue/10 p-4 sm:p-6">
             <p className="text-sm text-gray-700">
               Al editar nombre, nodo superior, defunción o parentesco, vea cómo cambian los porcentajes de los herederos
               activos. Los cambios solo se aplican al guardar el miembro.
@@ -1166,8 +1171,9 @@ const MiembrosArbolSienna = () => {
                 ))}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </details>
+        )}
 
         <Card className="border border-legal-gold/20">
           <CardHeader className="bg-legal-blue/5 border-b">
@@ -1187,18 +1193,13 @@ const MiembrosArbolSienna = () => {
               />
             </div>
 
-            <Table className="min-w-[1300px]">
+            <Table className="min-w-[860px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>Miembro</TableHead>
-                  <TableHead>Enlaces</TableHead>
-                  <TableHead className="min-w-[220px]">Línea parental</TableHead>
-                  <TableHead>Rama / nivel</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead>Rama</TableHead>
                   <TableHead>Conexión</TableHead>
-                  <TableHead>¿Hereda?</TableHead>
-                  <TableHead>Rol</TableHead>
-                  <TableHead>Fechas</TableHead>
-                  <TableHead>Foto</TableHead>
                   <TableHead>Documentos</TableHead>
                   <TableHead className="hidden xl:table-cell">Notas</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
@@ -1207,7 +1208,7 @@ const MiembrosArbolSienna = () => {
               <TableBody>
                 {loading && (
                   <TableRow>
-                    <TableCell colSpan={12} className="py-8 text-center text-legal-gray">
+                    <TableCell colSpan={7} className="py-8 text-center text-legal-gray">
                       <span className="inline-flex items-center gap-2">
                         <Loader2 className="h-4 w-4 animate-spin text-legal-blue" />
                         {loadingMessage}
@@ -1217,7 +1218,7 @@ const MiembrosArbolSienna = () => {
                 )}
                 {!loading && filteredMembers.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={12} className="py-8 text-center text-legal-gray">
+                    <TableCell colSpan={7} className="py-8 text-center text-legal-gray">
                       No hay miembros que coincidan con la búsqueda.
                     </TableCell>
                   </TableRow>
@@ -1246,7 +1247,7 @@ const MiembrosArbolSienna = () => {
 
                     return (
                       <TableRow key={member.id}>
-                        <TableCell className="min-w-[200px]">
+                        <TableCell className="min-w-[240px]">
                           <div className="flex items-start gap-2">
                             <MemberPhoto
                               name={member.name}
@@ -1256,59 +1257,46 @@ const MiembrosArbolSienna = () => {
                               size="sm"
                               pendingInheritance={isPendingInheritance}
                             />
-                            <div>
-                          <p className="font-medium text-legal-blue">{member.name}</p>
-                          <p className="mt-1 font-mono text-[10px] text-legal-gray">{member.id}</p>
-                          {member.is_highlighted_ancestor && (
-                            <Badge className="mt-1" variant="outline">
-                              Destacado
-                            </Badge>
-                          )}
+                            <div className="min-w-0">
+                              <p className="truncate font-medium text-legal-blue">{member.name}</p>
+                              <p className="mt-1 text-xs text-legal-gray">
+                                {member.birth || 'Sin nacimiento'}{member.death ? ' · † ' + member.death : ''}
+                              </p>
+                              {member.is_highlighted_ancestor && (
+                                <Badge className="mt-1" variant="outline">
+                                  Destacado
+                                </Badge>
+                              )}
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell className="min-w-[150px]">
+                        <TableCell className="min-w-[170px]">
+                          <div className="space-y-1.5">
+                            <Badge
+                              variant={displayInherits ? 'default' : 'secondary'}
+                              className={displayInherits ? 'bg-legal-gold text-white hover:bg-legal-gold/90' : ''}
+                            >
+                              {displayInherits ? 'Hereda' : 'No hereda'}
+                            </Badge>
                           <MemberVerificationBadge
                             member={member}
                             members={members}
                             genealogy={genealogy}
                           />
-                        </TableCell>
-                        <TableCell className="text-sm leading-relaxed text-gray-700">{context.parentalLine}</TableCell>
-                        <TableCell className="min-w-[160px]">
-                          <p className="text-sm font-medium text-legal-blue">{context.collateralLine}</p>
-                          <p className="mt-1 text-xs text-legal-gray">Nivel {context.treeLevel}</p>
-                        </TableCell>
-                        <TableCell className="min-w-[140px] text-sm text-gray-700">{context.connectionLabel}</TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={displayInherits ? 'default' : 'secondary'}
-                            className={displayInherits ? 'bg-legal-gold text-white hover:bg-legal-gold/90' : ''}
-                          >
-                            {displayInheritanceLabel}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="min-w-[140px] text-sm text-gray-700">{displayTreeRoleLabel}</TableCell>
-                        <TableCell className="whitespace-nowrap text-sm">
-                          {member.birth || '—'}
-                          {member.death ? ` / † ${member.death}` : ''}
-                          {spouseLabel ? (
-                            <p className="mt-1 text-xs text-legal-gray">Cónyuge: {spouseLabel}</p>
-                          ) : null}
-                        </TableCell>
-                        <TableCell className="min-w-[110px]">
-                          <div className="flex items-center justify-center">
-                            <MemberPhoto
-                              name={member.name}
-                              memberId={member.id}
-                              photoData={photoCache[member.id]}
-                              lookup={photoLookup}
-                              size="md"
-                              pendingInheritance={isPendingInheritance}
-                            />
                           </div>
                         </TableCell>
-                        <TableCell className="min-w-[220px]">
+                        <TableCell className="min-w-[160px]">
+                          <p className="text-sm font-medium text-legal-blue">{context.collateralLine}</p>
+                          <p className="mt-1 text-xs text-legal-gray">Nivel {context.treeLevel} · {displayTreeRoleLabel}</p>
+                        </TableCell>
+                        <TableCell className="max-w-[280px] text-sm text-gray-700">
+                          <p className="line-clamp-2">{context.parentalLine}</p>
+                          <p className="mt-1 text-xs text-legal-gray">{context.connectionLabel}</p>
+                          {spouseLabel ? (
+                            <p className="mt-1 truncate text-xs text-legal-gray">Cónyuge: {spouseLabel}</p>
+                          ) : null}
+                        </TableCell>
+                        <TableCell className="min-w-[150px]">
                           <div className="flex items-center gap-2">
                             <Badge variant="outline">{memberDocuments.length} acta(s)</Badge>
                             <Dialog
@@ -1327,7 +1315,7 @@ const MiembrosArbolSienna = () => {
                                   disabled={memberDocuments.length === 0}
                                 >
                                   <Eye className="mr-1 h-4 w-4" />
-                                  Ver documentación
+                                  Ver
                                 </Button>
                               </DialogTrigger>
                               <DialogContent className="max-h-[85vh] overflow-hidden sm:max-w-4xl">
@@ -1413,9 +1401,11 @@ const MiembrosArbolSienna = () => {
                           </div>
                         </TableCell>
                         <TableCell className="hidden min-w-[200px] text-sm text-gray-700 xl:table-cell">
-                          {getMemberEffectiveInheritanceReason(member) ||
-                            context.routeLabel ||
-                            '—'}
+                          <p className="line-clamp-2">
+                            {getMemberEffectiveInheritanceReason(member) ||
+                              context.routeLabel ||
+                              '—'}
+                          </p>
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">

@@ -62,6 +62,7 @@ Estado actual del flujo Sienna:
 - Las imágenes de actas se normalizan antes de insertarse en PDF para evitar soportes invisibles.
 - Las tablas de consulta de miembros se ordenan alfabéticamente; el árbol conserva su orden lógico visual.
 - `/sienna/miembros-arbol` separa carga liviana de workspace y media para que totales/listas no dependan de fotos pesadas.
+- La limpieza UX compacta tablas, colapsa detalles técnicos y deja rutas/simuladores bajo demanda para reducir ruido visual.
 
 ## Interfaz (ayuda y navegación)
 

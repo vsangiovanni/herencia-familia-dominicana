@@ -41,6 +41,17 @@ Endpoints canónicos actuales:
 - `MemberDetailSheet` es la ficha canónica reutilizable para abrir detalle de miembro desde árbol, hallazgos, dobles linajes y miembros.
 - El despliegue autorizado de este release subió frontend/backend solamente; no se ejecutaron migraciones, no se tocó la BD y no se sobrescribió `.env` remoto.
 
+## Limpieza UX/UI aplicada
+
+- `/sienna/miembros-arbol`: la tabla principal queda como directorio compacto; columnas técnicas, notas largas y detalles de filiación se consultan bajo demanda en ficha/detalles.
+- El bloque **Simulador antes de guardar** no se muestra con el formulario vacío; aparece colapsado solo al editar un miembro o al comenzar a escribir un nombre nuevo.
+- `/sienna/arbol-genealogico`: criterio legal, estado del API y cruces de ramas se muestran de forma discreta/colapsable para que el canvas sea protagonista.
+- `/sienna/explicacion-herederos`: las tarjetas de herederos resumen primero nombre, porcentaje, estado y monto; ruta genealógica/base legal quedan colapsadas.
+- `/documentos-probatorios`: la presentación manual de herederos queda bajo demanda para priorizar carga, OCR, vínculo y registro documental.
+- `/hallazgos`: la vista funciona como bandeja de corrección; la acción detallada de resolver se abre solo cuando hace falta.
+- `/sienna/dobles-linajes`: el encabezado y KPIs se reducen para apoyar una lectura master-detail de los casos.
+- `/sienna/calculo-filiacion`: rutas largas y nota jurídica quedan resumidas/colapsadas para reducir ruido visual.
+
 ## Documentos probatorios (vinculación)
 
 - Pantalla: `/documentos-probatorios`.
@@ -141,7 +152,7 @@ Ayuda en pantalla: icono **?** (`sienna-miembros`, `sienna-miembros-agregar`) e 
 |---------|-----------|
 | Por qué heredo | Explicación → pestaña «Por qué heredo» |
 | Simulador (excluir herederos) | Explicación → «Simulador» |
-| Simulador al editar miembro | Miembros → bloque simulador |
+| Simulador al editar miembro | Miembros → bloque simulador colapsado; visible solo al editar o empezar un miembro nuevo |
 | Semáforo documental | Explicación → «Semáforo» |
 | Línea de tiempo | Explicación → «Línea de tiempo» |
 | Resumen ejecutivo | Explicación (parte superior) |

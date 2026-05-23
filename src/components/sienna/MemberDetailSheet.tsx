@@ -147,8 +147,8 @@ const MemberDetailSheet = ({
                   <SheetTitle className="font-serif text-xl leading-tight text-legal-blue">
                     {member.name}
                   </SheetTitle>
-                  <SheetDescription className="mt-1 font-mono text-xs">
-                    {member.id}
+                  <SheetDescription className="mt-1 text-sm">
+                    Ficha canónica del miembro
                   </SheetDescription>
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     <Badge variant="outline" className={statusClass[effectiveStatus]}>
@@ -193,20 +193,21 @@ const MemberDetailSheet = ({
               </p>
             </div>
 
-            <div className="rounded-md border border-legal-blue/10 bg-white p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="flex items-center gap-2 text-xs font-semibold uppercase text-legal-blue">
+            <details className="rounded-md border border-legal-blue/10 bg-white">
+              <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs font-semibold uppercase text-legal-blue">
+                <span className="inline-flex items-center gap-2">
                   <GitBranch className="h-3.5 w-3.5" />
                   Integridad genealógica
-                </p>
+                </span>
                 <MemberVerificationBadge member={member} members={members} genealogy={genealogy} />
-              </div>
-              <div className="mt-3 grid gap-2 text-sm text-gray-700">
+              </summary>
+              <div className="grid gap-2 border-t border-legal-blue/10 p-3 text-sm text-gray-700">
+                <p>ID interno: <span className="font-mono text-xs">{member.id}</span></p>
                 <p>Vínculos parentales formales: <span className="font-semibold">{parentLinks.length}</span></p>
                 <p>Cruce de dos rutas parentales: <span className="font-semibold">{hasDualParentRoute ? 'Sí' : 'No'}</span></p>
                 <p>Documentos relacionados: <span className="font-semibold">{memberDocuments.length}</span></p>
               </div>
-            </div>
+            </details>
 
             {memberDocuments.length > 0 && (
               <div className="rounded-md border border-legal-blue/10 bg-white p-3">

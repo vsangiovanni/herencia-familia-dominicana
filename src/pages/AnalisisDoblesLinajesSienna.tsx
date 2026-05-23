@@ -520,39 +520,34 @@ const AnalisisDoblesLinajesSienna = () => {
       />
 
       <div className="space-y-6">
-        <section className="rounded-md border border-legal-blue/15 bg-gradient-to-br from-white via-legal-blue/[0.03] to-legal-gold/[0.08] p-5 shadow-sm">
-          <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
+        <section className="rounded-md border border-legal-blue/15 bg-white p-4 shadow-sm">
+          <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-center">
             <div>
               <p className="mb-2 inline-flex items-center gap-2 rounded-full border border-legal-gold/30 bg-white px-3 py-1 text-xs font-semibold uppercase text-legal-blue">
                 <Sparkles className="h-3.5 w-3.5 text-legal-gold" />
                 Debugger genealógico Sienna
               </p>
-              <h2 className="font-serif text-2xl font-bold text-legal-blue md:text-3xl">
-                Dobles rutas, convergencias y validación familiar en una sola vista
-              </h2>
-              <p className="mt-2 max-w-3xl text-sm leading-relaxed text-gray-700">
+              <p className="max-w-3xl text-sm leading-relaxed text-gray-700">
                 Esta sección no reemplaza el árbol. Usa el backend para auditar rutas, comparar linajes y
                 dirigir correcciones controladas hacia Miembros del Árbol.
               </p>
             </div>
-            <div className="rounded-md border border-legal-blue/10 bg-white p-4">
-              <p className="text-xs uppercase text-legal-gray">Política de edición</p>
-              <p className="mt-1 text-sm leading-relaxed text-gray-700">
+            <details className="rounded-md border border-legal-blue/10 bg-legal-blue/[0.02] px-3 py-2">
+              <summary className="cursor-pointer list-none text-xs font-semibold uppercase text-legal-blue">Política de edición</summary>
+              <p className="mt-2 max-w-md text-sm leading-relaxed text-gray-700">
                 {analysis?.audit_policy.message ||
                   'Las correcciones se hacen desde Miembros del Árbol, sin modificar relaciones automáticamente.'}
               </p>
-            </div>
+            </details>
           </div>
         </section>
 
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
           {[
             ['Personas', analysis?.summary.members_total ?? 0, Users],
             ['Doble linaje', analysis?.summary.dual_lineage_total ?? 0, GitMerge],
-            ['Convergencias', analysis?.summary.convergence_total ?? 0, Network],
             ['Inconsistencias', analysis?.summary.suspicious_total ?? 0, AlertTriangle],
             ['Críticas', analysis?.summary.critical_total ?? 0, ShieldAlert],
-            ['Pendientes', analysis?.summary.pending_validation_total ?? 0, CheckCircle2],
           ].map(([label, value, Icon]) => (
             <Card key={String(label)} className="border border-legal-gold/20">
               <CardContent className="flex min-h-[4.75rem] items-center gap-2 p-3 sm:min-h-[5.5rem] sm:gap-3 sm:p-4">
