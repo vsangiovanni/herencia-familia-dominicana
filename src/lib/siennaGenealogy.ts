@@ -332,6 +332,7 @@ export const countGenealogyInconsistencies = (bundle: SiennaGenealogyBundle) => 
 
   const unionIssues = bundle.unions.filter(
     (union) =>
+      isUnionAuditRelevant(union) &&
       union.is_inconsistent &&
       (referencedUnionIds.has(union.id) || normalizedId(union.partner_b_member_id))
   ).length;
@@ -340,3 +341,76 @@ export const countGenealogyInconsistencies = (bundle: SiennaGenealogyBundle) => 
 
   return unionIssues + linkIssues;
 };
+
+/** Uniones creadas solo por texto legacy o sin segundo partner: no afectan cálculo ni auditoría. */
+export const isInformativeOnlyUnion = (union: FamilyUnion) => {
+  if ((union.migration_source || '').trim() === 'spouse_text_only') return true;
+  return !normalizedId(union.partner_b_member_id);
+};
+
+export const isUnionAuditRelevant = (union: FamilyUnion) => !isInformativeOnlyUnion(union);
+
+export type MemberLinkVerificationStatus = 'verified' | 'pending';
+
+export const getMemberLinkVerificationStatus = (
+  member: SiennaFamilyMember,
+  members: SiennaFamilyMember[],
+  bundle: SiennaGenealogyBundle
+): { status: MemberLinkVerificationStatus; detail?: string } => {
+  const membersById = new Map(members.map((item) => [item.id, item]));
+  const childLinks = getParentLinksForChild(member.id, bundle.parent_links);
+  const parentLinks = getParentLinksForParent(member.id, bundle.parent_links);
+  const allLinks = [...childLinks, ...parentLinks];
+
+  const blockingLink = allLinks.find((link) => link.is_inconsistent);
+  if (blockingLink) {
+    return {
+      status: 'pending',
+      detail: blockingLink.inconsistency_reason || 'Vínculo parental inconsistente',
+    };
+  }
+
+  const isChild =
+    member.relationship_to_parent === 'hijo' || member.relationship_to_parent === 'hija';
+  if (isChild && member.parent_id && childLinks.length === 0) {
+    return { status: 'pending', detail: 'Falta vínculo formal de filiación' };
+  }
+
+  const spouseId = normalizedId(member.spouse_member_id);
+  if (spouseId) {
+    const spouse = membersById.get(spouseId);
+    if (!spouse) {
+      return { status: 'pending', detail: 'spouse_member_id apunta a un miembro inexistente' };
+    }
+    const union = findUnionBetween(member.id, spouseId, bundle.unions);
+    const reciprocal = normalizedId(spouse.spouse_member_id) === normalizedId(member.id);
+    if (!union && !reciprocal) {
+      return { status: 'pending', detail: 'Cónyuge enlazado sin unión formal registrada' };
+    }
+    const unionsToCheck = union ? [union] : getUnionsForMember(member.id, bundle.unions);
+    const badUnion = unionsToCheck.find(
+      (item) => isUnionAuditRelevant(item) && (item.is_inconsistent || item.confidence === 'baja')
+    );
+    if (badUnion) {
+      return {
+        status: 'pending',
+        detail: badUnion.inconsistency_reason || 'Unión formal por validar',
+      };
+    }
+  }
+
+  const badMemberUnion = getUnionsForMember(member.id, bundle.unions).find(
+    (item) => isUnionAuditRelevant(item) && (item.is_inconsistent || item.confidence === 'baja')
+  );
+  if (badMemberUnion) {
+    return {
+      status: 'pending',
+      detail: badMemberUnion.inconsistency_reason || 'Unión formal por validar',
+    };
+  }
+
+  return { status: 'verified' };
+};
+
+export const hasDocumentalSpouseReference = (member: SiennaFamilyMember) =>
+  Boolean(member.spouse?.trim()) && !normalizedId(member.spouse_member_id);

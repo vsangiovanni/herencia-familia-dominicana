@@ -31,21 +31,20 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
     ],
   },
   dashboard: {
-    title: 'Panel de control',
-    intro: 'Punto de entrada tras iniciar sesión. Desde aquí accede a las herramientas del expediente.',
+    title: 'Inicio del expediente',
+    intro: 'Pantalla principal para herederos: árbol familiar, su parte en la herencia, conexiones de parentesco y documentos.',
     sections: [
       {
-        title: 'Tarjetas',
+        title: 'Accesos principales',
         items: [
-          'Cada tarjeta abre un módulo: árbol, herederos, documentos o sección Sienna.',
-          'Las opciones de administración solo aparecen si su rol es administrador.',
+          'Use las tarjetas grandes para ir directo a lo más importante.',
+          'Mi herencia muestra cuánto le corresponde; Líneas de parentesco aclara si está vinculado por más de una rama.',
         ],
       },
       {
-        title: 'Ayuda en cada pantalla',
+        title: 'Administración',
         items: [
-          'En el resto de módulos verá un icono ? arriba a la derecha con instrucciones de esa pantalla.',
-          'No bloquea el trabajo: ábralo solo cuando lo necesite.',
+          'La sección de administración solo la ven cuentas del equipo legal.',
         ],
       },
     ],
@@ -286,6 +285,11 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
           'Detecta personas conectadas por más de una ruta genealógica usando el backend y la base de datos real.',
           'Compara rutas por fuente familiar, identifica ancestros compartidos y estima complejidad del cruce.',
           'Muestra alertas por duplicados, vínculos dudosos, fechas incoherentes y relaciones sospechosas.',
+          'El cónyuge en texto (sin spouse_member_id) es referencia documental y no genera inconsistencia sucesoria.',
+          'El badge Verificado indica enlaces formales correctos; Ref. doc. señala cónyuge solo en texto.',
+          'Use los filtros Todos, Heredan y No heredan / Vínculo para separar quienes reciben cuota del reparto de quienes solo conectan rutas.',
+          'El cuadro Reparto por rama muestra monto y porcentaje por Vincenzo/Vicente y Paolo/Paulino; Monto total heredado resume la cuota neta.',
+          'Los fallecidos muestran el mismo lacito y etiqueta Fallecido que en el árbol Sienna.',
         ],
       },
       {
@@ -410,7 +414,8 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
         items: [
           'Campo "Cónyuge": vincula la pareja de la persona que está guardando (no la filiación del hijo).',
           'Al guardar, crea/actualiza la unión entre ambos IDs.',
-          'Sin este enlace, las uniones antiguas solo en texto quedan marcadas como inconsistentes.',
+          'Sin spouse_member_id enlazado, el sistema trata a la persona como no casada para reparto y uniones formales.',
+          'El texto en cónyuge puede conservarse como referencia documental (badge Ref. doc.) sin afectar herencia.',
         ],
       },
       {

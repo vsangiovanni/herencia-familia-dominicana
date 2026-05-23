@@ -6,7 +6,7 @@ import DocumentHeader from '@/components/DocumentHeader';
 import SiennaPageLayout from '@/components/sienna/SiennaPageLayout';
 import { api, ConfirmedHeir, EvidenceDocument } from '@/lib/api';
 import { invalidateSiennaData, useSiennaCalculation, useSiennaWorkspace } from '@/hooks/useSiennaData';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import MemberPhoto from '@/components/sienna/MemberPhoto';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,7 +18,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/components/ui/use-toast';
 import {
   applySiennaCaseConfig,
-  buildDominicanInheritancePlan,
   InheritanceShare,
   legalCriterionText,
   normalizeName,
@@ -34,7 +33,7 @@ import {
   heirPhotoByName,
   routeSteps,
 } from '@/lib/siennaHeirExplain';
-import { calculateHeirAmount, resolveEstateAmounts, resolveHeirSimulatedShare } from '@/lib/siennaCalculation';
+import { buildInheritancePlanFromApiRows, calculateHeirAmount, resolveHeirSimulatedShare } from '@/lib/siennaCalculation';
 import { useAuth } from '@/context/AuthContext';
 import {
   AlertTriangle,
@@ -137,22 +136,25 @@ const ExplicacionHerederosSienna = () => {
 
   const loading = isLoading || !workspaceInitialized;
 
-  const estate = useMemo(
-    () => resolveEstateAmounts(estateAmount, lawyerFeePercentage),
-    [estateAmount, lawyerFeePercentage]
-  );
-  const { grossAmount, lawyerFeePercentage: feePercentage, lawyerFeeAmount: lawyerFee, distributableAmount: netAmount } =
-    estate;
   const { data: realtimeCalculationData, isFetching: isFetchingCalculation } = useSiennaCalculation(
     estateAmount,
     lawyerFeePercentage
   );
   const realtimeCalculation = realtimeCalculationData?.calculation;
+  const {
+    grossAmount = 0,
+    lawyerFeePercentage: feePercentage = 0,
+    lawyerFeeAmount: lawyerFee = 0,
+    distributableAmount: netAmount = 0,
+  } = realtimeCalculation?.estate ?? {};
   const apiRowsByMemberId = useMemo(
     () => new Map((realtimeCalculation?.active_heirs ?? []).map((row) => [row.member_id, row])),
     [realtimeCalculation?.active_heirs]
   );
-  const plan = useMemo(() => buildDominicanInheritancePlan(members, genealogy), [genealogy, members]);
+  const plan = useMemo(
+    () => buildInheritancePlanFromApiRows(realtimeCalculation?.active_heirs ?? [], members),
+    [members, realtimeCalculation?.active_heirs]
+  );
   const photosByName = useMemo(() => heirPhotoByName(heirs), [heirs]);
 
   const documentsByHeir = useMemo(() => {
@@ -209,7 +211,7 @@ const ExplicacionHerederosSienna = () => {
           photo: photosByName.get(normalizeName(share.member.name)) || null,
           traffic: evaluateEvidenceSupport(heirDocs, share.member, members),
         };
-      }),
+      }).sort((left, right) => left.share.member.name.localeCompare(right.share.member.name, 'es', { sensitivity: 'base' })),
     [apiRowsByMemberId, documentsByHeir, excludedHeirs, includedTotal, isRenormalizedSimulation, members, netAmount, photosByName, plan.activeHeirs]
   );
 
@@ -404,7 +406,17 @@ const ExplicacionHerederosSienna = () => {
                 <tbody>
                   {briefs.map((brief) => (
                     <tr key={brief.share.member.id} className="border-t border-legal-blue/10">
-                      <td className="p-3 font-medium text-legal-blue">{brief.share.member.name}</td>
+                      <td className="p-3">
+                        <div className="flex items-center gap-2">
+                          <MemberPhoto
+                            name={brief.share.member.name}
+                            memberId={brief.share.member.id}
+                            photoData={brief.photo?.photo_data}
+                            size="sm"
+                          />
+                          <span className="font-medium text-legal-blue">{brief.share.member.name}</span>
+                        </div>
+                      </td>
                       <td className="p-3">{formatPercent(brief.simulatedShare)}</td>
                       <td className="p-3">{formatMoney(brief.simulatedAmount)}</td>
                       <td className="p-3 text-xs text-legal-gray">{brief.share.sources.join(', ') || '-'}</td>
@@ -457,14 +469,13 @@ const ExplicacionHerederosSienna = () => {
               briefs.map((brief) => (
                 <Card key={brief.share.member.id} className="border border-legal-gold/20">
                   <CardContent className="grid gap-5 p-4 sm:p-5 sm:grid-cols-2 xl:grid-cols-[auto_1.2fr_1fr_minmax(0,220px)]">
-                    <Avatar className="h-20 w-20 border-2 border-legal-gold/40">
-                      {brief.photo?.photo_data && (
-                        <AvatarImage src={brief.photo.photo_data} alt={brief.share.member.name} className="object-cover" />
-                      )}
-                      <AvatarFallback className="bg-legal-blue/10 font-semibold text-legal-blue">
-                        {initials(brief.share.member.name)}
-                      </AvatarFallback>
-                    </Avatar>
+                    <MemberPhoto
+                      name={brief.share.member.name}
+                      memberId={brief.share.member.id}
+                      photoData={brief.photo?.photo_data}
+                      size="xl"
+                      className="border-2 border-legal-gold/40"
+                    />
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="font-serif text-xl font-bold text-legal-blue">{brief.share.member.name}</h3>
@@ -580,6 +591,12 @@ const ExplicacionHerederosSienna = () => {
                         <div className="flex items-center justify-between gap-3">
                           <div className="flex items-center gap-3">
                             <Checkbox checked={included} onCheckedChange={() => toggleHeir(brief.share.member.id)} />
+                            <MemberPhoto
+                              name={brief.share.member.name}
+                              memberId={brief.share.member.id}
+                              photoData={brief.photo?.photo_data}
+                              size="sm"
+                            />
                             <div>
                               <p className="font-medium text-legal-blue">{brief.share.member.name}</p>
                               <p className="text-xs text-legal-gray">Base legal: {formatPercent(brief.share.share)}</p>

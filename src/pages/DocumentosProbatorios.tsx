@@ -3,6 +3,7 @@ import Tesseract from 'tesseract.js';
 import { useQueryClient } from '@tanstack/react-query';
 import BackButton from '@/components/BackButton';
 import DocumentHeader from '@/components/DocumentHeader';
+import MemberPhoto from '@/components/sienna/MemberPhoto';
 import { api, ConfirmedHeir, EvidenceDocument, SiennaFamilyMember } from '@/lib/api';
 import { invalidateSiennaData, useSiennaWorkspace } from '@/hooks/useSiennaData';
 import { sortMembersByName } from '@/lib/siennaFamilyTree';
@@ -29,7 +30,8 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from '@/components/ui/use-toast';
-import { Archive, Eye, FileImage, FileSearch, Image, RefreshCcw, Save, Trash2, UserCheck } from 'lucide-react';
+import { readFileAsDataUrl } from '@/lib/readFileAsDataUrl';
+import { Archive, Eye, FileImage, FileSearch, RefreshCcw, Save, Trash2, UserCheck } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 type DocumentForm = Omit<EvidenceDocument, 'id' | 'created_at' | 'updated_at'>;
@@ -96,8 +98,8 @@ const parseDocument = (text: string, knownPeople: string[]): Partial<DocumentFor
   const detectedPeople = knownPeople.filter((person) => normalized.includes(normalizeText(person)));
   const documentType = detectDocumentType(text);
   const date = firstMatch(text, [
-    /(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})/,
-    /(?:fecha|date|data)[^\d]{0,20}(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})/i,
+    /(\d{1,2}[/\-.]\d{1,2}[/\-.]\d{2,4})/,
+    /(?:fecha|date|data)[^\d]{0,20}(\d{1,2}[/\-.]\d{1,2}[/\-.]\d{2,4})/i,
   ]);
   const fatherName = firstMatch(text, [
     /(?:padre|pere|father|paternidad)[:\s-]+([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑa-záéíóúñ'\s]{3,80})/i,
@@ -128,14 +130,6 @@ const parseDocument = (text: string, knownPeople: string[]): Partial<DocumentFor
     extracted_text: text,
   };
 };
-
-const readFileAsDataUrl = (file: File) =>
-  new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ''));
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
 
 const formatMoney = (amount: number | string | null | undefined) =>
   new Intl.NumberFormat('es-DO', {
@@ -776,7 +770,17 @@ const DocumentosProbatorios = () => {
                   const photo = draft.photo_data || heir.photo_data;
                   return (
                   <TableRow key={heir.id}>
-                    <TableCell className="font-medium text-legal-blue min-w-[240px]">{heir.heir_name}</TableCell>
+                    <TableCell className="font-medium text-legal-blue min-w-[240px]">
+                      <div className="flex items-center gap-2">
+                        <MemberPhoto
+                          name={heir.heir_name}
+                          memberId={heir.sienna_member_id}
+                          photoData={photo}
+                          size="sm"
+                        />
+                        {heir.heir_name}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-2">
                         {heir.line_vincenzo && <Badge variant="outline">Vincenzo/Vicente</Badge>}
@@ -793,13 +797,12 @@ const DocumentosProbatorios = () => {
                     </TableCell>
                     <TableCell className="min-w-[220px]">
                       <div className="flex items-center gap-3">
-                        <div className="h-12 w-12 overflow-hidden rounded-full border bg-legal-blue/5 flex items-center justify-center">
-                          {photo ? (
-                            <img src={String(photo)} alt={heir.heir_name} className="h-full w-full object-cover" />
-                          ) : (
-                            <Image className="h-5 w-5 text-legal-gray" />
-                          )}
-                        </div>
+                        <MemberPhoto
+                          name={heir.heir_name}
+                          memberId={heir.sienna_member_id}
+                          photoData={photo}
+                          size="md"
+                        />
                         <Input
                           type="file"
                           accept="image/*"

@@ -18,6 +18,8 @@
     "test:sienna": "node scripts/test-sienna-inheritance.mjs",
     "migrate:genealogy": "node scripts/migrate-sienna-genealogy.cjs",
     "migrate:genealogy:prod": "ENV_FILE=.env.prod.working node scripts/migrate-sienna-genealogy.cjs",
+    "cleanup:spouse-text-unions": "node scripts/cleanup-spouse-text-unions.cjs",
+    "cleanup:spouse-text-unions:prod": "ENV_FILE=.env.prod.working node scripts/cleanup-spouse-text-unions.cjs",
     "deploy:env": "python3 scripts/upload-prod-env.py",
     "deploy:zip": "python3 scripts/build-prod-deploy-zip.py",
     "build:dev": "vite build --mode development",

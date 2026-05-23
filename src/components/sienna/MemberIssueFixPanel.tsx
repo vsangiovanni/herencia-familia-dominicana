@@ -57,10 +57,9 @@ export const MemberIssueFixPanel = ({
           value={draft.filiationUnionId || '__none__'}
           onValueChange={(value) => {
             const unionId = value === '__none__' ? '' : value;
-            const nextSecond = buildSecondParentOptions(parentId, unionId || null, members, unions);
             onDraftChange({
               filiationUnionId: unionId,
-              secondParentId: nextSecond[0]?.id || '',
+              secondParentId: '',
             });
           }}
         >
@@ -102,7 +101,7 @@ export const MemberIssueFixPanel = ({
           onClick={onSave}
         >
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          Guardar filiación
+          {draft.filiationUnionId ? 'Guardar filiación' : 'Guardar sin unión'}
         </Button>
       </div>
     );

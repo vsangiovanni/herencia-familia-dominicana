@@ -1,4 +1,5 @@
 import { InheritancePlan, InheritanceShare } from '@/lib/dominicanInheritance';
+import type { SiennaFamilyMember, SiennaRealtimeCalculationRow } from '@/lib/api';
 
 export type SiennaHeirCalculationRow = {
   member_id: string;
@@ -9,6 +10,7 @@ export type SiennaHeirCalculationRow = {
   payment_basis: string;
   reason: string;
   sources: string[];
+  source_breakdown?: Array<{ source: string; share: number; routes: string[] }>;
 };
 
 export type SiennaCalculationSnapshotPayload = {
@@ -96,6 +98,7 @@ export const buildHeirCalculationRows = (
       payment_basis: share.paymentBasis,
       reason: share.reason,
       sources: share.sources,
+      source_breakdown: share.sourceBreakdown,
     })),
     distributableAmount
   );
@@ -117,6 +120,41 @@ export const buildMembersHash = (memberIds: string[]) =>
     .slice()
     .sort((a, b) => a.localeCompare(b))
     .join('|');
+
+export const buildInheritancePlanFromApiRows = (
+  rows: SiennaRealtimeCalculationRow[],
+  members: SiennaFamilyMember[]
+): InheritancePlan => {
+  const membersById = new Map(members.map((member) => [member.id, member]));
+  const activeHeirs: InheritanceShare[] = rows
+    .map((row) => {
+      const member = membersById.get(row.member_id);
+      if (!member) return null;
+      return {
+        member,
+        share: Number(row.share_percent || 0),
+        role: 'Heredero final',
+        reason: row.reason || '',
+        route: row.route || '',
+        paymentBasis: row.payment_basis || '',
+        sources: Array.isArray(row.sources) ? row.sources : [],
+        sourceBreakdown: Array.isArray(row.source_breakdown)
+          ? row.source_breakdown.map((segment) => ({
+              source: segment.source,
+              share: Number(segment.share || 0),
+              routes: Array.isArray(segment.routes) ? segment.routes : [],
+            }))
+          : [],
+      } satisfies InheritanceShare;
+    })
+    .filter((share): share is InheritanceShare => Boolean(share));
+
+  return {
+    activeHeirs,
+    sharesById: new Map(activeHeirs.map((share) => [share.member.id, share])),
+    sharesByName: new Map(activeHeirs.map((share) => [share.member.name, share])),
+  };
+};
 
 export const parseCalculationPayload = (payloadJson?: string | null): SiennaCalculationSnapshotPayload | null => {
   if (!payloadJson) return null;

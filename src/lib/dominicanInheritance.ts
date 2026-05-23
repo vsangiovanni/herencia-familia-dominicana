@@ -5,6 +5,7 @@ import {
   resolveSpousePartner,
   SiennaGenealogyBundle,
 } from './siennaGenealogy';
+import { getMemberEffectiveInheritanceStatus, getMemberStoredInheritanceStatus } from './siennaMemberInheritance';
 
 export type InheritanceStatus = 'posible_heredero' | 'no_hereda' | 'requiere_revision' | 'confirmado';
 
@@ -410,6 +411,14 @@ export const classifyMemberByDominicanLaw = (
     };
   }
 
+  if (isDeceased(member)) {
+    return {
+      inheritance_status: 'no_hereda',
+      inheritance_reason:
+        'Persona fallecida sin descendientes documentados en el árbol; no recibe cuota en el reparto activo (la transmisión sigue por los parientes vivos de su rama).',
+    };
+  }
+
   return {
     inheritance_status: member.inheritance_status || 'requiere_revision',
     inheritance_reason: member.inheritance_reason || 'No hay suficiente información del expediente para clasificarlo automáticamente.',
@@ -439,7 +448,7 @@ export const summarizeInheritanceStatuses = (
   let pending = 0;
 
   members.forEach((member) => {
-    const status = resolveEffectiveInheritanceStatus(member, members, genealogy, resolvedPlan);
+    const status = getMemberEffectiveInheritanceStatus(member);
     if (status === 'posible_heredero' || status === 'confirmado') heirs += 1;
     else if (status === 'no_hereda') connectors += 1;
     else if (status === 'requiere_revision') pending += 1;
@@ -450,6 +459,6 @@ export const summarizeInheritanceStatuses = (
     heirs,
     connectors,
     pending,
-    storedPending: members.filter((member) => member.inheritance_status === 'requiere_revision').length,
+    storedPending: members.filter((member) => getMemberStoredInheritanceStatus(member) === 'requiere_revision').length,
   };
 };

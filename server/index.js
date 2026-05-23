@@ -7,6 +7,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import mysql from 'mysql2/promise';
 import { randomUUID } from 'node:crypto';
+import { enrichSiennaMembersWithEffectiveInheritance } from './siennaMemberInheritance.js';
 
 const app = express();
 const port = Number(process.env.PORT || process.env.API_PORT || 3001);
@@ -96,6 +97,13 @@ async function loadGenealogyBundle() {
   };
 }
 
+const siennaInheritanceDeps = () => ({
+  normalizeSiennaName,
+  buildApiInheritancePlan,
+  getDescendantsForRepresentation,
+  isDeceasedMember,
+});
+
 async function loadSiennaFamilyBundle() {
   const members = await query(
     `SELECT sfm.id, sfm.parent_id, sfm.relationship_to_parent, sfm.name, sfm.birth, sfm.death, sfm.spouse_member_id, sfm.spouse, sfm.spouse_birth,
@@ -109,13 +117,21 @@ async function loadSiennaFamilyBundle() {
      ORDER BY COALESCE(parent_id, ''), sort_order, name`
   );
   const genealogy = await loadGenealogyBundle();
+  const normalizedMembers = members.map((member) => ({
+    ...member,
+    is_highlighted_ancestor: Boolean(member.is_highlighted_ancestor),
+    sort_order: Number(member.sort_order || 0),
+  }));
+  const settings = await loadAppSettings();
+  const enrichedMembers = enrichSiennaMembersWithEffectiveInheritance(
+    normalizedMembers,
+    genealogy,
+    settings,
+    siennaInheritanceDeps()
+  );
 
   return {
-    members: members.map((member) => ({
-      ...member,
-      is_highlighted_ancestor: Boolean(member.is_highlighted_ancestor),
-      sort_order: Number(member.sort_order || 0),
-    })),
+    members: enrichedMembers,
     ...genealogy,
   };
 }
@@ -164,6 +180,39 @@ async function loadConfirmedHeirs(includeMedia = false) {
     inheritance_amount: Number(heir.inheritance_amount || 0),
     evidence_count: Number(heir.evidence_count || 0),
   }));
+}
+
+async function loadConfirmedHeirById(id, includeMedia = false) {
+  const photoSelect = includeMedia
+    ? 'h.photo_data'
+    : '(CASE WHEN h.photo_data IS NOT NULL AND CHAR_LENGTH(h.photo_data) > 0 THEN 1 ELSE 0 END) AS has_photo';
+  const rows = await query(
+    `SELECT h.id, h.sienna_member_id, h.heir_name, h.relationship_summary, h.line_vincenzo, h.line_paolo,
+            h.status, h.notes, h.photo_file_name, h.photo_file_type,
+            h.inheritance_amount, h.created_by, h.updated_by, h.created_at, h.updated_at,
+            ${photoSelect},
+            creator.email AS created_by_email, creator.full_name AS created_by_name,
+            updater.email AS updated_by_email, updater.full_name AS updated_by_name,
+            COUNT(ed.id) AS evidence_count
+     FROM confirmed_heirs h
+     LEFT JOIN evidence_documents ed ON ed.related_heir_name = h.heir_name OR ed.related_member_id = h.sienna_member_id
+     LEFT JOIN profiles creator ON creator.id = h.created_by
+     LEFT JOIN profiles updater ON updater.id = h.updated_by
+     WHERE h.id = :id
+     GROUP BY h.id
+     LIMIT 1`,
+    { id }
+  );
+  const heir = rows[0];
+  if (!heir) return null;
+  return {
+    ...heir,
+    line_vincenzo: Boolean(heir.line_vincenzo),
+    line_paolo: Boolean(heir.line_paolo),
+    has_photo: includeMedia ? undefined : Boolean(heir.has_photo),
+    inheritance_amount: Number(heir.inheritance_amount || 0),
+    evidence_count: Number(heir.evidence_count || 0),
+  };
 }
 
 async function loadEvidenceDocuments(includeMedia = false) {
@@ -504,6 +553,13 @@ const enumerateAncestorRoutes = (memberId, membersById, links, path = [], depth 
 
 const routeLabel = (route) => route.map((member) => member.name).reverse().join(' -> ');
 
+const isInformativeOnlyUnion = (union) => {
+  if ((union.migration_source || '').trim() === 'spouse_text_only') return true;
+  return !normalizedMemberId(union.partner_b_member_id);
+};
+
+const isUnionAuditRelevant = (union) => !isInformativeOnlyUnion(union);
+
 const buildSiennaDualLineageAnalysis = async () => {
   const family = await loadSiennaFamilyBundle();
   const settings = await loadAppSettings();
@@ -556,6 +612,7 @@ const buildSiennaDualLineageAnalysis = async () => {
   });
 
   family.unions.forEach((union) => {
+    if (!isUnionAuditRelevant(union)) return;
     if (union.is_inconsistent || union.confidence === 'baja') {
       addIssue('doubtful_union', 'warning', 'Unión por validar', union.inconsistency_reason || 'Unión marcada como inconsistente o de baja confianza.', union.partner_a_member_id, `/sienna/miembros-arbol?edit=${encodeURIComponent(union.partner_a_member_id)}`);
     }
@@ -607,6 +664,13 @@ const buildSiennaDualLineageAnalysis = async () => {
     const calculationRow = calculation.active_heirs.find((row) => row.member_id === member.id);
     const isDualByCalculation = (calculationRow?.sources || []).length > 1;
     if (sources.length < 2 && !isDualByCalculation && sharedAncestors.length < 2) return null;
+    const distributableAmount = calculation.estate.distributableAmount;
+    const sourceAmounts = (calculationRow?.source_breakdown || []).map((segment) => ({
+      source: segment.source,
+      share_percent: segment.share,
+      amount: roundMoney(distributableAmount * (segment.share / 100)),
+      routes: segment.routes || [],
+    }));
     const complexityScore = Math.min(100, sources.length * 26 + routesByRoot.length * 8 + sharedAncestors.length * 6 + suspicious.filter((issue) => issue.member_id === member.id).length * 10);
     return {
       member: {
@@ -633,12 +697,16 @@ const buildSiennaDualLineageAnalysis = async () => {
       })),
       routes: routesByRoot,
       calculation_routes: calculationRow?.source_breakdown || [],
+      source_amounts: sourceAmounts,
+      inherits: Boolean(calculationRow),
+      inheritance_share: calculationRow?.share_percent ?? null,
+      inheritance_amount: calculationRow?.amount ?? null,
       issues: suspicious.filter((issue) => issue.member_id === member.id),
       explanation: `${member.name} presenta doble linaje porque conecta con ${(sources.length ? sources : calculationRow?.sources || []).join(' y ')} por rutas familiares distintas. Revise cada ruta para validar el punto de convergencia y los nodos intermedios.`,
       tree_href: `/sienna/arbol-genealogico?member=${encodeURIComponent(member.id)}`,
       edit_href: `/sienna/miembros-arbol?edit=${encodeURIComponent(member.id)}`,
     };
-  }).filter(Boolean).sort((a, b) => b.complexity_score - a.complexity_score || a.member.name.localeCompare(b.member.name, 'es'));
+  }).filter(Boolean).sort((a, b) => (b.inheritance_amount || 0) - (a.inheritance_amount || 0) || b.complexity_score - a.complexity_score || a.member.name.localeCompare(b.member.name, 'es'));
 
   const ancestorCrossCounts = new Map();
   dualCases.forEach((item) => item.shared_ancestors.forEach((ancestor) => {
@@ -665,7 +733,179 @@ const buildSiennaDualLineageAnalysis = async () => {
     inconsistencies: suspicious,
     audit_policy: {
       mode: 'controlled',
-      message: 'Esta consola no modifica relaciones automáticamente. Las correcciones se ejecutan desde Miembros del Árbol y quedan registradas con created_by/updated_by y timestamps.',
+      message:
+        'Esta consola no modifica relaciones automáticamente. El cónyuge en texto es solo referencia documental; las uniones formales dependen de spouse_member_id. Las correcciones se ejecutan desde Miembros del Árbol.',
+    },
+  };
+};
+
+const getUnionsForMember = (memberId, unions) => {
+  const id = normalizedMemberId(memberId);
+  return unions.filter((union) =>
+    normalizedMemberId(union.partner_a_member_id) === id ||
+    normalizedMemberId(union.partner_b_member_id) === id
+  );
+};
+
+const formatUnionLabelForApi = (union, membersById) => {
+  const a = membersById.get(normalizedMemberId(union.partner_a_member_id))?.name || '—';
+  const b = union.partner_b_member_id
+    ? membersById.get(normalizedMemberId(union.partner_b_member_id))?.name || '—'
+    : 'sin segunda persona';
+  const type = union.union_type === 'matrimonio'
+    ? 'Matrimonio'
+    : union.union_type === 'union_libre'
+      ? 'Unión libre'
+      : 'Unión';
+  return `${type}: ${a} y ${b}`;
+};
+
+const buildUnionOptionsForParent = (parentId, unions, membersById) =>
+  getUnionsForMember(parentId, unions)
+    .map((union) => ({
+      id: union.id,
+      label: `${formatUnionLabelForApi(union, membersById)}${union.is_inconsistent ? ' (inconsistente)' : ''}`,
+    }))
+    .sort((left, right) => left.label.localeCompare(right.label, 'es', { sensitivity: 'base' }));
+
+const buildSecondParentOptions = (parentId, unionId, members, unions) => {
+  if (!unionId) return [];
+  const membersById = new Map(members.map((member) => [member.id, member]));
+  const union = unions.find((item) => item.id === unionId);
+  if (!union || !membersById.has(parentId)) return [];
+  const otherId = union.partner_a_member_id === parentId ? union.partner_b_member_id : union.partner_a_member_id;
+  return otherId && membersById.has(otherId) ? [{ id: otherId, name: membersById.get(otherId).name }] : [];
+};
+
+const isFindingChildMember = (member) => {
+  const relationship = member.relationship_to_parent;
+  return relationship === 'hijo' || relationship === 'hija' || relationship == null || relationship === '';
+};
+
+const buildSiennaMemberIssueRows = async () => {
+  const family = await loadSiennaFamilyBundle();
+  const calculation = await buildSiennaRealtimeCalculation();
+  const members = family.members;
+  const unions = family.unions;
+  const parentLinks = family.parent_links;
+  const genealogy = { unions, parent_links: parentLinks };
+  const membersById = new Map(members.map((member) => [member.id, member]));
+  const rows = [];
+
+  members.forEach((child) => {
+    if (!isFindingChildMember(child) || !child.parent_id) return;
+    if (getParentLinksForChild(child.id, parentLinks).length > 0) return;
+    const parent = membersById.get(child.parent_id);
+    rows.push({
+      id: `sync-link-${child.id}`,
+      memberId: child.id,
+      memberName: child.name,
+      kind: 'sync_parent_link',
+      severity: 'Alta prioridad',
+      problem: 'Es hijo/hija en el árbol visual pero no tiene vínculo formal de filiación en la base de datos.',
+      solution: 'Guarde para crear el vínculo por parent_id. La unión matrimonial es opcional si proviene de otra relación.',
+      context: parent ? `Superior en árbol: ${parent.name}` : undefined,
+      defaults: { spouseMemberId: '', filiationUnionId: '', secondParentId: '' },
+      spouseOptions: [],
+      unionOptions: parent ? buildUnionOptionsForParent(parent.id, unions, membersById) : [],
+      secondParentOptions: [],
+    });
+  });
+
+  members.forEach((child) => {
+    if (!isFindingChildMember(child) || !child.parent_id) return;
+    const links = getParentLinksForChild(child.id, parentLinks);
+    if (!links.length) return;
+    const parent = membersById.get(child.parent_id);
+    if (!parent) return;
+    const unionOptions = buildUnionOptionsForParent(parent.id, unions, membersById).filter((option) => !option.label.includes('inconsistente'));
+    const inconsistentUnion = links
+      .map((link) => unions.find((union) => union.id === link.union_id))
+      .find((union) => Boolean(union?.is_inconsistent));
+    if (!inconsistentUnion) return;
+    const defaultUnion = unionOptions[0]?.id || '';
+    const secondParentOptions = buildSecondParentOptions(parent.id, defaultUnion, members, unions);
+    rows.push({
+      id: `inconsistent-filiation-${child.id}`,
+      memberId: child.id,
+      memberName: child.name,
+      kind: 'complete_filiation',
+      severity: 'Alta prioridad',
+      problem: 'Su filiación usa una unión marcada como inconsistente.',
+      solution: 'Seleccione una unión formal válida y el segundo progenitor, luego guarde la filiación.',
+      context: inconsistentUnion.inconsistency_reason || `Unión actual: ${formatUnionLabelForApi(inconsistentUnion, membersById)}`,
+      defaults: { spouseMemberId: '', filiationUnionId: defaultUnion, secondParentId: secondParentOptions[0]?.id || '' },
+      spouseOptions: [],
+      unionOptions,
+      secondParentOptions,
+    });
+  });
+
+  members.forEach((member) => {
+    if (!isDeceasedMember(member)) return;
+    if (getDescendantsForRepresentation(member, members, genealogy).length > 0) return;
+    const referencedAsParent =
+      members.some((candidate) => normalizedMemberId(candidate.parent_id) === member.id) ||
+      parentLinks.some((link) => normalizedMemberId(link.parent_member_id) === member.id);
+    if (!referencedAsParent) return;
+    rows.push({
+      id: `dead-branch-${member.id}`,
+      memberId: member.id,
+      memberName: member.name,
+      kind: 'dead_branch',
+      severity: 'Media prioridad',
+      problem: 'Está fallecido, aparece como progenitor en el árbol, pero no tiene descendientes registrados.',
+      solution: 'Agregue hijos faltantes en Miembros del árbol o corrija el parentesco. Sin descendencia, la cuota sucesoral de esta rama no se reparte.',
+      context: member.death ? `Fallecido: ${member.death}` : undefined,
+      defaults: { spouseMemberId: '', filiationUnionId: '', secondParentId: '' },
+      spouseOptions: [],
+      unionOptions: [],
+      secondParentOptions: [],
+    });
+  });
+
+  const severityRank = (value) => value === 'Alta prioridad' ? 0 : value === 'Media prioridad' ? 1 : 2;
+  rows.sort((left, right) =>
+    severityRank(left.severity) - severityRank(right.severity) ||
+    left.memberName.localeCompare(right.memberName, 'es') ||
+    left.kind.localeCompare(right.kind)
+  );
+  const byKind = rows.reduce((acc, row) => {
+    acc[row.kind] += 1;
+    return acc;
+  }, { sync_parent_link: 0, complete_filiation: 0, dead_branch: 0 });
+  const distributedPercent = Number(calculation.total_share || 0);
+  return {
+    rows,
+    summary: {
+      undistributedPercent: Math.max(0, 100 - distributedPercent),
+      distributedPercent,
+      totalIssues: rows.length,
+      membersAffected: new Set(rows.map((row) => row.memberId)).size,
+      byKind,
+    },
+    generated_at: new Date().toISOString(),
+    source: 'api',
+  };
+};
+
+const buildSiennaAnalysisSummary = async () => {
+  const family = await loadSiennaFamilyBundle();
+  const calculation = await buildSiennaRealtimeCalculation();
+  const dual = await buildSiennaDualLineageAnalysis();
+  const findings = await buildSiennaMemberIssueRows();
+  return {
+    generated_at: new Date().toISOString(),
+    members_total: family.members.length,
+    active_heir_count: calculation.active_heir_count,
+    total_share: calculation.total_share,
+    estate: calculation.estate,
+    dual_lineage_total: dual.summary.dual_lineage_total,
+    pending_findings_total: findings.summary.totalIssues,
+    pending_validation_total: dual.summary.pending_validation_total,
+    backend_contract: {
+      source: 'api',
+      message: 'Las pantallas Sienna deben consumir este API como fuente única; el frontend no debe recalcular reglas sucesorales.',
     },
   };
 };
@@ -808,6 +1048,21 @@ async function ensureDatabase() {
   await schemaConnection.end();
 }
 
+async function syncRegularUserPageAccess(pagePath) {
+  const pageRows = await query('SELECT id FROM pages WHERE path = :path LIMIT 1', { path: pagePath });
+  const page = pageRows[0];
+  if (!page) return;
+
+  const users = await query("SELECT id FROM profiles WHERE role <> 'admin' AND is_approved = 1");
+  for (const userRow of users) {
+    await query(
+      `INSERT IGNORE INTO user_page_permissions (id, user_id, page_id, created_by)
+       VALUES (:id, :userId, :pageId, :createdBy)`,
+      { id: randomUUID(), userId: userRow.id, pageId: page.id, createdBy: userRow.id }
+    );
+  }
+}
+
 async function ensureSchemaMigrations() {
   const columns = await query(
     `SELECT COLUMN_NAME
@@ -895,6 +1150,7 @@ async function ensureSchemaMigrations() {
      ON DUPLICATE KEY UPDATE name = VALUES(name), description = VALUES(description)`,
     { id: randomUUID() }
   );
+  await syncRegularUserPageAccess('/sienna/dobles-linajes');
   await query(
     `INSERT INTO app_settings (setting_key, setting_value)
      VALUES ('lawyer_fee_percentage', '0')
@@ -1135,8 +1391,24 @@ app.patch('/api/auth/password', requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/api/pages', requireAuth, async (_req, res) => {
+app.get('/api/pages', requireAuth, requireAdmin, async (_req, res) => {
   const pages = await query('SELECT id, name, path, description, created_at FROM pages ORDER BY name');
+  res.json({ pages });
+});
+
+app.get('/api/me/pages', requireAuth, async (req, res) => {
+  if (req.user?.role === 'admin') {
+    const pages = await query('SELECT id, name, path, description, created_at FROM pages ORDER BY name');
+    return res.json({ pages });
+  }
+  const pages = await query(
+    `SELECT p.id, p.name, p.path, p.description, p.created_at
+     FROM pages p
+     INNER JOIN user_page_permissions up ON up.page_id = p.id
+     WHERE up.user_id = :userId
+     ORDER BY p.name`,
+    { userId: req.user.id }
+  );
   res.json({ pages });
 });
 
@@ -1313,6 +1585,12 @@ app.get('/api/confirmed-heirs', requireAuth, async (req, res) => {
   res.json({ heirs: await loadConfirmedHeirs(req.query.includeMedia === '1') });
 });
 
+app.get('/api/confirmed-heirs/:id', requireAuth, async (req, res) => {
+  const heir = await loadConfirmedHeirById(req.params.id, req.query.includeMedia === '1');
+  if (!heir) return res.status(404).json({ message: 'Heredero no encontrado' });
+  res.json({ heir });
+});
+
 app.post('/api/confirmed-heirs/bulk-amounts', requireAuth, async (req, res) => {
   const items = Array.isArray(req.body?.items) ? req.body.items : [];
   for (const item of items) {
@@ -1476,6 +1754,14 @@ app.get('/api/sienna-dual-lineage-analysis', requireAuth, async (_req, res) => {
   res.json({ analysis: await buildSiennaDualLineageAnalysis() });
 });
 
+app.get('/api/sienna-analysis-summary', requireAuth, async (_req, res) => {
+  res.json({ summary: await buildSiennaAnalysisSummary() });
+});
+
+app.get('/api/sienna-findings', requireAuth, async (_req, res) => {
+  res.json({ findings: await buildSiennaMemberIssueRows() });
+});
+
 app.get('/api/sienna-family-members', requireAuth, async (_req, res) => {
   res.json(await loadSiennaFamilyBundle());
 });
@@ -1579,9 +1865,9 @@ app.post('/api/sienna-family-members', requireAuth, async (req, res) => {
     );
   }
 
-  const rows = await query('SELECT * FROM sienna_family_members WHERE id = :id LIMIT 1', { id: memberId });
-  const genealogy = await loadGenealogyBundle();
-  res.status(201).json({ ok: true, member: rows[0] || null, ...genealogy });
+  const bundle = await loadSiennaFamilyBundle();
+  const savedMember = bundle.members.find((member) => member.id === memberId) || null;
+  res.status(201).json({ ok: true, member: savedMember, unions: bundle.unions, parent_links: bundle.parent_links });
 });
 
 app.delete('/api/sienna-family-members/:id', requireAuth, requireAdmin, async (req, res) => {

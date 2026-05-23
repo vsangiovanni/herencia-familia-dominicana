@@ -36,11 +36,11 @@ const Profile = () => {
         title: "Perfil actualizado",
         description: "Tu nombre ha sido actualizado exitosamente.",
       });
-    } catch (error: any) {
+    } catch (error) {
       toast({
         variant: "destructive",
         title: "Error al actualizar",
-        description: error.message || "No se pudo actualizar el nombre.",
+        description: error instanceof Error ? error.message : "No se pudo actualizar el nombre.",
       });
     } finally {
       setLoading(false);
@@ -71,18 +71,17 @@ const Profile = () => {
       await api.updatePassword(newPassword);
 
       setIsChangingPassword(false);
-      setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
       toast({
         title: "Contraseña actualizada",
         description: "Tu contraseña ha sido cambiada exitosamente.",
       });
-    } catch (error: any) {
+    } catch (error) {
       toast({
         variant: "destructive",
         title: "Error al cambiar contraseña",
-        description: error.message || "No se pudo cambiar la contraseña.",
+        description: error instanceof Error ? error.message : "No se pudo cambiar la contraseña.",
       });
     } finally {
       setLoading(false);
@@ -92,11 +91,11 @@ const Profile = () => {
   const handleSignOut = async () => {
     try {
       await signOut();
-    } catch (error: any) {
+    } catch (error) {
       toast({
         variant: "destructive",
         title: "Error al cerrar sesión",
-        description: error.message || "Ocurrió un error al cerrar la sesión.",
+        description: error instanceof Error ? error.message : "Ocurrió un error al cerrar la sesión.",
       });
     }
   };

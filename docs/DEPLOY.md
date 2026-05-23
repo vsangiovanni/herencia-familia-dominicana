@@ -3,6 +3,18 @@
 **URL:** https://herenciard.vmsencf.com  
 **Directorio remoto (document root):** raíz del login FTP (`/`), **no** la subcarpeta `herenciard/`
 
+## Regla de autorización
+
+No desplegar a Hostinger, producción ni GitHub sin permiso explícito de Víctor para ese despliegue concreto.
+
+Flujo obligatorio:
+
+- Trabajar y validar en local.
+- Correr verificación mínima (`php -l public/api.php` cuando cambie PHP y `pnpm run build`).
+- Informar resultado.
+- Desplegar solo cuando Víctor autorice subir esa versión.
+- Si la autorización dice solo frontend/backend, no ejecutar migraciones, no tocar BD, no subir `.env` y no modificar archivos productivos fuera del artefacto desplegado.
+
 El subdominio apunta al mismo directorio que la raíz FTP de la cuenta (`index.html`, `assets/`, `api.php`). Los scripts ignoran `REMOTE_DIR` si apunta a `.../herenciard` y despliegan en `/`.
 
 ## Resumen rápido
@@ -12,6 +24,8 @@ pnpm run build
 pnpm run deploy          # sube dist/ por FTP
 pnpm run check:prod      # verifica health y rutas Sienna
 ```
+
+Ejecutar estos comandos solo después de autorización explícita de deploy.
 
 Despliegue alterno por MCP Hostinger (recomendado cuando FTP esté lento o inestable):
 
@@ -51,7 +65,9 @@ pnpm run release
 Flujo recomendado con Git:
 
 ```sh
-git add -A
+git status --short
+# Staging explícito: no usar git add -A si hay zips, backups, .env, logs o auditorias locales.
+git add <archivos_fuente_y_docs_del_release>
 git commit -m "descripción del cambio"
 git push origin main
 pnpm run release
@@ -79,7 +95,7 @@ Las tablas también se crean al primer request si `api.php` arranca migraciones 
 
 1. `pnpm run build` — genera `dist/` (HTML, assets, `api.php`, `.htaccess`, favicon).
 2. `python3 scripts/deploy-dist.py` — sube todo `dist/` por FTP **sin** sobrescribir `.env` remoto.
-3. `npm run migrate:genealogy:prod` — migración de filiación en MySQL de producción (solo cuando el release lo incluya).
+3. `pnpm run migrate:genealogy:prod` — migración de filiación en MySQL de producción (solo cuando el release lo incluya y Víctor autorice tocar BD).
 4. `bash scripts/post-deploy-check.sh` — health + rutas Sienna en HTTP 200.
 
 Si usas MCP para static deploy:
@@ -175,10 +191,13 @@ Rutas Sienna deben devolver HTTP 200 (SPA):
 Tras validar local y producción:
 
 ```sh
-git add -A
+git status --short
+git add <archivos_fuente_y_docs_del_release>
 git commit -m "descripción del cambio"
 git push origin main
 ```
+
+No versionar ni subir: `.env*`, zips de deploy, backups, logs, salidas de auditoría, builds locales ni archivos temporales.
 
 ## Arquitectura en producción
 

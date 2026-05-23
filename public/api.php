@@ -141,6 +141,40 @@ function fetch_confirmed_heirs(bool $includeMedia = false): array {
   return $heirs;
 }
 
+function fetch_confirmed_heir_by_id(string $id, bool $includeMedia = false): ?array {
+  $photoSelect = $includeMedia
+    ? 'h.photo_data'
+    : '(CASE WHEN h.photo_data IS NOT NULL AND CHAR_LENGTH(h.photo_data) > 0 THEN 1 ELSE 0 END) AS has_photo';
+
+  $heir = query_one(
+    "SELECT h.id, h.sienna_member_id, h.heir_name, h.relationship_summary, h.line_vincenzo, h.line_paolo, h.status, h.notes,
+            h.photo_file_name, h.photo_file_type, h.inheritance_amount, h.created_by, h.updated_by, h.created_at, h.updated_at,
+            {$photoSelect},
+            creator.email AS created_by_email, creator.full_name AS created_by_name,
+            updater.email AS updated_by_email, updater.full_name AS updated_by_name,
+            COUNT(d.id) AS evidence_count
+     FROM confirmed_heirs h
+     LEFT JOIN evidence_documents d ON d.related_heir_name = h.heir_name OR d.related_member_id = h.sienna_member_id
+     LEFT JOIN profiles creator ON creator.id = h.created_by
+     LEFT JOIN profiles updater ON updater.id = h.updated_by
+     WHERE h.id = :id
+     GROUP BY h.id
+     LIMIT 1",
+    ['id' => $id]
+  );
+
+  if (!$heir) return null;
+
+  $heir['line_vincenzo'] = (bool)$heir['line_vincenzo'];
+  $heir['line_paolo'] = (bool)$heir['line_paolo'];
+  $heir['evidence_count'] = (int)($heir['evidence_count'] ?? 0);
+  if (!$includeMedia) {
+    $heir['has_photo'] = (bool)($heir['has_photo'] ?? false);
+  }
+
+  return $heir;
+}
+
 function fetch_evidence_documents(bool $includeMedia = false): array {
   $select = $includeMedia
     ? 'SELECT *'
@@ -162,6 +196,114 @@ function fetch_evidence_documents(bool $includeMedia = false): array {
   }
 
   return $docs;
+}
+
+function default_known_intermediates(): array {
+  return [
+    ['name' => 'Domenico (Domingo) Sangiovanni', 'reason' => 'Tronco familiar común; sirve para ubicar ramas, no como heredero final.'],
+    ['name' => 'María Magdalena Sangiovanni', 'reason' => 'Madre del causante Alessandro; rama del causante, no heredera final en este análisis.'],
+    ['name' => 'Vincenzo (Vicente) Sangiovanni', 'reason' => 'Hermano de la madre del causante; abre una rama sucesoral activa por sus descendientes.'],
+    ['name' => 'Paolo (Paulino) Sangiovanni', 'reason' => 'Hermano de la madre del causante; abre una rama sucesoral activa por sus descendientes.'],
+    ['name' => 'María Rosa Sangiovanni Pérez', 'reason' => 'Intermedia fallecida en rama Vincenzo/Vicente y vínculo hacia la doble filiación.'],
+    ['name' => 'Pedro Pablo Sangiovanni Simo', 'reason' => 'Intermedio fallecido en rama Paolo/Paulino y vínculo hacia la doble filiación.'],
+    ['name' => 'Domingo Ramón Sangiovanni Pérez', 'reason' => 'Intermedio fallecido en rama Vincenzo/Vicente; transmite representación a sus descendientes.'],
+    ['name' => 'Víctor Manuel Sangiovanni Sangiovanni', 'reason' => 'Intermedio fallecido; conecta a Víctor Manuel Martín y a Rosa Julia/Perla.'],
+    ['name' => 'Rosa Julia Sangiovanni Rodríguez', 'reason' => 'Intermedia fallecida; Perla Rosa entra por representación en su rama.'],
+    ['name' => 'María Amparo Sangiovanni Gesualdo', 'reason' => 'Intermedia fallecida; Bernardo Martín entra por representación en su rama.'],
+    ['name' => 'José Vicente Sangiovanni Gesualdo', 'reason' => 'Intermedio fallecido; Jocelyn y Mayra entran por representación a sus descendientes.'],
+  ];
+}
+
+function known_intermediates_map(array $settings): array {
+  $caseConfig = is_array($settings['sienna_case_config'] ?? null) ? $settings['sienna_case_config'] : [];
+  $configured = is_array($caseConfig['known_intermediates'] ?? null) ? $caseConfig['known_intermediates'] : [];
+  $list = count($configured) > 0 ? $configured : default_known_intermediates();
+  $map = [];
+  foreach ($list as $item) {
+    if (!is_array($item) || empty($item['name']) || empty($item['reason'])) continue;
+    $map[normalize_sienna_name((string)$item['name'])] = (string)$item['reason'];
+  }
+  return $map;
+}
+
+function classify_member_by_dominican_law(array $member, array $members, array $genealogy, array $settings, array $plan): array {
+  $caseConfig = is_array($settings['sienna_case_config'] ?? null) ? $settings['sienna_case_config'] : [];
+  $causanteName = $caseConfig['causante_name'] ?? 'Alessandro de Paola Sangiovanni';
+  $knownIntermediates = known_intermediates_map($settings);
+  $sharesById = [];
+  foreach (($plan['activeHeirs'] ?? []) as $share) {
+    if (!empty($share['member']['id'])) {
+      $sharesById[(string)$share['member']['id']] = $share;
+    }
+  }
+  $name = normalize_sienna_name((string)($member['name'] ?? ''));
+
+  if ($name === normalize_sienna_name($causanteName)) {
+    return [
+      'inheritance_status' => 'no_hereda',
+      'inheritance_reason' => 'Es el causante del expediente; no se clasifica como heredero.',
+    ];
+  }
+
+  $share = $sharesById[(string)$member['id']] ?? null;
+  if ($share) {
+    return [
+      'inheritance_status' => (($member['inheritance_status'] ?? '') === 'confirmado') ? 'confirmado' : 'posible_heredero',
+      'inheritance_reason' => (string)($share['reason'] ?? 'Heredero por representación dentro de la estirpe sucesoral activa.'),
+    ];
+  }
+
+  if (isset($knownIntermediates[$name])) {
+    return [
+      'inheritance_status' => 'no_hereda',
+      'inheritance_reason' => $knownIntermediates[$name],
+    ];
+  }
+
+  if (is_deceased_member($member) && count(get_descendants_for_representation($member, $members, $genealogy)) > 0) {
+    return [
+      'inheritance_status' => 'no_hereda',
+      'inheritance_reason' => 'Nodo intermedio fallecido; su cuota se transmite por representación a sus descendientes vivos documentados.',
+    ];
+  }
+
+  if (is_deceased_member($member)) {
+    return [
+      'inheritance_status' => 'no_hereda',
+      'inheritance_reason' => 'Persona fallecida sin descendientes documentados en el árbol; no recibe cuota en el reparto activo (la transmisión sigue por los parientes vivos de su rama).',
+    ];
+  }
+
+  return [
+    'inheritance_status' => $member['inheritance_status'] ?? 'requiere_revision',
+    'inheritance_reason' => $member['inheritance_reason'] ?? 'No hay suficiente información del expediente para clasificarlo automáticamente.',
+  ];
+}
+
+function resolve_effective_member_inheritance(array $member, array $classified): array {
+  $storedStatus = $member['inheritance_status'] ?? 'requiere_revision';
+  if ($storedStatus !== '' && $storedStatus !== 'requiere_revision') {
+    return [
+      'inheritance_status' => $storedStatus,
+      'inheritance_reason' => $member['inheritance_reason'] ?? 'Estado definido manualmente en la administración del árbol.',
+    ];
+  }
+  return $classified;
+}
+
+function enrich_sienna_members_with_effective_inheritance(array $members, array $genealogy, array $settings): array {
+  $plan = build_api_inheritance_plan($members, $genealogy, $settings);
+  $enriched = [];
+  foreach ($members as $member) {
+    $classified = classify_member_by_dominican_law($member, $members, $genealogy, $settings, $plan);
+    $effective = resolve_effective_member_inheritance($member, $classified);
+    $member['inheritance_status_stored'] = $member['inheritance_status'] ?? 'requiere_revision';
+    $member['inheritance_reason_stored'] = $member['inheritance_reason'] ?? null;
+    $member['effective_inheritance_status'] = $effective['inheritance_status'];
+    $member['effective_inheritance_reason'] = $effective['inheritance_reason'];
+    $enriched[] = $member;
+  }
+  return $enriched;
 }
 
 function fetch_sienna_family_bundle(): array {
@@ -190,6 +332,13 @@ function fetch_sienna_family_bundle(): array {
     $link['is_primary_line'] = (bool)$link['is_primary_line'];
     $link['is_inconsistent'] = (bool)$link['is_inconsistent'];
   }
+
+  $settings = fetch_app_settings();
+  $members = enrich_sienna_members_with_effective_inheritance(
+    $members,
+    ['unions' => $unions, 'parent_links' => $parentLinks],
+    $settings
+  );
 
   return [
     'members' => $members,
@@ -566,6 +715,15 @@ function dual_analysis_route_label(array $route): string {
   return implode(' -> ', array_values(array_filter($names)));
 }
 
+function is_informative_only_union(array $union): bool {
+  if (($union['migration_source'] ?? '') === 'spouse_text_only') return true;
+  return normalized_member_id($union['partner_b_member_id'] ?? '') === '';
+}
+
+function is_union_audit_relevant(array $union): bool {
+  return !is_informative_only_union($union);
+}
+
 function build_sienna_dual_lineage_analysis(): array {
   $family = fetch_sienna_family_bundle();
   $settings = fetch_app_settings();
@@ -646,6 +804,7 @@ function build_sienna_dual_lineage_analysis(): array {
   }
 
   foreach ($family['unions'] as $union) {
+    if (!is_union_audit_relevant($union)) continue;
     if (!empty($union['is_inconsistent']) || ($union['confidence'] ?? '') === 'baja') {
       $memberId = normalized_member_id($union['partner_a_member_id'] ?? '');
       $addIssue(
@@ -732,6 +891,16 @@ function build_sienna_dual_lineage_analysis(): array {
 
     $memberIssues = array_values(array_filter($issues, fn($issue) => ($issue['member_id'] ?? null) === $memberId));
     $complexityScore = min(100, count($sources) * 26 + count($routesByRoot) * 8 + count($sharedAncestors) * 6 + count($memberIssues) * 10);
+    $distributableAmount = (float)($calculation['estate']['distributableAmount'] ?? 0);
+    $sourceAmounts = array_map(function ($segment) use ($distributableAmount) {
+      $share = (float)($segment['share'] ?? 0);
+      return [
+        'source' => (string)($segment['source'] ?? ''),
+        'share_percent' => $share,
+        'amount' => round($distributableAmount * ($share / 100), 2),
+        'routes' => is_array($segment['routes'] ?? null) ? $segment['routes'] : [],
+      ];
+    }, is_array($calculationRow['source_breakdown'] ?? null) ? $calculationRow['source_breakdown'] : []);
     $effectiveSources = count($sources) ? $sources : $calculationSources;
     $caseRoutes = [];
     foreach ($routesByRoot as $route) {
@@ -767,6 +936,10 @@ function build_sienna_dual_lineage_analysis(): array {
       'shared_ancestors' => $caseSharedAncestors,
       'routes' => $caseRoutes,
       'calculation_routes' => $calculationRow['source_breakdown'] ?? [],
+      'source_amounts' => $sourceAmounts,
+      'inherits' => !empty($calculationRow),
+      'inheritance_share' => isset($calculationRow['share_percent']) ? (float)$calculationRow['share_percent'] : null,
+      'inheritance_amount' => isset($calculationRow['amount']) ? (float)$calculationRow['amount'] : null,
       'issues' => $memberIssues,
       'explanation' => ($member['name'] ?? 'Esta persona') . ' presenta doble linaje porque conecta con ' . implode(' y ', $effectiveSources) . ' por rutas familiares distintas. Revise cada ruta para validar el punto de convergencia y los nodos intermedios.',
       'tree_href' => '/sienna/arbol-genealogico?member=' . rawurlencode($memberId),
@@ -774,7 +947,7 @@ function build_sienna_dual_lineage_analysis(): array {
     ];
   }
 
-  usort($dualCases, fn($a, $b) => (($b['complexity_score'] ?? 0) <=> ($a['complexity_score'] ?? 0)) ?: strcoll($a['member']['name'] ?? '', $b['member']['name'] ?? ''));
+  usort($dualCases, fn($a, $b) => (($b['inheritance_amount'] ?? 0) <=> ($a['inheritance_amount'] ?? 0)) ?: (($b['complexity_score'] ?? 0) <=> ($a['complexity_score'] ?? 0)) ?: strcoll($a['member']['name'] ?? '', $b['member']['name'] ?? ''));
 
   $ancestorCrossCounts = [];
   foreach ($dualCases as $item) {
@@ -806,9 +979,245 @@ function build_sienna_dual_lineage_analysis(): array {
     'inconsistencies' => $issues,
     'audit_policy' => [
       'mode' => 'controlled',
-      'message' => 'Esta consola no modifica relaciones automáticamente. Las correcciones se ejecutan desde Miembros del Árbol y quedan registradas con created_by/updated_by y timestamps.',
+      'message' => 'Esta consola no modifica relaciones automáticamente. El cónyuge en texto es solo referencia documental; las uniones formales dependen de spouse_member_id. Las correcciones se ejecutan desde Miembros del Árbol.',
     ],
   ];
+}
+
+function get_unions_for_member_api(string $memberId, array $unions): array {
+  $id = normalized_member_id($memberId);
+  return array_values(array_filter($unions, function ($union) use ($id) {
+    return normalized_member_id($union['partner_a_member_id'] ?? '') === $id
+      || normalized_member_id($union['partner_b_member_id'] ?? '') === $id;
+  }));
+}
+
+function format_union_label_for_api(array $union, array $membersById): string {
+  $aId = normalized_member_id($union['partner_a_member_id'] ?? '');
+  $bId = normalized_member_id($union['partner_b_member_id'] ?? '');
+  $a = $membersById[$aId]['name'] ?? '—';
+  $b = $bId !== '' ? ($membersById[$bId]['name'] ?? '—') : 'sin segunda persona';
+  $type = ($union['union_type'] ?? '') === 'matrimonio'
+    ? 'Matrimonio'
+    : ((($union['union_type'] ?? '') === 'union_libre') ? 'Unión libre' : 'Unión');
+  return $type . ': ' . $a . ' y ' . $b;
+}
+
+function build_union_options_for_parent_api(string $parentId, array $unions, array $membersById): array {
+  $options = array_map(function ($union) use ($membersById) {
+    return [
+      'id' => $union['id'],
+      'label' => format_union_label_for_api($union, $membersById) . (!empty($union['is_inconsistent']) ? ' (inconsistente)' : ''),
+    ];
+  }, get_unions_for_member_api($parentId, $unions));
+  usort($options, fn($a, $b) => strcoll($a['label'] ?? '', $b['label'] ?? ''));
+  return $options;
+}
+
+function build_second_parent_options_api(string $parentId, ?string $unionId, array $membersById, array $unions): array {
+  if (!$unionId || !isset($membersById[$parentId])) return [];
+  $target = null;
+  foreach ($unions as $union) {
+    if (($union['id'] ?? null) === $unionId) {
+      $target = $union;
+      break;
+    }
+  }
+  if (!$target) return [];
+  $aId = normalized_member_id($target['partner_a_member_id'] ?? '');
+  $bId = normalized_member_id($target['partner_b_member_id'] ?? '');
+  $otherId = $aId === $parentId ? $bId : $aId;
+  return $otherId !== '' && isset($membersById[$otherId])
+    ? [['id' => $otherId, 'name' => $membersById[$otherId]['name']]]
+    : [];
+}
+
+function is_finding_child_member_api(array $member): bool {
+  $relationship = $member['relationship_to_parent'] ?? null;
+  return $relationship === 'hijo' || $relationship === 'hija' || $relationship === null || $relationship === '';
+}
+
+function build_sienna_member_issue_rows(): array {
+  $family = fetch_sienna_family_bundle();
+  $calculation = build_sienna_realtime_calculation();
+  $members = $family['members'];
+  $unions = $family['unions'];
+  $parentLinks = $family['parent_links'];
+  $genealogy = ['unions' => $unions, 'parent_links' => $parentLinks];
+  $membersById = [];
+  foreach ($members as $member) {
+    $membersById[(string)$member['id']] = $member;
+  }
+  $rows = [];
+
+  foreach ($members as $child) {
+    if (!is_finding_child_member_api($child) || empty($child['parent_id'])) continue;
+    if (count(get_parent_links_for_child((string)$child['id'], $parentLinks)) > 0) continue;
+    $parentId = normalized_member_id($child['parent_id'] ?? '');
+    $parent = $membersById[$parentId] ?? null;
+    $rows[] = [
+      'id' => 'sync-link-' . $child['id'],
+      'memberId' => $child['id'],
+      'memberName' => $child['name'],
+      'kind' => 'sync_parent_link',
+      'severity' => 'Alta prioridad',
+      'problem' => 'Es hijo/hija en el árbol visual pero no tiene vínculo formal de filiación en la base de datos.',
+      'solution' => 'Guarde para crear el vínculo por parent_id. La unión matrimonial es opcional si proviene de otra relación.',
+      'context' => $parent ? ('Superior en árbol: ' . $parent['name']) : null,
+      'defaults' => ['spouseMemberId' => '', 'filiationUnionId' => '', 'secondParentId' => ''],
+      'spouseOptions' => [],
+      'unionOptions' => $parent ? build_union_options_for_parent_api((string)$parent['id'], $unions, $membersById) : [],
+      'secondParentOptions' => [],
+    ];
+  }
+
+  foreach ($members as $child) {
+    if (!is_finding_child_member_api($child) || empty($child['parent_id'])) continue;
+    $links = get_parent_links_for_child((string)$child['id'], $parentLinks);
+    if (!count($links)) continue;
+    $parentId = normalized_member_id($child['parent_id'] ?? '');
+    $parent = $membersById[$parentId] ?? null;
+    if (!$parent) continue;
+    $unionOptions = array_values(array_filter(
+      build_union_options_for_parent_api((string)$parent['id'], $unions, $membersById),
+      fn($option) => strpos($option['label'] ?? '', 'inconsistente') === false
+    ));
+    $inconsistentUnion = null;
+    foreach ($links as $link) {
+      $linkUnionId = $link['union_id'] ?? null;
+      foreach ($unions as $union) {
+        if (($union['id'] ?? null) === $linkUnionId && !empty($union['is_inconsistent'])) {
+          $inconsistentUnion = $union;
+          break 2;
+        }
+      }
+    }
+    if (!$inconsistentUnion) continue;
+    $defaultUnion = $unionOptions[0]['id'] ?? '';
+    $secondParentOptions = build_second_parent_options_api((string)$parent['id'], $defaultUnion, $membersById, $unions);
+    $rows[] = [
+      'id' => 'inconsistent-filiation-' . $child['id'],
+      'memberId' => $child['id'],
+      'memberName' => $child['name'],
+      'kind' => 'complete_filiation',
+      'severity' => 'Alta prioridad',
+      'problem' => 'Su filiación usa una unión marcada como inconsistente.',
+      'solution' => 'Seleccione una unión formal válida y el segundo progenitor, luego guarde la filiación.',
+      'context' => $inconsistentUnion['inconsistency_reason'] ?? ('Unión actual: ' . format_union_label_for_api($inconsistentUnion, $membersById)),
+      'defaults' => [
+        'spouseMemberId' => '',
+        'filiationUnionId' => $defaultUnion,
+        'secondParentId' => $secondParentOptions[0]['id'] ?? '',
+      ],
+      'spouseOptions' => [],
+      'unionOptions' => $unionOptions,
+      'secondParentOptions' => $secondParentOptions,
+    ];
+  }
+
+  foreach ($members as $member) {
+    if (!is_deceased_member($member)) continue;
+    if (count(get_descendants_for_representation($member, $members, $genealogy)) > 0) continue;
+    $referencedAsParent = false;
+    foreach ($members as $candidate) {
+      if (normalized_member_id($candidate['parent_id'] ?? '') === (string)$member['id']) {
+        $referencedAsParent = true;
+        break;
+      }
+    }
+    if (!$referencedAsParent) {
+      foreach ($parentLinks as $link) {
+        if (normalized_member_id($link['parent_member_id'] ?? '') === (string)$member['id']) {
+          $referencedAsParent = true;
+          break;
+        }
+      }
+    }
+    if (!$referencedAsParent) continue;
+    $rows[] = [
+      'id' => 'dead-branch-' . $member['id'],
+      'memberId' => $member['id'],
+      'memberName' => $member['name'],
+      'kind' => 'dead_branch',
+      'severity' => 'Media prioridad',
+      'problem' => 'Está fallecido, aparece como progenitor en el árbol, pero no tiene descendientes registrados.',
+      'solution' => 'Agregue hijos faltantes en Miembros del árbol o corrija el parentesco. Sin descendencia, la cuota sucesoral de esta rama no se reparte.',
+      'context' => !empty($member['death']) ? ('Fallecido: ' . $member['death']) : null,
+      'defaults' => ['spouseMemberId' => '', 'filiationUnionId' => '', 'secondParentId' => ''],
+      'spouseOptions' => [],
+      'unionOptions' => [],
+      'secondParentOptions' => [],
+    ];
+  }
+
+  $severityRank = fn($value) => $value === 'Alta prioridad' ? 0 : ($value === 'Media prioridad' ? 1 : 2);
+  usort($rows, fn($a, $b) =>
+    ($severityRank($a['severity']) <=> $severityRank($b['severity']))
+      ?: strcoll($a['memberName'] ?? '', $b['memberName'] ?? '')
+      ?: strcoll($a['kind'] ?? '', $b['kind'] ?? '')
+  );
+  $byKind = ['sync_parent_link' => 0, 'complete_filiation' => 0, 'dead_branch' => 0];
+  $affected = [];
+  foreach ($rows as $row) {
+    $kind = $row['kind'] ?? '';
+    if (array_key_exists($kind, $byKind)) $byKind[$kind] += 1;
+    $affected[(string)$row['memberId']] = true;
+  }
+  $distributedPercent = (float)($calculation['total_share'] ?? 0);
+  return [
+    'rows' => $rows,
+    'summary' => [
+      'undistributedPercent' => max(0, 100 - $distributedPercent),
+      'distributedPercent' => $distributedPercent,
+      'totalIssues' => count($rows),
+      'membersAffected' => count($affected),
+      'byKind' => $byKind,
+    ],
+    'generated_at' => gmdate('c'),
+    'source' => 'api',
+  ];
+}
+
+function build_sienna_analysis_summary(): array {
+  $family = fetch_sienna_family_bundle();
+  $calculation = build_sienna_realtime_calculation();
+  $dual = build_sienna_dual_lineage_analysis();
+  $findings = build_sienna_member_issue_rows();
+  return [
+    'generated_at' => gmdate('c'),
+    'members_total' => count($family['members']),
+    'active_heir_count' => $calculation['active_heir_count'],
+    'total_share' => $calculation['total_share'],
+    'estate' => $calculation['estate'],
+    'dual_lineage_total' => $dual['summary']['dual_lineage_total'],
+    'pending_findings_total' => $findings['summary']['totalIssues'],
+    'pending_validation_total' => $dual['summary']['pending_validation_total'],
+    'backend_contract' => [
+      'source' => 'api',
+      'message' => 'Las pantallas Sienna deben consumir este API como fuente única; el frontend no debe recalcular reglas sucesorales.',
+    ],
+  ];
+}
+
+function sync_regular_user_page_access(string $path): void {
+  $page = query_one('SELECT id FROM pages WHERE path = :path LIMIT 1', ['path' => $path]);
+  if (!$page) {
+    return;
+  }
+
+  $users = query_all("SELECT id FROM profiles WHERE role <> 'admin' AND is_approved = 1");
+  foreach ($users as $userRow) {
+    exec_sql(
+      'INSERT IGNORE INTO user_page_permissions (id, user_id, page_id, created_by)
+       VALUES (:id, :userId, :pageId, :createdBy)',
+      [
+        'id' => uuid(),
+        'userId' => $userRow['id'],
+        'pageId' => $page['id'],
+        'createdBy' => $userRow['id'],
+      ]
+    );
+  }
 }
 
 function ensure_schema(): void {
@@ -966,6 +1375,7 @@ function ensure_schema(): void {
     ['Árbol Sienna', '/sienna/arbol-genealogico', 'Árbol genealógico con foto y monto heredado'],
     ['Miembros del Árbol Sienna', '/sienna/miembros-arbol', 'CRUD de miembros del árbol genealógico Sienna'],
     ['Explicación de Herederos Sienna', '/sienna/explicacion-herederos', 'Explicación, simulación y auditoría de herederos Sienna'],
+    ['Análisis de Dobles Linajes', '/sienna/dobles-linajes', 'Consola visual de auditoría y validación de dobles linajes'],
   ];
 
   foreach ($pages as [$name, $path, $description]) {
@@ -976,6 +1386,8 @@ function ensure_schema(): void {
       ['id' => uuid(), 'name' => $name, 'path' => $path, 'description' => $description]
     );
   }
+
+  sync_regular_user_page_access('/sienna/dobles-linajes');
 
   $migrations = [
     ['sienna_member_id', 'ALTER TABLE confirmed_heirs ADD COLUMN sienna_member_id VARCHAR(120) NULL UNIQUE AFTER id'],
@@ -1348,8 +1760,24 @@ try {
   }
 
   if ($method === 'GET' && $path === '/pages') {
-    require_user();
+    $user = require_user();
+    require_admin($user);
     json_response(['pages' => query_all('SELECT id, name, path, description, created_at FROM pages ORDER BY name')]);
+  }
+
+  if ($method === 'GET' && $path === '/me/pages') {
+    $user = require_user();
+    if (($user['role'] ?? '') === 'admin') {
+      json_response(['pages' => query_all('SELECT id, name, path, description, created_at FROM pages ORDER BY name')]);
+    }
+    json_response(['pages' => query_all(
+      'SELECT p.id, p.name, p.path, p.description, p.created_at
+       FROM pages p
+       INNER JOIN user_page_permissions up ON up.page_id = p.id
+       WHERE up.user_id = :userId
+       ORDER BY p.name',
+      ['userId' => $user['id']]
+    )]);
   }
 
   if ($method === 'GET' && $path === '/settings') {
@@ -1587,6 +2015,15 @@ try {
     json_response(['ok' => true]);
   }
 
+  if (preg_match('#^/confirmed-heirs/([^/]+)$#', $path, $m) && $method === 'GET') {
+    require_user();
+    $heir = fetch_confirmed_heir_by_id($m[1], wants_media());
+    if (!$heir) {
+      json_response(['message' => 'Heredero no encontrado'], 404);
+    }
+    json_response(['heir' => $heir]);
+  }
+
   if (preg_match('#^/confirmed-heirs/([^/]+)$#', $path, $m) && $method === 'PUT') {
     $user = require_user();
     $data = body();
@@ -1647,6 +2084,16 @@ try {
   if ($method === 'GET' && $path === '/sienna-dual-lineage-analysis') {
     require_user();
     json_response(['analysis' => build_sienna_dual_lineage_analysis()]);
+  }
+
+  if ($method === 'GET' && $path === '/sienna-analysis-summary') {
+    require_user();
+    json_response(['summary' => build_sienna_analysis_summary()]);
+  }
+
+  if ($method === 'GET' && $path === '/sienna-findings') {
+    require_user();
+    json_response(['findings' => build_sienna_member_issue_rows()]);
   }
 
   if ($method === 'GET' && $path === '/sienna-family-members') {
@@ -1751,11 +2198,19 @@ try {
 
     $unions = query_all('SELECT * FROM family_unions ORDER BY partner_a_member_id, partner_b_member_id');
     $parentLinks = query_all('SELECT * FROM member_parent_links ORDER BY child_member_id, parent_member_id');
+    $family = fetch_sienna_family_bundle();
+    $savedMember = null;
+    foreach ($family['members'] as $memberRow) {
+      if (($memberRow['id'] ?? '') === $id) {
+        $savedMember = $memberRow;
+        break;
+      }
+    }
     json_response([
       'ok' => true,
-      'member' => query_one('SELECT * FROM sienna_family_members WHERE id = :id LIMIT 1', ['id' => $id]),
-      'unions' => $unions,
-      'parent_links' => $parentLinks,
+      'member' => $savedMember,
+      'unions' => $family['unions'],
+      'parent_links' => $family['parent_links'],
     ], 201);
   }
 

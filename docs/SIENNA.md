@@ -8,9 +8,38 @@ Pantallas especializadas del expediente familiar (caso Alessandro y derivados).
 |------|---------|-----------|
 | `/sienna/arbol-genealogico` | `ArbolGenealogicoSienna.tsx` | Árbol clásico, cálculo de montos, doble linaje, pantalla completa y resumen por heredero |
 | `/sienna/miembros-arbol` | `MiembrosArbolSienna.tsx` | CRUD con línea parental, rama sucesoral, conexión al árbol y si hereda |
+| `/sienna/dobles-linajes` | `AnalisisDoblesLinajesSienna.tsx` | Auditoría visual de dobles linajes, rutas, convergencias e inconsistencias |
 | `/sienna/explicacion-herederos` | `ExplicacionHerederosSienna.tsx` | Reunión: por qué heredo, simulador, semáforo, timeline, glosario, PDF |
 | `/hallazgos` | `Hallazgos.tsx` | Hallazgos dinámicos de consistencia (sin texto hardcodeado) según data vigente |
 | `/admin/settings` | `AdminSettings.tsx` | Editor guiado de settings globales y configuración del caso (solo admin) |
+
+## Regla canónica de datos Sienna
+
+Las pantallas Sienna no son fuente de verdad. La fuente única para información, cálculo y validación es el API/backend sobre la base de datos real.
+
+- El frontend solo consume y presenta respuestas del API.
+- No duplicar en frontend lógica sucesoral, validación genealógica, hallazgos, convergencias, clasificación efectiva ni reglas de doble linaje.
+- Si una regla aparece en Node y PHP, debe mantenerse como contrato equivalente de API hasta poder centralizarla más; no crear una tercera versión en React.
+- Local primero. No desplegar a Hostinger, GitHub ni producción sin autorización explícita de Víctor para ese despliegue.
+
+Endpoints canónicos actuales:
+
+| Endpoint | Uso |
+|----------|-----|
+| `GET /api/sienna-workspace` | Datos base de miembros, uniones, vínculos, herederos, documentos y settings |
+| `GET /api/sienna-calculation` | Cálculo sucesoral vigente, cuotas, montos y estado efectivo |
+| `GET /api/sienna-dual-lineage-analysis` | Casos de doble linaje, rutas, convergencias e inconsistencias |
+| `GET /api/sienna-analysis-summary` | Resumen ejecutivo de métricas Sienna |
+| `GET /api/sienna-findings` | Hallazgos accionables por miembro |
+
+## Estado del release 2026-05-22
+
+- Backend Node y PHP exponen el resumen Sienna, hallazgos y estado sucesoral efectivo para que React no replique reglas de negocio.
+- `/sienna/miembros-arbol` carga el workspace liviano para totales/listas y las fotos por separado mediante herederos confirmados con media; esto evita bloquear las tarjetas superiores por archivos pesados.
+- Las tablas/listas de miembros en Sienna se presentan en orden alfabetico cuando son tablas de consulta. El arbol conserva su orden logico propio para no romper la genealogia visual.
+- `/sienna/dobles-linajes` usa los casos calculados por API y ordena la auditoria por nombre de miembro.
+- `MemberDetailSheet` es la ficha canónica reutilizable para abrir detalle de miembro desde árbol, hallazgos, dobles linajes y miembros.
+- El despliegue autorizado de este release subió frontend/backend solamente; no se ejecutaron migraciones, no se tocó la BD y no se sobrescribió `.env` remoto.
 
 ## Documentos probatorios (vinculación)
 
@@ -100,9 +129,11 @@ Ayuda en pantalla: icono **?** (`sienna-miembros`, `sienna-miembros-agregar`) e 
 
 ## Librerías
 
-- `src/lib/dominicanInheritance.ts` — plan sucesoral y clasificación.
-- `src/lib/siennaGenealogy.ts` — uniones, vínculos parentales, hijos por filiación y descendientes para representación.
-- `src/lib/siennaHeirExplain.ts` — semáforo, timeline, glosario, PDF, textos «por qué heredo».
+- `src/lib/api.ts` y `src/hooks/useSiennaData.ts` — contrato de consumo del API.
+- `src/lib/dominicanInheritance.ts` — lógica histórica de plan sucesoral; debe migrarse gradualmente fuera del frontend cuando una pantalla dependa de ella para decisiones.
+- `src/lib/siennaGenealogy.ts` — helpers de UI sobre uniones/vínculos; no debe convertirse en fuente de validación de negocio.
+- `src/lib/siennaHeirExplain.ts` — presentación, PDF, semáforo y textos; los insumos deben venir del API.
+- `src/lib/siennaMemberInheritance.ts` — adaptador de UI para leer `effective_inheritance_status` y `effective_inheritance_reason` devueltos por el API.
 
 ## Herramientas para reunión
 
@@ -133,7 +164,34 @@ Ayuda en pantalla: icono **?** (`sienna-miembros`, `sienna-miembros-agregar`) e 
 - Tipos: sincronizar vínculo de filiación, completar matrimonio del hijo, rama cortada.
 - El cónyuge en texto (sin miembro en el árbol) es **referencia documental** — no genera pendiente ni nodo aparte.
 - Corrección inline con selectores + Guardar (API `saveSiennaFamilyMember`).
-- Lógica: `src/lib/siennaMemberIssues.ts`, UI: `MemberIssueFixPanel.tsx`.
+- Lógica canónica: `GET /api/sienna-findings` en Node/PHP.
+- UI: `Hallazgos.tsx` + `MemberIssueFixPanel.tsx`.
+
+## Deuda técnica detectada
+
+Estas pantallas todavía tienen cálculo de negocio en frontend y deben migrarse por fases a endpoints:
+
+| Pantalla | Cálculo frontend pendiente | Destino recomendado |
+|----------|----------------------------|---------------------|
+| Árbol Genealógico Sienna | plan sucesoral, montos, rutas y resumen ya vienen de `/api/sienna-calculation`; queda solo presentación visual | mantener sin lógica sucesoral nueva en React |
+| Explicación a herederos | plan, montos, motivos y rutas ya vienen de `/api/sienna-calculation`; queda simulador de exclusiones en frontend | endpoint de briefs/simulación por heredero |
+| Cálculo de Filiación | distribución por línea ya consume `/api/sienna-calculation` | mover análisis comparativo específico si se amplía la página |
+| Miembros del árbol | plan actual, orden/contexto y métricas ya consumen cálculo API; queda preview de borrador y simulación antes/después | endpoint de preview de miembro/filiación |
+| Documentos probatorios | sugerencia automática de familiares por árbol | mantener como asistencia visual, pero validación final en API |
+
+## Verificación del release
+
+Comandos mínimos antes de considerar lista una entrega Sienna:
+
+```sh
+php -l public/api.php
+pnpm run lint
+pnpm run build
+pnpm run test:sienna
+pnpm run check:prod   # solo después de deploy autorizado
+```
+
+Estado de la última validación local: PHP OK, build OK, pruebas Sienna OK, lint sin errores (quedan warnings no bloqueantes de Fast Refresh/hooks).
 
 ## PDF de explicación (mosaico de soporte)
 

@@ -34,7 +34,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const fetchUserPages = async (profile: UserProfile) => {
     try {
-      const { pages } = await api.listPages();
+      const { pages } = await api.listMyPages();
       setUserPages(pages);
     } catch (error) {
       console.error("Error obteniendo páginas:", error);
@@ -82,11 +82,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           navigationBlocker.current = false;
         }, 500);
       }
-    } catch (error: any) {
+    } catch (error) {
       toast({
         variant: "destructive",
         title: "Error de registro",
-        description: error.message || "Ocurrió un error durante el registro.",
+        description: error instanceof Error ? error.message : "Ocurrió un error durante el registro.",
       });
       console.error("Sign up error:", error);
     } finally {
@@ -112,11 +112,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           navigationBlocker.current = false;
         }, 500);
       }
-    } catch (error: any) {
+    } catch (error) {
       toast({
         variant: "destructive",
         title: "Error de inicio de sesión",
-        description: error.message || "Credenciales inválidas.",
+        description: error instanceof Error ? error.message : "Credenciales inválidas.",
       });
       console.error("Sign in error:", error);
     } finally {
@@ -142,11 +142,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           navigationBlocker.current = false;
         }, 500);
       }
-    } catch (error: any) {
+    } catch (error) {
       toast({
         variant: "destructive",
         title: "Error al cerrar sesión",
-        description: error.message || "Ocurrió un error al cerrar la sesión.",
+        description: error instanceof Error ? error.message : "Ocurrió un error al cerrar la sesión.",
       });
       console.error("Sign out error:", error);
     } finally {
@@ -160,8 +160,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (isAdmin) return true;
     if (!isApproved) return false;
 
-    const publicApprovedPaths = new Set(["/", "/dashboard"]);
-    if (publicApprovedPaths.has(normalizedPath)) return true;
+    const sharedApprovedPaths = new Set(["/", "/dashboard", "/sienna/dobles-linajes"]);
+    if (sharedApprovedPaths.has(normalizedPath)) return true;
 
     if (userPages.length === 0) return false;
     return userPages.some((page) => {

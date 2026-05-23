@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuth } from "@/context/AuthContext";
-import { Navigate } from "react-router-dom";
+import { Navigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -43,15 +43,21 @@ const Auth = () => {
   };
 
   return (
-    <div className="container relative mx-auto max-w-md px-4 py-8">
-      <div className="absolute right-4 top-8 z-10">
-        <PageHelp helpKey="auth" />
-      </div>
-      <div className="space-y-6 bg-white p-6 rounded-lg shadow-md border border-legal-gold/20">
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-legal-blue">HerenciaRD</h1>
-          <p className="mt-2 text-legal-dark">Sistema de Gestión de Herencias</p>
+    <div className="min-h-[calc(100vh-8rem)] bg-gradient-to-b from-legal-beige/50 to-white">
+      <div className="container relative mx-auto max-w-md px-4 py-8 sm:py-12">
+        <div className="absolute right-4 top-8 z-10">
+          <PageHelp helpKey="auth" />
         </div>
+        <div className="mb-6 text-center">
+          <Link to="/" className="text-sm font-medium text-legal-gray transition-colors hover:text-legal-blue">
+            ← Volver al inicio
+          </Link>
+        </div>
+        <div className="space-y-6 rounded-lg border border-legal-gold/20 bg-white p-6 shadow-md">
+          <div className="text-center">
+            <h1 className="font-serif text-2xl font-bold text-legal-blue">HerenciaRD</h1>
+            <p className="mt-2 text-legal-dark">Acceso al expediente familiar</p>
+          </div>
 
         <Form {...loginForm}>
           <form onSubmit={loginForm.handleSubmit(onLoginSubmit)} className="space-y-4">
@@ -94,6 +100,7 @@ const Auth = () => {
             El acceso es privado. Solicita tus credenciales al administrador del expediente.
           </AlertDescription>
         </Alert>
+        </div>
       </div>
     </div>
   );

@@ -16,6 +16,18 @@ export interface UserPage {
   description: string | null;
 }
 
+export interface PageVisit {
+  id: string;
+  user_id: string;
+  page_path: string;
+  page_name: string | null;
+  visited_at: string;
+  user_agent: string | null;
+  ip_address?: string | null;
+  user_email?: string | null;
+  user_full_name?: string | null;
+}
+
 export interface ConfirmedHeir {
   id: string;
   sienna_member_id?: string | null;
@@ -99,6 +111,52 @@ export interface SiennaRealtimeCalculation {
   generated_at: string;
 }
 
+export type SiennaFindingKind = "sync_parent_link" | "complete_filiation" | "dead_branch";
+
+export interface SiennaFindingRow {
+  id: string;
+  memberId: string;
+  memberName: string;
+  kind: SiennaFindingKind;
+  severity: "Alta prioridad" | "Media prioridad" | "Baja prioridad";
+  problem: string;
+  solution: string;
+  context?: string;
+  defaults: {
+    spouseMemberId: string;
+    filiationUnionId: string;
+    secondParentId: string;
+  };
+  spouseOptions: Array<{ id: string; name: string; suggested?: boolean }>;
+  unionOptions: Array<{ id: string; label: string }>;
+  secondParentOptions: Array<{ id: string; name: string }>;
+}
+
+export interface SiennaFindingsResponse {
+  rows: SiennaFindingRow[];
+  summary: {
+    undistributedPercent: number;
+    distributedPercent: number;
+    totalIssues: number;
+    membersAffected: number;
+    byKind: Record<SiennaFindingKind, number>;
+  };
+  generated_at: string;
+  source: "api";
+}
+
+export interface SiennaAnalysisSummary {
+  generated_at: string;
+  members_total: number;
+  active_heir_count: number;
+  total_share: number;
+  estate: SiennaRealtimeCalculation["estate"];
+  dual_lineage_total: number;
+  pending_findings_total: number;
+  pending_validation_total: number;
+  backend_contract: { source: string; message: string };
+}
+
 export type DualLineageSeverity = "info" | "warning" | "critical";
 
 export interface DualLineageRouteNode {
@@ -136,6 +194,8 @@ export interface DualLineageCase {
     is_deceased: boolean;
     inheritance_status?: SiennaFamilyMember["inheritance_status"];
   };
+  inherits: boolean;
+  inheritance_share?: number | null;
   sources: string[];
   route_count: number;
   generation_depth: number;
@@ -145,6 +205,13 @@ export interface DualLineageCase {
   shared_ancestors: Array<DualLineageRouteNode & { route_count: number }>;
   routes: DualLineageRoute[];
   calculation_routes: Array<{ source: string; share: number; routes: string[] }>;
+  source_amounts?: Array<{
+    source: string;
+    share_percent: number;
+    amount: number;
+    routes: string[];
+  }>;
+  inheritance_amount?: number | null;
   issues: DualLineageIssue[];
   explanation: string;
   tree_href: string;
@@ -180,6 +247,10 @@ export interface SiennaFamilyMember {
   spouse_birth?: string | null;
   inheritance_status?: "posible_heredero" | "no_hereda" | "requiere_revision" | "confirmado" | null;
   inheritance_reason?: string | null;
+  inheritance_status_stored?: "posible_heredero" | "no_hereda" | "requiere_revision" | "confirmado" | null;
+  inheritance_reason_stored?: string | null;
+  effective_inheritance_status?: "posible_heredero" | "no_hereda" | "requiere_revision" | "confirmado" | null;
+  effective_inheritance_reason?: string | null;
   is_highlighted_ancestor?: boolean;
   sort_order?: number;
   created_by?: string | null;
@@ -286,6 +357,7 @@ export const api = {
       body: JSON.stringify(data),
     }),
   listPages: () => request<{ pages: UserPage[] }>("/api/pages"),
+  listMyPages: () => request<{ pages: UserPage[] }>("/api/me/pages"),
   listUsers: () => request<{ users: Array<UserProfile & { permissions?: { page_id: string }[] }> }>("/api/users"),
   createUser: (data: { email: string; password: string; full_name?: string | null; role?: "admin" | "regular"; is_approved?: boolean }) =>
     request<{ profile: UserProfile }>("/api/users", {
@@ -310,7 +382,7 @@ export const api = {
       body: JSON.stringify(data),
     }),
   listPageVisits: () =>
-    request<{ visits: any[] }>("/api/page-visits"),
+    request<{ visits: PageVisit[] }>("/api/page-visits"),
   getSettings: () =>
     request<{ settings: Record<string, string | number | boolean | SiennaCaseConfig | null> }>("/api/settings"),
   updateSettings: (data: { estate_amount?: number; lawyer_fee_percentage?: number; sienna_case_config?: SiennaCaseConfig }) =>
@@ -321,6 +393,10 @@ export const api = {
   listConfirmedHeirs: (options?: { includeMedia?: boolean }) =>
     request<{ heirs: ConfirmedHeir[] }>(
       `/api/confirmed-heirs${options?.includeMedia ? "?includeMedia=1" : ""}`
+    ),
+  getConfirmedHeir: (id: string, options?: { includeMedia?: boolean }) =>
+    request<{ heir: ConfirmedHeir }>(
+      `/api/confirmed-heirs/${id}${options?.includeMedia ? "?includeMedia=1" : ""}`
     ),
   bulkUpdateHeirAmounts: (items: Array<{ id: string; inheritance_amount: number }>) =>
     request<{ ok: boolean }>("/api/confirmed-heirs/bulk-amounts", {
@@ -375,6 +451,10 @@ export const api = {
   },
   getSiennaDualLineageAnalysis: () =>
     request<{ analysis: DualLineageAnalysis }>("/api/sienna-dual-lineage-analysis"),
+  getSiennaAnalysisSummary: () =>
+    request<{ summary: SiennaAnalysisSummary }>("/api/sienna-analysis-summary"),
+  getSiennaFindings: () =>
+    request<{ findings: SiennaFindingsResponse }>("/api/sienna-findings"),
   saveSiennaFamilyMember: (
     data: Omit<SiennaFamilyMember, "created_at" | "updated_at"> & { filiation?: MemberFiliationPayload }
   ) =>

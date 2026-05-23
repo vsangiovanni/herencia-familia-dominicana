@@ -33,12 +33,12 @@ const UserMenu = () => {
   const handleSignOut = async () => {
     try {
       await signOut();
-      navigate('/auth');
-    } catch (error: any) {
+      navigate('/');
+    } catch (error) {
       toast({
         variant: "destructive",
         title: "Error al cerrar sesión",
-        description: error.message || "Ocurrió un error al cerrar la sesión.",
+        description: error instanceof Error ? error.message : "Ocurrió un error al cerrar la sesión.",
       });
     }
   };

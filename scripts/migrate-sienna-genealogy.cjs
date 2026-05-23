@@ -123,19 +123,6 @@ async function main() {
           : null,
       });
       if (inconsistent) stats.inconsistentUnions += 1;
-    } else if (member.spouse && !spouseId) {
-      const unionId = buildUnionId(memberId, 'texto');
-      upsertUnion({
-        id: unionId,
-        partner_a_member_id: memberId,
-        partner_b_member_id: null,
-        union_type: 'matrimonio',
-        migration_source: 'spouse_text_only',
-        confidence: 'baja',
-        is_inconsistent: true,
-        inconsistency_reason: `Cónyuge solo en texto ('${member.spouse}') sin spouse_member_id`,
-      });
-      stats.inconsistentUnions += 1;
     }
   }
 

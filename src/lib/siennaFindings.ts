@@ -6,7 +6,7 @@ import {
   SiennaFamilyMember,
 } from '@/lib/api';
 import { buildDominicanInheritancePlan, normalizeName } from '@/lib/dominicanInheritance';
-import { countGenealogyInconsistencies, getDescendantsForRepresentation, getParentLinksForChild, getUnionsForMember, SiennaGenealogyBundle } from '@/lib/siennaGenealogy';
+import { countGenealogyInconsistencies, getDescendantsForRepresentation, getParentLinksForChild, SiennaGenealogyBundle } from '@/lib/siennaGenealogy';
 
 export type FindingCategory = 'genealogia' | 'calculo' | 'expediente';
 export type FindingSeverity = 'Alta prioridad' | 'Media prioridad' | 'Baja prioridad';
@@ -46,10 +46,19 @@ export type SiennaFindingsInput = {
   documents: EvidenceDocument[];
 };
 
-const isChildMember = (member: SiennaFamilyMember) =>
-  member.relationship_to_parent === 'hijo' ||
-  member.relationship_to_parent === 'hija' ||
-  !member.relationship_to_parent;
+const isChildMember = (member: SiennaFamilyMember) => {
+  const relationship = member.relationship_to_parent;
+  if (relationship === 'hijo' || relationship === 'hija') return true;
+  return relationship == null || relationship === '';
+};
+
+export const resolveChildRelationship = (member: SiennaFamilyMember): 'hijo' | 'hija' | null => {
+  if (member.relationship_to_parent === 'hijo' || member.relationship_to_parent === 'hija') {
+    return member.relationship_to_parent;
+  }
+  if (!member.parent_id) return null;
+  return 'hijo';
+};
 
 const isDeceased = (member: SiennaFamilyMember) => Boolean(member.death?.trim());
 
@@ -64,33 +73,15 @@ const matchMemberBySpouseText = (spouseText: string, members: SiennaFamilyMember
 };
 
 export const inferFiliationForChild = (
-  child: SiennaFamilyMember,
-  members: SiennaFamilyMember[],
-  unions: FamilyUnion[]
+  _child: SiennaFamilyMember,
+  _members: SiennaFamilyMember[],
+  _unions: FamilyUnion[]
 ) => {
-  if (!child.parent_id) return null;
-  const membersById = new Map(members.map((member) => [member.id, member]));
-  const parent = membersById.get(child.parent_id);
-  if (!parent) return null;
-
-  const parentUnions = getUnionsForMember(parent.id, unions).filter(
-    (union) => union.partner_b_member_id && !union.is_inconsistent
-  );
-  const union = parentUnions[0] || null;
-
-  let secondParentId: string | null = null;
-  if (union) {
-    secondParentId =
-      union.partner_a_member_id === parent.id
-        ? union.partner_b_member_id || null
-        : union.partner_a_member_id;
-  } else if (parent.spouse_member_id) {
-    secondParentId = parent.spouse_member_id;
-  }
-
+  // La filiación de cada hijo es independiente: no heredar union_id ni segundo progenitor
+  // del spouse_member_id del padre/madre en el árbol.
   return {
-    union_id: union?.id || null,
-    second_parent_id: secondParentId,
+    union_id: null,
+    second_parent_id: null,
   };
 };
 
@@ -103,20 +94,22 @@ export const buildMemberSavePayload = (
     filiation?: { union_id?: string | null; second_parent_id?: string | null };
   } = {}
 ) => {
-  const filiation =
-    overrides.filiation ??
-    (member.parent_id && isChildMember(member)
-      ? inferFiliationForChild(member, members, unions)
-      : undefined);
+  const resolvedFiliation =
+    overrides.filiation !== undefined
+      ? overrides.filiation
+      : member.parent_id && isChildMember(member)
+        ? inferFiliationForChild(member, members, unions)
+        : undefined;
 
   const spouseMemberId =
     overrides.spouse_member_id !== undefined ? overrides.spouse_member_id : member.spouse_member_id;
   const spouseMember = spouseMemberId ? members.find((item) => item.id === spouseMemberId) : null;
+  const childRelationship = resolveChildRelationship(member);
 
   return {
     id: member.id,
     parent_id: member.parent_id,
-    relationship_to_parent: member.relationship_to_parent,
+    relationship_to_parent: childRelationship ?? member.relationship_to_parent ?? null,
     name: member.name,
     birth: member.birth,
     death: member.death,
@@ -128,10 +121,10 @@ export const buildMemberSavePayload = (
     is_highlighted_ancestor: member.is_highlighted_ancestor,
     sort_order: member.sort_order ?? 0,
     filiation:
-      member.parent_id && isChildMember(member) && filiation
+      member.parent_id && isChildMember(member) && resolvedFiliation !== undefined
         ? {
-            union_id: filiation.union_id,
-            second_parent_id: filiation.second_parent_id,
+            union_id: resolvedFiliation?.union_id ?? null,
+            second_parent_id: resolvedFiliation?.second_parent_id ?? null,
           }
         : undefined,
   };

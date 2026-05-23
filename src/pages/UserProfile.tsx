@@ -77,11 +77,11 @@ const UserProfile = () => {
         title: 'Perfil actualizado',
         description: 'Tu información ha sido actualizada exitosamente.',
       });
-    } catch (error: any) {
+    } catch (error) {
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: error.message || 'No se pudo actualizar el perfil',
+        description: error instanceof Error ? error.message : 'No se pudo actualizar el perfil',
       });
     } finally {
       setLoading(false);
@@ -101,11 +101,11 @@ const UserProfile = () => {
       
       // Reiniciar formulario
       passwordForm.reset();
-    } catch (error: any) {
+    } catch (error) {
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: error.message || 'No se pudo cambiar la contraseña',
+        description: error instanceof Error ? error.message : 'No se pudo cambiar la contraseña',
       });
     } finally {
       setLoading(false);

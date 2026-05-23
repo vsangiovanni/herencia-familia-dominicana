@@ -8,6 +8,7 @@ import {
   normalizeName,
 } from '@/lib/dominicanInheritance';
 import { formatPercent } from '@/lib/siennaHeirExplain';
+import { getMemberEffectiveInheritanceReason, getMemberEffectiveInheritanceStatus } from '@/lib/siennaMemberInheritance';
 import { ChildFiliationGroup, getDirectChildrenOfMember, groupChildrenForMember, SiennaGenealogyBundle } from '@/lib/siennaGenealogy';
 
 export type TreeRole =
@@ -159,11 +160,13 @@ export const resolveTreeRole = (
     return 'heredero_final';
   }
 
-  if (member.inheritance_status === 'no_hereda') {
+  const effectiveStatus = getMemberEffectiveInheritanceStatus(member);
+
+  if (effectiveStatus === 'no_hereda') {
     return member.death ? 'enlace_intermedio' : 'enlace_genealogico';
   }
 
-  if (member.inheritance_status === 'requiere_revision') {
+  if (effectiveStatus === 'requiere_revision') {
     return 'pendiente';
   }
 
@@ -193,21 +196,24 @@ export const resolveInheritanceDisplay = (
     };
   }
 
-  if (member.inheritance_status === 'confirmado') {
+  const effectiveStatus = getMemberEffectiveInheritanceStatus(member);
+  const effectiveReason = getMemberEffectiveInheritanceReason(member);
+
+  if (effectiveStatus === 'confirmado') {
     return {
       inherits: true,
       inheritanceLabel: 'Sí — confirmado manualmente',
       sharePercent: null,
-      routeLabel: member.inheritance_reason || null,
+      routeLabel: effectiveReason || null,
     };
   }
 
-  if (member.inheritance_status === 'no_hereda') {
+  if (effectiveStatus === 'no_hereda') {
     return {
       inherits: false,
       inheritanceLabel: 'No — enlace o intermedio',
       sharePercent: null,
-      routeLabel: member.inheritance_reason || null,
+      routeLabel: effectiveReason || null,
     };
   }
 

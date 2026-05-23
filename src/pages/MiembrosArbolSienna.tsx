@@ -1,9 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import BackButton from '@/components/BackButton';
 import DocumentHeader from '@/components/DocumentHeader';
 import SiennaPageLayout from '@/components/sienna/SiennaPageLayout';
-import { api, FamilyUnion, MemberParentLink, SiennaFamilyMember } from '@/lib/api';
+import { api, ConfirmedHeir, EvidenceDocument, FamilyUnion, MemberParentLink, SiennaFamilyMember } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -27,9 +27,17 @@ import {
 } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/use-toast';
-import { applySiennaCaseConfig, buildDominicanInheritancePlan, classifyMemberByDominicanLaw, normalizeName, summarizeInheritanceStatuses } from '@/lib/dominicanInheritance';
-import { invalidateSiennaData, useSiennaWorkspace } from '@/hooks/useSiennaData';
-import { ConfirmedHeir, EvidenceDocument } from '@/lib/api';
+import { readFileAsDataUrl } from '@/lib/readFileAsDataUrl';
+import { applySiennaCaseConfig, buildDominicanInheritancePlan, classifyMemberByDominicanLaw, normalizeName } from '@/lib/dominicanInheritance';
+import {
+  getMemberEffectiveInheritanceReason,
+  getMemberEffectiveInheritanceStatus,
+  getMemberStoredInheritanceReason,
+  getMemberStoredInheritanceStatus,
+} from '@/lib/siennaMemberInheritance';
+import { invalidateSiennaData, useConfirmedHeirs, useSiennaCalculation, useSiennaWorkspace } from '@/hooks/useSiennaData';
+import MemberPhoto from '@/components/sienna/MemberPhoto';
+import MemberDetailSheet from '@/components/sienna/MemberDetailSheet';
 import {
   buildMemberTreeContext,
   formatParentOptionLabel,
@@ -43,8 +51,11 @@ import {
 } from '@/lib/siennaGenealogy';
 import { buildSecondParentOptions, buildUnionOptionsForParent } from '@/lib/siennaMemberIssues';
 import { formatPercent } from '@/lib/siennaHeirExplain';
+import { buildMemberPhotoLookup } from '@/lib/memberPhotos';
+import { buildInheritancePlanFromApiRows } from '@/lib/siennaCalculation';
 import MemberTreeContextPanel from '@/components/sienna/MemberTreeContextPanel';
 import MemberRegistrationGuide from '@/components/sienna/MemberRegistrationGuide';
+import MemberVerificationBadge from '@/components/sienna/MemberVerificationBadge';
 import PageHelp from '@/components/PageHelp';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import {
@@ -54,7 +65,6 @@ import {
   FileText,
   GitBranch,
   GitMerge,
-  Image as ImageIcon,
   Loader2,
   Save,
   Search,
@@ -102,6 +112,25 @@ const emptyForm: MemberForm = {
   filiation_union_id: '',
   second_parent_id: '',
 };
+
+type MemberPhotoDraft = {
+  data: string | null;
+  fileName: string | null;
+  fileType: string | null;
+  dirty: boolean;
+};
+
+const emptyPhotoDraft: MemberPhotoDraft = {
+  data: null,
+  fileName: null,
+  fileType: null,
+  dirty: false,
+};
+
+const findLinkedHeir = (heirs: ConfirmedHeir[], memberId: string, memberName: string) =>
+  heirs.find((heir) => heir.sienna_member_id === memberId) ||
+  heirs.find((heir) => normalizeName(heir.heir_name) === normalizeName(memberName)) ||
+  null;
 
 const makeId = (name: string) =>
   `${normalizeName(name)
@@ -176,8 +205,8 @@ const toForm = (
     spouse_member_id: member.spouse_member_id || '',
     spouse: member.spouse || '',
     spouse_birth: member.spouse_birth || '',
-    inheritance_status: (member.inheritance_status as MemberForm['inheritance_status']) || 'requiere_revision',
-    inheritance_reason: member.inheritance_reason || '',
+    inheritance_status: getMemberStoredInheritanceStatus(member),
+    inheritance_reason: getMemberStoredInheritanceReason(member) || '',
     is_highlighted_ancestor: Boolean(member.is_highlighted_ancestor),
     sort_order: String(member.sort_order || 0),
     filiation_union_id: primaryLink?.union_id || links.find((link) => link.union_id)?.union_id || '',
@@ -190,10 +219,17 @@ const MiembrosArbolSienna = () => {
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const { data: workspace, isLoading, isFetching, refetch } = useSiennaWorkspace(false);
+  const { data: heirsWithPhotos } = useConfirmedHeirs(true);
+  const { data: realtimeCalculationData } = useSiennaCalculation(
+    workspace?.settings?.estate_amount ?? 0,
+    workspace?.settings?.lawyer_fee_percentage ?? 0
+  );
+  const realtimeCalculation = realtimeCalculationData?.calculation;
   const members = workspace?.members ?? [];
   const unions = workspace?.unions ?? [];
   const parentLinks = workspace?.parent_links ?? [];
-  const heirs = workspace?.heirs ?? [];
+  const heirs = heirsWithPhotos?.heirs ?? workspace?.heirs ?? [];
+  const photoLookup = useMemo(() => buildMemberPhotoLookup(heirs), [heirs]);
   const [documentOverrides, setDocumentOverrides] = useState<Record<string, EvidenceDocument>>({});
   const documents = useMemo(
     () =>
@@ -203,13 +239,62 @@ const MiembrosArbolSienna = () => {
     [documentOverrides, workspace?.documents]
   );
   const [form, setForm] = useState<MemberForm>(emptyForm);
+  const [photoDraft, setPhotoDraft] = useState<MemberPhotoDraft>(emptyPhotoDraft);
+  const [photoCache, setPhotoCache] = useState<Record<string, string>>({});
   const [loadingMessage, setLoadingMessage] = useState('Cargando miembros y contexto del árbol...');
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
   const [viewerMemberId, setViewerMemberId] = useState<string | null>(null);
   const [viewerDocumentId, setViewerDocumentId] = useState<string | null>(null);
+  const [detailMemberId, setDetailMemberId] = useState<string | null>(null);
   const [caseConfigRevision, setCaseConfigRevision] = useState(0);
   const [deletingMemberId, setDeletingMemberId] = useState<string | null>(null);
+  const formSectionRef = useRef<HTMLDivElement>(null);
+  const detailMember = useMemo(
+    () => members.find((member) => member.id === detailMemberId) || null,
+    [detailMemberId, members]
+  );
+
+  const scrollToForm = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      formSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, []);
+
+  const openMemberForEdit = useCallback(
+    (member: SiennaFamilyMember) => {
+      setForm(toForm(member, parentLinks));
+      setPhotoDraft(emptyPhotoDraft);
+      scrollToForm();
+
+      const linkedHeir = findLinkedHeir(heirs, member.id, member.name);
+      const cachedPhoto = photoCache[member.id];
+      const linkedPhoto = linkedHeir?.photo_data || null;
+      if (cachedPhoto || linkedPhoto) {
+        setPhotoDraft({
+          data: cachedPhoto || linkedPhoto,
+          fileName: linkedHeir?.photo_file_name ?? null,
+          fileType: linkedHeir?.photo_file_type ?? null,
+          dirty: false,
+        });
+        return;
+      }
+
+      if (!linkedHeir?.id || !linkedHeir.has_photo) return;
+
+      void api.getConfirmedHeir(linkedHeir.id, { includeMedia: true }).then(({ heir }) => {
+        if (!heir.photo_data) return;
+        setPhotoCache((current) => ({ ...current, [member.id]: heir.photo_data! }));
+        setPhotoDraft({
+          data: heir.photo_data ?? null,
+          fileName: heir.photo_file_name ?? null,
+          fileType: heir.photo_file_type ?? null,
+          dirty: false,
+        });
+      });
+    },
+    [heirs, parentLinks, photoCache, scrollToForm]
+  );
 
   const loadMembers = async () => {
     setLoadingMessage('Actualizando miembros del árbol...');
@@ -256,15 +341,73 @@ const MiembrosArbolSienna = () => {
     if (!editId || loading || !members.length) return;
     const member = members.find((item) => item.id === editId);
     if (member) {
-      setForm(toForm(member, parentLinks));
+      openMemberForEdit(member);
     }
-  }, [loading, members, parentLinks, searchParams]);
+  }, [loading, members, openMemberForEdit, searchParams]);
 
   const updateForm = (field: keyof MemberForm, value: string | boolean) => {
     setForm((current) => ({ ...current, [field]: value }));
   };
 
-  const resetForm = () => setForm(emptyForm);
+  const resetForm = () => {
+    setForm(emptyForm);
+    setPhotoDraft(emptyPhotoDraft);
+  };
+
+  const handlePhotoPick = async (file?: File) => {
+    if (!file) return;
+    try {
+      const data = await readFileAsDataUrl(file);
+      setPhotoDraft({
+        data,
+        fileName: file.name,
+        fileType: file.type,
+        dirty: true,
+      });
+    } catch (error) {
+      toast({
+        title: 'No se pudo leer la foto',
+        description: error instanceof Error ? error.message : 'Error desconocido',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const persistMemberPhoto = async (memberId: string, memberName: string) => {
+    if (!photoDraft.dirty) return;
+
+    const linkedHeir = findLinkedHeir(heirs, memberId, memberName);
+    if (linkedHeir?.id) {
+      await api.updateConfirmedHeir(linkedHeir.id, {
+        sienna_member_id: memberId,
+        heir_name: memberName,
+        relationship_summary: linkedHeir.relationship_summary ?? null,
+        line_vincenzo: linkedHeir.line_vincenzo,
+        line_paolo: linkedHeir.line_paolo,
+        status: linkedHeir.status,
+        notes: linkedHeir.notes ?? null,
+        photo_file_name: photoDraft.fileName,
+        photo_file_type: photoDraft.fileType,
+        photo_data: photoDraft.data,
+        inheritance_amount: Number(linkedHeir.inheritance_amount || 0),
+      });
+      return;
+    }
+
+    await api.saveConfirmedHeir({
+      sienna_member_id: memberId,
+      heir_name: memberName,
+      relationship_summary: null,
+      line_vincenzo: false,
+      line_paolo: false,
+      status: 'mencionado',
+      notes: null,
+      photo_file_name: photoDraft.fileName,
+      photo_file_type: photoDraft.fileType,
+      photo_data: photoDraft.data,
+      inheritance_amount: 0,
+    });
+  };
 
   const genealogy = useMemo(
     () => ({ unions, parent_links: parentLinks }),
@@ -280,12 +423,12 @@ const MiembrosArbolSienna = () => {
     : evaluation.inheritance_reason;
 
   const inheritancePlan = useMemo(
-    () => buildDominicanInheritancePlan(members, genealogy),
-    [caseConfigRevision, genealogy, members]
+    () => buildInheritancePlanFromApiRows(realtimeCalculation?.active_heirs ?? [], members),
+    [members, realtimeCalculation?.active_heirs]
   );
 
   const sortedMembers = useMemo(
-    () => sortMembersByTree(members, inheritancePlan),
+    () => sortMembersByName(members),
     [inheritancePlan, members]
   );
   const membersById = useMemo(
@@ -332,7 +475,7 @@ const MiembrosArbolSienna = () => {
         context?.collateralLine,
         context?.connectionLabel,
         context?.inheritanceLabel,
-        member.inheritance_reason,
+        getMemberEffectiveInheritanceReason(member),
       ]
         .filter(Boolean)
         .join(' ')
@@ -404,7 +547,7 @@ const MiembrosArbolSienna = () => {
         afterShare: after?.share || 0,
         delta: (after?.share || 0) - (before?.share || 0),
       };
-    }).sort((a, b) => b.afterShare - a.afterShare || a.name.localeCompare(b.name));
+    }).sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
   }, [draftMembers, genealogy, members]);
 
   const filiationUnionOptions = useMemo(() => {
@@ -429,11 +572,14 @@ const MiembrosArbolSienna = () => {
 
     setSaving(true);
     try {
+      const memberId = form.id || makeId(form.name);
+      const memberName = form.name.trim();
+      const savingPhoto = photoDraft.dirty;
       await api.saveSiennaFamilyMember({
-        id: form.id || makeId(form.name),
+        id: memberId,
         parent_id: form.parent_id === 'root' ? null : form.parent_id,
         relationship_to_parent: form.parent_id === 'root' ? null : form.relationship_to_parent,
-        name: form.name.trim(),
+        name: memberName,
         birth: form.birth || null,
         death: form.death || null,
         spouse_member_id: form.spouse_member_id || null,
@@ -452,10 +598,23 @@ const MiembrosArbolSienna = () => {
               }
             : undefined,
       });
+
+      if (savingPhoto) {
+        await persistMemberPhoto(memberId, memberName);
+        if (photoDraft.data) {
+          setPhotoCache((current) => ({ ...current, [memberId]: photoDraft.data! }));
+        }
+      }
+
       resetForm();
       invalidateSiennaData(queryClient);
       await loadMembers();
-      toast({ title: 'Miembro guardado', description: 'La administración del árbol fue actualizada.' });
+      toast({
+        title: 'Miembro guardado',
+        description: savingPhoto
+          ? 'Datos del árbol y foto del expediente actualizados.'
+          : 'La administración del árbol fue actualizada.',
+      });
     } catch (error) {
       toast({
         title: 'No se pudo guardar',
@@ -496,15 +655,23 @@ const MiembrosArbolSienna = () => {
   };
 
   const stats = useMemo(() => {
-    const summary = summarizeInheritanceStatuses(members, genealogy, inheritancePlan);
+    const summary = {
+      confirmed: members.filter((member) => getMemberEffectiveInheritanceStatus(member) === 'confirmado').length,
+      possible: members.filter((member) => getMemberEffectiveInheritanceStatus(member) === 'posible_heredero').length,
+      connectors: members.filter((member) => getMemberEffectiveInheritanceStatus(member) === 'no_hereda').length,
+      pending: members.filter((member) => getMemberEffectiveInheritanceStatus(member) === 'requiere_revision').length,
+      finalHeirs: inheritancePlan.activeHeirs.length,
+    };
 
     return {
       ...summary,
+      total: members.length,
+      heirs: summary.finalHeirs,
       unions: unions.length,
       parentLinks: parentLinks.length,
       inconsistentUnions: unions.filter((union) => union.is_inconsistent).length,
     };
-  }, [genealogy, inheritancePlan, members, parentLinks.length, unions]);
+  }, [inheritancePlan.activeHeirs.length, members, parentLinks.length, unions]);
 
   const showChildFiliationFields =
     form.parent_id !== 'root' &&
@@ -605,13 +772,7 @@ const MiembrosArbolSienna = () => {
             <CardContent className="p-5">
               <p className="text-sm text-legal-gray">Pendientes</p>
               <p className="text-2xl font-bold text-legal-blue">{stats.pending}</p>
-              <p className="mt-1 text-xs text-legal-gray">Sin clasificar tras autodetectar (cálculo en vivo)</p>
-              {stats.storedPending > stats.pending && (
-                <p className="mt-1 text-xs text-amber-800">
-                  {stats.storedPending - stats.pending} miembro(s) ya clasificados por el cálculo; guarde la ficha para
-                  actualizar la base de datos.
-                </p>
-              )}
+              <p className="mt-1 text-xs text-legal-gray">Sin clasificar tras autodetectar (según cálculo vigente)</p>
             </CardContent>
           </Card>
           <Card><CardContent className="p-5"><p className="text-sm text-legal-gray">Uniones</p><p className="text-2xl font-bold text-legal-blue">{stats.unions}</p></CardContent></Card>
@@ -663,7 +824,7 @@ const MiembrosArbolSienna = () => {
           </CardContent>
         </Card>
 
-        <Card className="border border-legal-gold/20">
+        <Card ref={formSectionRef} className="scroll-mt-24 border border-legal-gold/20">
           <CardHeader className="bg-legal-blue/5 border-b">
             <div className="flex items-center justify-between gap-2">
               <CardTitle className="flex items-center gap-2 text-legal-blue">
@@ -680,6 +841,32 @@ const MiembrosArbolSienna = () => {
             <div className="md:col-span-2">
               <Label>Nombre</Label>
               <Input value={form.name} onChange={(event) => updateForm('name', event.target.value)} />
+            </div>
+            <div className="md:col-span-2">
+              <Label>Foto del miembro</Label>
+              <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center">
+                <MemberPhoto
+                  name={form.name || 'Miembro'}
+                  memberId={form.id || null}
+                  photoData={photoDraft.data}
+                  size="lg"
+                />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    disabled={!form.name.trim()}
+                    onChange={(event) => {
+                      void handlePhotoPick(event.target.files?.[0]);
+                      event.target.value = '';
+                    }}
+                  />
+                  <p className="text-xs leading-relaxed text-legal-gray">
+                    Elija una imagen y pulse Guardar. Se almacena en el expediente del heredero vinculado a este
+                    miembro.
+                  </p>
+                </div>
+              </div>
             </div>
             <div>
               <Label>Conectar debajo de (nodo superior)</Label>
@@ -783,9 +970,13 @@ const MiembrosArbolSienna = () => {
                     <Label>Matrimonio / pareja de {editingPersonLabel} (progenitor: {superiorLabel})</Label>
                     <Select
                       value={form.filiation_union_id || '__none__'}
-                      onValueChange={(value) =>
-                        updateForm('filiation_union_id', value === '__none__' ? '' : value)
-                      }
+                      onValueChange={(value) => {
+                        const unionId = value === '__none__' ? '' : value;
+                        updateForm('filiation_union_id', unionId);
+                        if (!unionId) {
+                          updateForm('second_parent_id', '');
+                        }
+                      }}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Sin unión registrada" />
@@ -1000,6 +1191,7 @@ const MiembrosArbolSienna = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Miembro</TableHead>
+                  <TableHead>Enlaces</TableHead>
                   <TableHead className="min-w-[220px]">Línea parental</TableHead>
                   <TableHead>Rama / nivel</TableHead>
                   <TableHead>Conexión</TableHead>
@@ -1015,7 +1207,7 @@ const MiembrosArbolSienna = () => {
               <TableBody>
                 {loading && (
                   <TableRow>
-                    <TableCell colSpan={11} className="py-8 text-center text-legal-gray">
+                    <TableCell colSpan={12} className="py-8 text-center text-legal-gray">
                       <span className="inline-flex items-center gap-2">
                         <Loader2 className="h-4 w-4 animate-spin text-legal-blue" />
                         {loadingMessage}
@@ -1025,7 +1217,7 @@ const MiembrosArbolSienna = () => {
                 )}
                 {!loading && filteredMembers.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={11} className="py-8 text-center text-legal-gray">
+                    <TableCell colSpan={12} className="py-8 text-center text-legal-gray">
                       No hay miembros que coincidan con la búsqueda.
                     </TableCell>
                   </TableRow>
@@ -1048,10 +1240,23 @@ const MiembrosArbolSienna = () => {
                       (member.spouse_member_id ? membersById.get(member.spouse_member_id.trim())?.name : null) ||
                       member.spouse ||
                       null;
+                    const isPendingInheritance =
+                      getMemberEffectiveInheritanceStatus(member) ===
+                      'requiere_revision';
 
                     return (
                       <TableRow key={member.id}>
                         <TableCell className="min-w-[200px]">
+                          <div className="flex items-start gap-2">
+                            <MemberPhoto
+                              name={member.name}
+                              memberId={member.id}
+                              photoData={photoCache[member.id]}
+                              lookup={photoLookup}
+                              size="sm"
+                              pendingInheritance={isPendingInheritance}
+                            />
+                            <div>
                           <p className="font-medium text-legal-blue">{member.name}</p>
                           <p className="mt-1 font-mono text-[10px] text-legal-gray">{member.id}</p>
                           {member.is_highlighted_ancestor && (
@@ -1059,6 +1264,15 @@ const MiembrosArbolSienna = () => {
                               Destacado
                             </Badge>
                           )}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="min-w-[150px]">
+                          <MemberVerificationBadge
+                            member={member}
+                            members={members}
+                            genealogy={genealogy}
+                          />
                         </TableCell>
                         <TableCell className="text-sm leading-relaxed text-gray-700">{context.parentalLine}</TableCell>
                         <TableCell className="min-w-[160px]">
@@ -1084,17 +1298,14 @@ const MiembrosArbolSienna = () => {
                         </TableCell>
                         <TableCell className="min-w-[110px]">
                           <div className="flex items-center justify-center">
-                            {linkedHeir?.photo_data ? (
-                              <img
-                                src={String(linkedHeir.photo_data)}
-                                alt={member.name}
-                                className="h-12 w-12 rounded-full border object-cover"
-                              />
-                            ) : (
-                              <div className="flex h-12 w-12 items-center justify-center rounded-full border bg-legal-blue/5">
-                                <ImageIcon className="h-4 w-4 text-legal-gray" />
-                              </div>
-                            )}
+                            <MemberPhoto
+                              name={member.name}
+                              memberId={member.id}
+                              photoData={photoCache[member.id]}
+                              lookup={photoLookup}
+                              size="md"
+                              pendingInheritance={isPendingInheritance}
+                            />
                           </div>
                         </TableCell>
                         <TableCell className="min-w-[220px]">
@@ -1202,12 +1413,17 @@ const MiembrosArbolSienna = () => {
                           </div>
                         </TableCell>
                         <TableCell className="hidden min-w-[200px] text-sm text-gray-700 xl:table-cell">
-                          {member.inheritance_reason || context.routeLabel || '—'}
+                          {getMemberEffectiveInheritanceReason(member) ||
+                            context.routeLabel ||
+                            '—'}
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
-                            <Button variant="outline" size="sm" onClick={() => setForm(toForm(member, parentLinks))}>
+                            <Button variant="outline" size="sm" onClick={() => openMemberForEdit(member)}>
                               <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={() => setDetailMemberId(member.id)}>
+                              Ficha
                             </Button>
                             {isAdmin && (
                               <Button
@@ -1230,6 +1446,16 @@ const MiembrosArbolSienna = () => {
           </CardContent>
         </Card>
       </div>
+      <MemberDetailSheet
+        member={detailMember}
+        members={members}
+        genealogy={genealogy}
+        heirs={heirs}
+        documents={documents}
+        photoData={detailMember ? photoCache[detailMember.id] : null}
+        open={Boolean(detailMember)}
+        onOpenChange={(open) => !open && setDetailMemberId(null)}
+      />
     </SiennaPageLayout>
   );
 };

@@ -43,12 +43,15 @@ Documentación: [docs/SIENNA.md](docs/SIENNA.md)
 |------|-----|
 | `/sienna/arbol-genealogico` | Árbol clásico, montos, doble linaje, pantalla completa y resumen «Por qué heredan» |
 | `/sienna/miembros-arbol` | CRUD de miembros, uniones matrimoniales, filiación hijo/hija y simulador |
+| `/sienna/dobles-linajes` | Auditoría visual de doble linaje, rutas, convergencias y validación |
 | `/sienna/explicacion-herederos` | Reunión con herederos: pestañas, PDF, semáforo, timeline |
 | `/documentos-probatorios` | Evidencias vinculadas a miembros del árbol (titular + parentescos autoasistidos) |
 | `/hallazgos` | Hallazgos dinámicos calculados con data actual (miembros, herederos y documentos) |
 | `/admin/settings` | Configuración central del caso Sienna (solo administradores) |
 
-Lógica compartida: `src/lib/dominicanInheritance.ts`, `src/lib/siennaGenealogy.ts`, `src/lib/siennaHeirExplain.ts`.
+Regla canónica: el API/backend es la fuente única de información, cálculo y validación Sienna. El frontend presenta respuestas del API y no debe duplicar reglas sucesorales, genealógicas, hallazgos ni convergencias.
+
+Lógica/presentación compartida: `src/lib/siennaGenealogy.ts`, `src/lib/siennaHeirExplain.ts`, `src/lib/siennaMemberInheritance.ts`.
 
 Estado actual del flujo Sienna:
 
@@ -57,6 +60,8 @@ Estado actual del flujo Sienna:
 - Los miembros fallecidos se marcan con lacito negro discreto y etiqueta **Fallecido** en árbol, vistas reutilizables y PDF.
 - La explicación para herederos usa cálculo en vivo, muestra doble linaje por ruta y genera PDF con mosaico de documentos soporte.
 - Las imágenes de actas se normalizan antes de insertarse en PDF para evitar soportes invisibles.
+- Las tablas de consulta de miembros se ordenan alfabéticamente; el árbol conserva su orden lógico visual.
+- `/sienna/miembros-arbol` separa carga liviana de workspace y media para que totales/listas no dependan de fotos pesadas.
 
 ## Interfaz (ayuda y navegación)
 
@@ -78,8 +83,8 @@ Tablas principales: `confirmed_heirs`, `sienna_family_members`, `family_unions`,
 Migración inicial de filiación desde datos legacy:
 
 ```sh
-npm run migrate:genealogy          # local (.env)
-npm run migrate:genealogy:prod     # producción (.env.prod.working)
+pnpm run migrate:genealogy          # local (.env)
+pnpm run migrate:genealogy:prod     # producción (.env.prod.working), solo con autorización de BD
 ```
 
 ## Marca y créditos

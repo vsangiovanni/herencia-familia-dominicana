@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import BackButton from '@/components/BackButton';
 import DocumentHeader from '@/components/DocumentHeader';
-import { useSiennaCalculation, useSiennaWorkspace } from '@/hooks/useSiennaData';
-import { applySiennaCaseConfig, buildDominicanInheritancePlan, normalizeName } from '@/lib/dominicanInheritance';
+import MemberPhoto from '@/components/sienna/MemberPhoto';
+import { useSiennaCalculation, useConfirmedHeirs, useSiennaWorkspace } from '@/hooks/useSiennaData';
+import { applySiennaCaseConfig, normalizeName } from '@/lib/dominicanInheritance';
+import { buildMemberPhotoLookup } from '@/lib/memberPhotos';
 import { countGenealogyInconsistencies } from '@/lib/siennaGenealogy';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -60,12 +62,12 @@ const prettyRoute = (routes: string[]) =>
 
 const CalculoFiliacion = () => {
   const { data: workspace } = useSiennaWorkspace(false);
+  const { data: heirsWithPhotos } = useConfirmedHeirs(true);
+  const confirmedHeirs = heirsWithPhotos?.heirs ?? workspace?.heirs ?? [];
   const members = workspace?.members ?? [];
   const unions = workspace?.unions ?? [];
   const parentLinks = workspace?.parent_links ?? [];
   const [estateAmount, setEstateAmount] = useState(0);
-  const [caseConfigRevision, setCaseConfigRevision] = useState(0);
-  const confirmedHeirs = workspace?.heirs ?? [];
   const lawyerFeePercentage = Number(workspace?.settings?.lawyer_fee_percentage || 0);
   const { data: realtimeCalculationData, isFetching: isFetchingCalculation } = useSiennaCalculation(
     estateAmount,
@@ -82,20 +84,13 @@ const CalculoFiliacion = () => {
     if (!workspace) return;
     applySiennaCaseConfig(workspace.settings?.sienna_case_config);
     setEstateAmount(Number(workspace.settings?.estate_amount || 0));
-    setCaseConfigRevision((current) => current + 1);
   }, [workspace]);
-
-  const inheritancePlan = useMemo(
-    () => buildDominicanInheritancePlan(members, genealogy),
-    [caseConfigRevision, genealogy, members]
-  );
 
   const genealogyIssues = useMemo(() => countGenealogyInconsistencies(genealogy), [genealogy]);
 
   const distributionLines = useMemo<DistributionLine[]>(
     () => {
-      if (realtimeCalculation?.active_heirs.length) {
-        return realtimeCalculation.active_heirs
+      return (realtimeCalculation?.active_heirs ?? [])
           .flatMap((row) => {
             const breakdown = row.source_breakdown?.length
               ? row.source_breakdown
@@ -115,39 +110,23 @@ const CalculoFiliacion = () => {
               left.line.localeCompare(right.line, 'es') ||
               right.percentage - left.percentage
           );
-      }
-
-      return inheritancePlan.activeHeirs
-          .flatMap((share) =>
-            share.sourceBreakdown.map((segment) => ({
-              line: segment.source,
-              branch: extractBranch(segment.routes),
-              memberId: share.member.id,
-              heir: share.member.name,
-              route: prettyRoute(segment.routes),
-              percentage: segment.share,
-            }))
-          )
-          .sort(
-            (left, right) =>
-              left.heir.localeCompare(right.heir, 'es') ||
-              left.line.localeCompare(right.line, 'es') ||
-              right.percentage - left.percentage
-          );
     },
-    [inheritancePlan.activeHeirs, realtimeCalculation?.active_heirs]
+    [realtimeCalculation?.active_heirs]
   );
 
   const totalsByHeir = useMemo(() => {
-    const totals = new Map<string, { heir: string; percentage: number; amount: number; routes: number }>();
+    const totals = new Map<string, { heir: string; memberId?: string; percentage: number; amount: number; routes: number }>();
 
     distributionLines.forEach((item) => {
       const current = totals.get(item.heir) || {
         heir: item.heir,
+        memberId: item.memberId,
         percentage: 0,
         amount: 0,
         routes: 0,
       };
+
+      current.memberId = current.memberId || item.memberId;
 
       current.percentage += item.percentage;
       current.amount += Number(realtimeCalculation?.estate.distributableAmount || estateAmount) * (item.percentage / 100);
@@ -155,7 +134,7 @@ const CalculoFiliacion = () => {
       totals.set(item.heir, current);
     });
 
-    return Array.from(totals.values()).sort((a, b) => b.percentage - a.percentage || a.heir.localeCompare(b.heir, 'es'));
+  return Array.from(totals.values()).sort((a, b) => a.heir.localeCompare(b.heir, 'es', { sensitivity: 'base' }));
   }, [distributionLines, estateAmount, realtimeCalculation?.estate.distributableAmount]);
 
   const totalsByLine = useMemo(() => {
@@ -186,6 +165,7 @@ const CalculoFiliacion = () => {
     confirmedHeirs.filter((heir) => heir.sienna_member_id).map((heir) => [String(heir.sienna_member_id), heir])
   );
   const heirEvidenceByName = new Map(confirmedHeirs.map((heir) => [normalizeName(heir.heir_name), heir]));
+  const photoLookup = useMemo(() => buildMemberPhotoLookup(confirmedHeirs), [confirmedHeirs]);
 
   return (
     <div className="app-shell py-8">
@@ -324,7 +304,17 @@ const CalculoFiliacion = () => {
                     <TableRow key={`${item.line}-${item.memberId}-${item.route}`}>
                       <TableCell className="font-medium text-legal-blue">{item.line}</TableCell>
                       <TableCell>{item.branch}</TableCell>
-                      <TableCell>{item.heir}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <MemberPhoto
+                            name={item.heir}
+                            memberId={item.memberId}
+                            lookup={photoLookup}
+                            size="sm"
+                          />
+                          <span>{item.heir}</span>
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <Badge variant={evidence?.status === 'confirmado' ? 'default' : 'secondary'}>
                           {evidence?.status || 'sin confirmar'}
@@ -363,7 +353,17 @@ const CalculoFiliacion = () => {
               <TableBody>
                 {totalsByHeir.map((item) => (
                   <TableRow key={item.heir}>
-                    <TableCell className="font-medium">{item.heir}</TableCell>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        <MemberPhoto
+                          name={item.heir}
+                          memberId={item.memberId}
+                          lookup={photoLookup}
+                          size="sm"
+                        />
+                        {item.heir}
+                      </div>
+                    </TableCell>
                     <TableCell>{item.routes}</TableCell>
                     <TableCell>{heirEvidenceByName.get(normalizeName(item.heir))?.evidence_count || 0}</TableCell>
                     <TableCell className="text-right">

@@ -4,7 +4,6 @@ import {
   getDescendantsForRepresentation,
   getParentLinksForChild,
   getUnionsForMember,
-  resolveSpousePartner,
   SiennaGenealogyBundle,
 } from '@/lib/siennaGenealogy';
 
@@ -42,8 +41,11 @@ export type MemberIssuesSummary = {
   byKind: Record<MemberIssueKind, number>;
 };
 
-const isChildMember = (member: SiennaFamilyMember) =>
-  member.relationship_to_parent === 'hijo' || member.relationship_to_parent === 'hija';
+const isChildMember = (member: SiennaFamilyMember) => {
+  const relationship = member.relationship_to_parent;
+  if (relationship === 'hijo' || relationship === 'hija') return true;
+  return relationship == null || relationship === '';
+};
 
 const isDeceased = (member: SiennaFamilyMember) => Boolean(member.death?.trim());
 
@@ -65,33 +67,20 @@ export const buildSecondParentOptions = (
   members: SiennaFamilyMember[],
   unions: FamilyUnion[]
 ) => {
+  if (!unionId) return [];
+
   const membersById = new Map(members.map((member) => [member.id, member]));
   const parent = membersById.get(parentId);
   if (!parent) return [];
 
-  const options = new Map<string, string>();
+  const union = unions.find((item) => item.id === unionId);
+  if (!union) return [];
 
-  if (unionId) {
-    const union = unions.find((item) => item.id === unionId);
-    if (union) {
-      const otherId =
-        union.partner_a_member_id === parentId ? union.partner_b_member_id : union.partner_a_member_id;
-      if (otherId && membersById.get(otherId)) {
-        options.set(otherId, membersById.get(otherId)!.name);
-      }
-    }
-  }
+  const otherId =
+    union.partner_a_member_id === parentId ? union.partner_b_member_id : union.partner_a_member_id;
+  if (!otherId || !membersById.get(otherId)) return [];
 
-  if (parent.spouse_member_id && membersById.get(parent.spouse_member_id)) {
-    options.set(parent.spouse_member_id, membersById.get(parent.spouse_member_id)!.name);
-  }
-
-  const partner = resolveSpousePartner(parent, members, { unions, parent_links: [] }, 'suggestions');
-  if (partner) options.set(partner.id, partner.name);
-
-  return Array.from(options.entries())
-    .map(([id, name]) => ({ id, name }))
-    .sort((left, right) => left.name.localeCompare(right.name, 'es', { sensitivity: 'base' }));
+  return [{ id: otherId, name: membersById.get(otherId)!.name }];
 };
 
 export const buildMemberIssueRows = (
@@ -110,11 +99,6 @@ export const buildMemberIssueRows = (
 
     const parent = membersById.get(child.parent_id);
     const unionOptions = parent ? buildUnionOptionsForParent(parent.id, unions, membersById) : [];
-    const defaultUnion =
-      unionOptions.find((option) => !option.label.includes('inconsistente'))?.id || unionOptions[0]?.id || '';
-    const secondParentOptions = parent
-      ? buildSecondParentOptions(parent.id, defaultUnion || null, members, unions)
-      : [];
 
     rows.push({
       id: `sync-link-${child.id}`,
@@ -124,16 +108,16 @@ export const buildMemberIssueRows = (
       severity: 'Alta prioridad',
       problem: 'Es hijo/hija en el árbol visual pero no tiene vínculo formal de filiación en la base de datos.',
       solution:
-        'Confirme la unión matrimonial del progenitor y el segundo progenitor, luego guarde para crear member_parent_links.',
+        'Guarde para crear el vínculo por parent_id. La unión matrimonial es opcional si proviene de otra relación.',
       context: parent ? `Superior en árbol: ${parent.name}` : undefined,
       defaults: {
         spouseMemberId: '',
-        filiationUnionId: defaultUnion,
-        secondParentId: secondParentOptions[0]?.id || '',
+        filiationUnionId: '',
+        secondParentId: '',
       },
       spouseOptions: [],
       unionOptions,
-      secondParentOptions,
+      secondParentOptions: [],
     });
   });
 
@@ -177,31 +161,6 @@ export const buildMemberIssueRows = (
       });
       return;
     }
-
-    if (links.some((link) => link.union_id)) return;
-    if (!unionOptions.length) return;
-
-    const defaultUnion = unionOptions[0].id;
-    const secondParentOptions = buildSecondParentOptions(parent.id, defaultUnion, members, unions);
-
-    rows.push({
-      id: `filiation-${child.id}`,
-      memberId: child.id,
-      memberName: child.name,
-      kind: 'complete_filiation',
-      severity: 'Media prioridad',
-      problem: 'Tiene vínculo parental pero falta indicar de qué matrimonio proviene (unión de filiación).',
-      solution: 'Seleccione el matrimonio / pareja del progenitor y el segundo progenitor, luego guarde.',
-      context: `Progenitor de referencia: ${parent.name}`,
-      defaults: {
-        spouseMemberId: '',
-        filiationUnionId: defaultUnion,
-        secondParentId: secondParentOptions[0]?.id || '',
-      },
-      spouseOptions: [],
-      unionOptions,
-      secondParentOptions,
-    });
   });
 
   members.forEach((member) => {

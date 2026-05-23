@@ -3,8 +3,11 @@ import { Link } from 'react-router-dom';
 import BackButton from '@/components/BackButton';
 import DocumentHeader from '@/components/DocumentHeader';
 import SoftLoadingIndicator from '@/components/SoftLoadingIndicator';
+import MemberPhoto from '@/components/sienna/MemberPhoto';
+import MemberDetailSheet from '@/components/sienna/MemberDetailSheet';
 import { IssueDraft, MemberIssueFixPanel } from '@/components/sienna/MemberIssueFixPanel';
-import { useSiennaCalculation, useSiennaWorkspace, invalidateSiennaData } from '@/hooks/useSiennaData';
+import { useConfirmedHeirs, useSiennaFindings, useSiennaWorkspace, invalidateSiennaData } from '@/hooks/useSiennaData';
+import { buildMemberPhotoLookup } from '@/lib/memberPhotos';
 import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -27,10 +30,9 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { api } from '@/lib/api';
-import { applySiennaCaseConfig, buildDominicanInheritancePlan } from '@/lib/dominicanInheritance';
+import { applySiennaCaseConfig } from '@/lib/dominicanInheritance';
 import { buildMemberSavePayload } from '@/lib/siennaFindings';
 import {
-  buildMemberIssueRows,
   kindLabels,
   MemberIssueKind,
   MemberIssueRow,
@@ -47,19 +49,27 @@ const kindBadgeClass: Record<MemberIssueKind, string> = {
 const Hallazgos = () => {
   const queryClient = useQueryClient();
   const { data: workspace, isLoading, isFetching, refetch } = useSiennaWorkspace(false);
+  const { data: heirsData } = useConfirmedHeirs(true);
+  const photoLookup = useMemo(
+    () => buildMemberPhotoLookup(heirsData?.heirs ?? []),
+    [heirsData?.heirs]
+  );
   const members = workspace?.members ?? [];
   const unions = workspace?.unions ?? [];
   const parentLinks = workspace?.parent_links ?? [];
-  const { data: realtimeCalculationData } = useSiennaCalculation(
-    workspace?.settings?.estate_amount,
-    workspace?.settings?.lawyer_fee_percentage
-  );
+  const documents = workspace?.documents ?? [];
+  const heirs = heirsData?.heirs ?? workspace?.heirs ?? [];
+  const { data: findingsData, isFetching: isFetchingFindings } = useSiennaFindings();
   const [loadingMessage, setLoadingMessage] = useState('Analizando miembros...');
   const [search, setSearch] = useState('');
   const [kindFilter, setKindFilter] = useState<MemberIssueKind | 'all'>('all');
   const [drafts, setDrafts] = useState<Record<string, IssueDraft>>({});
   const [savingRowId, setSavingRowId] = useState<string | null>(null);
-  const [caseConfigRevision, setCaseConfigRevision] = useState(0);
+  const [detailMemberId, setDetailMemberId] = useState<string | null>(null);
+  const detailMember = useMemo(
+    () => members.find((member) => member.id === detailMemberId) || null,
+    [detailMemberId, members]
+  );
 
   const loadData = useCallback(async () => {
     await refetch();
@@ -72,41 +82,51 @@ const Hallazgos = () => {
       setLoadingMessage('Consultando árbol, uniones y vínculos...');
       return;
     }
-    if (isFetching) {
+    if (isFetching || isFetchingFindings) {
       setLoadingMessage('Actualizando hallazgos...');
     }
-  }, [isFetching, isLoading]);
+  }, [isFetching, isFetchingFindings, isLoading]);
 
   useEffect(() => {
     if (!workspace) return;
     applySiennaCaseConfig(workspace.settings?.sienna_case_config);
-    setCaseConfigRevision((current) => current + 1);
   }, [workspace]);
 
-  const distributedPercent = useMemo(() => {
-    if (realtimeCalculationData?.calculation) {
-      return realtimeCalculationData.calculation.total_share;
-    }
-    const plan = buildDominicanInheritancePlan(members, { unions, parent_links: parentLinks });
-    return plan.activeHeirs.reduce((sum, share) => sum + share.share, 0);
-  }, [caseConfigRevision, members, parentLinks, realtimeCalculationData?.calculation, unions]);
-
-  const { rows, summary } = useMemo(
-    () => buildMemberIssueRows(members, unions, parentLinks, distributedPercent),
-    [distributedPercent, members, parentLinks, unions]
+  const rows = useMemo(
+    () => (findingsData?.findings.rows ?? []) as MemberIssueRow[],
+    [findingsData?.findings.rows]
   );
 
+  const summary = findingsData?.findings.summary ?? {
+    undistributedPercent: 0,
+    distributedPercent: 0,
+    totalIssues: 0,
+    membersAffected: 0,
+    byKind: { sync_parent_link: 0, complete_filiation: 0, dead_branch: 0 } as Record<MemberIssueKind, number>,
+  };
+
+  const rowIdsKey = useMemo(() => rows.map((row) => row.id).join('|'), [rows]);
+
   useEffect(() => {
-    const next: Record<string, IssueDraft> = {};
-    rows.forEach((row) => {
-      next[row.id] = {
-        spouseMemberId: row.defaults.spouseMemberId,
-        filiationUnionId: row.defaults.filiationUnionId,
-        secondParentId: row.defaults.secondParentId,
-      };
+    setDrafts((current) => {
+      const next = { ...current };
+      rows.forEach((row) => {
+        if (!next[row.id]) {
+          next[row.id] = {
+            spouseMemberId: row.defaults.spouseMemberId,
+            filiationUnionId: row.defaults.filiationUnionId,
+            secondParentId: row.defaults.secondParentId,
+          };
+        }
+      });
+      Object.keys(next).forEach((id) => {
+        if (!rows.some((row) => row.id === id)) {
+          delete next[id];
+        }
+      });
+      return next;
     });
-    setDrafts(next);
-  }, [rows]);
+  }, [rowIdsKey, rows]);
 
   const filteredRows = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -118,7 +138,7 @@ const Hallazgos = () => {
         row.problem.toLowerCase().includes(query) ||
         (row.context || '').toLowerCase().includes(query)
       );
-    });
+    }).sort((left, right) => left.memberName.localeCompare(right.memberName, 'es', { sensitivity: 'base' }));
   }, [kindFilter, rows, search]);
 
   const completionPercent = members.length
@@ -137,10 +157,19 @@ const Hallazgos = () => {
     const draft = drafts[row.id];
     if (!member || !draft) return;
 
+    if ((row.kind === 'sync_parent_link' || row.kind === 'complete_filiation') && !member.parent_id) {
+      toast({
+        title: 'Falta progenitor en el árbol',
+        description: 'Este miembro no tiene parent_id. Corrija el vínculo superior en Miembros del árbol antes de guardar filiación.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setSavingRowId(row.id);
     try {
       if (row.kind === 'sync_parent_link' || row.kind === 'complete_filiation') {
-        await api.saveSiennaFamilyMember(
+        const result = await api.saveSiennaFamilyMember(
           buildMemberSavePayload(member, members, unions, {
             filiation: {
               union_id: draft.filiationUnionId || null,
@@ -148,7 +177,26 @@ const Hallazgos = () => {
             },
           })
         );
-        toast({ title: 'Filiación guardada', description: `${member.name} sincronizado en base de datos.` });
+
+        const savedLinks =
+          result.parent_links?.filter((link) => link.child_member_id === member.id) ?? [];
+        if (!savedLinks.length) {
+          throw new Error(
+            'El servidor no creó member_parent_links. Verifique que el miembro tenga parent_id y parentesco hijo/hija.'
+          );
+        }
+
+        toast({
+          title: draft.filiationUnionId ? 'Filiación guardada' : 'Vínculo actualizado',
+          description: draft.filiationUnionId
+            ? `${member.name} sincronizado con unión formal.`
+            : `${member.name} guardado sin unión matrimonial (solo parent_id / vínculo parental).`,
+        });
+        setDrafts((current) => {
+          const next = { ...current };
+          delete next[row.id];
+          return next;
+        });
       }
 
       invalidateSiennaData(queryClient);
@@ -170,11 +218,27 @@ const Hallazgos = () => {
     return (
       <TableRow key={row.id} className="align-top">
         <TableCell className="min-w-[11rem]">
-          <p className="font-semibold text-legal-blue">{row.memberName}</p>
+          <div className="flex items-start gap-2">
+            <MemberPhoto
+              name={row.memberName}
+              memberId={row.memberId}
+              lookup={photoLookup}
+              size="sm"
+            />
+            <div className="min-w-0">
+          <button
+            type="button"
+            className="text-left font-semibold text-legal-blue underline-offset-4 hover:underline"
+            onClick={() => setDetailMemberId(row.memberId)}
+          >
+            {row.memberName}
+          </button>
           <Badge variant="outline" className={`mt-1 text-[10px] ${kindBadgeClass[row.kind]}`}>
             {kindLabels[row.kind]}
           </Badge>
           {row.context && <p className="mt-1 text-xs text-legal-gray">{row.context}</p>}
+            </div>
+          </div>
         </TableCell>
         <TableCell className="min-w-[14rem]">
           <p className="text-sm text-gray-900">{row.problem}</p>
@@ -338,11 +402,25 @@ const Hallazgos = () => {
                   return (
                     <div key={row.id} className="rounded-lg border border-legal-gold/25 bg-white p-4">
                       <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
-                        <div>
-                          <p className="font-semibold text-legal-blue">{row.memberName}</p>
+                        <div className="flex items-start gap-2">
+                          <MemberPhoto
+                            name={row.memberName}
+                            memberId={row.memberId}
+                            lookup={photoLookup}
+                            size="sm"
+                          />
+                          <div>
+                          <button
+                            type="button"
+                            className="text-left font-semibold text-legal-blue underline-offset-4 hover:underline"
+                            onClick={() => setDetailMemberId(row.memberId)}
+                          >
+                            {row.memberName}
+                          </button>
                           <Badge variant="outline" className={`mt-1 text-[10px] ${kindBadgeClass[row.kind]}`}>
                             {kindLabels[row.kind]}
                           </Badge>
+                          </div>
                         </div>
                         <Badge variant="outline">{row.severity === 'Alta prioridad' ? 'Alta' : 'Media'}</Badge>
                       </div>
@@ -385,6 +463,16 @@ const Hallazgos = () => {
           </Card>
         )}
       </div>
+      <MemberDetailSheet
+        member={detailMember}
+        members={members}
+        genealogy={{ unions, parent_links: parentLinks }}
+        heirs={heirs}
+        documents={documents}
+        photoLookup={photoLookup}
+        open={Boolean(detailMember)}
+        onOpenChange={(open) => !open && setDetailMemberId(null)}
+      />
     </div>
   );
 };

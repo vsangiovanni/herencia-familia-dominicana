@@ -14,6 +14,7 @@ import PageVisitTracker from './components/PageVisitTracker';
 import SoftLoadingIndicator from './components/SoftLoadingIndicator';
 
 const Auth = lazy(() => import('./pages/Auth'));
+const Home = lazy(() => import('./pages/Home'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Profile = lazy(() => import('./pages/Profile'));
 const Legal = lazy(() => import('./pages/Legal'));
@@ -61,7 +62,7 @@ function App() {
                   }
                 >
                   <Routes>
-                    <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                    <Route path="/" element={<Home />} />
                     <Route path="/auth" element={<Auth />} />
                     <Route
                       path="/dashboard"
