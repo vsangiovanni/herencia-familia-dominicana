@@ -2775,9 +2775,9 @@ function fallback_sienna_curiosities(array $context): array {
     }
   }
 
-  foreach (array_slice($multiRouteHeirs, 0, 2) as $heir) {
-    $facts[] = '¿Sabías que ' . ($heir['name'] ?? 'esta persona') . ' no llega por una sola ruta? Su conexión combina ' .
-      (count($heir['sources'] ?? []) ? implode(' y ', $heir['sources']) : 'más de una rama familiar') . '.';
+  foreach (array_slice($multiRouteHeirs, 0, 4) as $heir) {
+    $facts[] = 'Doble ruta documentada: ' . ($heir['name'] ?? 'esta persona') . ' combina ' .
+      (count($heir['sources'] ?? []) ? implode(' y ', $heir['sources']) : 'más de una rama familiar') . ' dentro del expediente.';
   }
 
   $subtleFinding = null;
@@ -2804,7 +2804,7 @@ function fallback_sienna_curiosities(array $context): array {
 
   $facts = array_values(array_unique($facts));
   $facts[] = 'Estoy buscando cruces familiares poco evidentes para contarte solo curiosidades reales del expediente.';
-  return array_slice($facts, 0, 3);
+  return array_slice($facts, 0, 6);
 }
 
 function build_sienna_ai_curiosities(?array $user = null): array {
@@ -2829,7 +2829,8 @@ function build_sienna_ai_curiosities(?array $user = null): array {
           'Redacta microcuriosidades reales y poco obvias para la portada del expediente familiar.',
           'Usa solo datos del contexto. No inventes nombres, montos, parentescos ni hechos.',
 	          'Prioriza datos difíciles de detectar a simple vista: doble ruta, convergencia, validación histórica, patrón documental o cruce familiar.',
-	          'Si hay usuario_miembro, al menos una línea debe sentirse personal y puede usar su primer nombre.',
+          'Si hay usuario_miembro, puedes usar su primer nombre, pero no lo hagas si no aporta claridad.',
+          'Evita iniciar varias líneas con “¿Sabías que...?”. No uses tono de mensaje personal si el dato habla de otra persona.',
 	          'Evita frases obvias como conteos simples, resúmenes generales o “hay X herederos”.',
           'No menciones que eres IA ni detalles técnicos.',
           'Devuelve exactamente 3 líneas, una curiosidad por línea.',

@@ -1036,7 +1036,9 @@ const Dashboard = () => {
     return [...facts.slice(offset), ...facts.slice(0, offset)].slice(0, 3);
   }, [dashboardVisitSeed, familyData?.members, familyData?.parent_links, familyData?.unions]);
 
-  const aiCuriosityCards = aiCuriositiesData?.curiosities?.filter(Boolean).slice(0, 3) ?? [];
+  const aiCuriosityCards = aiCuriositiesData?.mode === 'openai'
+    ? aiCuriositiesData.curiosities?.filter(Boolean).slice(0, 3) ?? []
+    : [];
   const displayCuriosityCards = aiCuriosityCards.length
     ? aiCuriosityCards
     : curiosityCards.length
