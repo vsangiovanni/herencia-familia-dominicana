@@ -162,7 +162,7 @@ export interface SiennaAnalysisSummary {
 export interface SiennaAiAssistantResponse {
   answer: string;
   model: string;
-  mode: "openai" | "fallback";
+  mode: "openai" | "fallback" | "deterministic";
   guardrails: string[];
   suggested_paths: Array<{ label: string; path: string; reason: string }>;
 }

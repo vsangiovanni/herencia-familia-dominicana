@@ -1019,6 +1019,7 @@ const SIENNA_ASSISTANT_PATHS = [
 ];
 
 const suggestSiennaAssistantPaths = (question = '') => {
+  if (isSiennaSmallTalkQuestion(question)) return [];
   const normalized = String(question || '').toLowerCase();
   const scored = SIENNA_ASSISTANT_PATHS.map((item) => ({
     ...item,
@@ -1185,6 +1186,15 @@ const detectSiennaMemberForUser = (user, members = []) => {
 const isInternalSiennaAiRequest = (question = '') =>
   SIENNA_INTERNAL_REQUEST_PATTERNS.some((pattern) => pattern.test(question));
 
+const isSiennaSmallTalkQuestion = (question = '') => {
+  const normalized = compactAiName(question);
+  if (!normalized) return false;
+  const caseTerms = /\b(expediente|herencia|hereda|heredero|arbol|familia|familiar|padre|madre|herman|prima|primo|miembro|documento|hallazgo|linaje|alessandro|sangiovanni|reparto|monto|porcentaje)\b/.test(normalized);
+  if (caseTerms) return false;
+  return /^(hola|saludos|buenas|buen dia|buenos dias|buenas tardes|buenas noches|hey|hello|hi)( sienna)?$/.test(normalized)
+    || /^(hola )?(como estas|como te va|que tal|todo bien)( sienna)?$/.test(normalized);
+};
+
 const sanitizeSiennaConversationHistory = (history = []) => {
   if (!Array.isArray(history)) return [];
   return history
@@ -1221,6 +1231,7 @@ const classifySiennaAssistantIntent = (question = '', conversationHistory = []) 
   let deterministic = false;
 
   if (isInternalSiennaAiRequest(question)) type = 'internal_protected';
+  else if (isSiennaSmallTalkQuestion(question)) type = 'small_talk_greeting';
   else if (/\b(hermanos|hermanas|herman[ao]s?)\b/.test(normalized)) type = 'family_siblings';
   else if (/\b(padres|pap[aá]s|progenitores)\b/.test(normalized)) type = 'family_parents';
   else if (/\b(hijos|hijas|hij[ao]s?)\b/.test(normalized)) type = 'family_children';
@@ -1232,6 +1243,7 @@ const classifySiennaAssistantIntent = (question = '', conversationHistory = []) 
 
   deterministic = [
     'internal_protected',
+    'small_talk_greeting',
     'family_siblings',
     'family_parents',
     'family_children',
@@ -1572,6 +1584,11 @@ const buildDeterministicSiennaAssistantAnswer = (question, context) => {
   const spouse = context?.user?.memberContext?.immediateFamily?.spouse || null;
   const relevantFamily = context?.relevantFamily || [];
 
+  if (intentType === 'small_talk_greeting') {
+    return (firstName ? 'Hola, ' + firstName + '. ' : 'Hola. ')
+      + 'Estoy aquí contigo. Pregúntame por una persona, una rama, un documento, un hallazgo o el reparto del expediente y te ayudo a ubicarlo sin cambiar nada.';
+  }
+
   if (intentType === 'family_siblings') {
     if (!siblings.length) {
       return (firstName ? firstName + ', ' : '') + 'no veo hermanos registrados para tu ficha familiar en el contexto actual. Puedes confirmarlo en **Miembros del árbol**.';
@@ -1765,7 +1782,7 @@ const extractSiennaStreamDelta = (eventData) => {
   return '';
 };
 
-async function streamOpenAISiennaAssistant({ question, context, conversationHistory = [], onDelta }) {
+async function streamOpenAISiennaAssistant({ question, context, suggestedPaths = [], conversationHistory = [], onDelta }) {
   const apiKey = process.env.OPENAI_API_KEY;
   const model = process.env.OPENAI_MODEL || SIENNA_AI_DEFAULT_MODEL;
   const deterministicAnswer = buildDeterministicSiennaAssistantAnswer(question, context);
@@ -2926,6 +2943,7 @@ app.post('/api/sienna-ai-assistant-stream', requireAuth, async (req, res) => {
     currentPath,
     user: req.user,
   });
+  const deterministicAnswer = buildDeterministicSiennaAssistantAnswer(question, context);
 
   res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -2933,7 +2951,7 @@ app.post('/api/sienna-ai-assistant-stream', requireAuth, async (req, res) => {
   res.write('event: meta\n');
   res.write('data: ' + JSON.stringify({
     model: process.env.OPENAI_MODEL || SIENNA_AI_DEFAULT_MODEL,
-    mode: isInternalSiennaAiRequest(question) ? 'fallback' : 'openai',
+    mode: isInternalSiennaAiRequest(question) ? 'fallback' : (deterministicAnswer ? 'deterministic' : 'openai'),
     guardrails: SIENNA_AI_GUARDRAILS,
     suggested_paths: suggestedPaths,
   }) + '\n\n');
@@ -2947,7 +2965,7 @@ app.post('/api/sienna-ai-assistant-stream', requireAuth, async (req, res) => {
     if (isInternalSiennaAiRequest(question)) {
       writeDelta(buildInternalSiennaAssistantAnswer(question));
     } else {
-      await streamOpenAISiennaAssistant({ question, context, conversationHistory, onDelta: writeDelta });
+      await streamOpenAISiennaAssistant({ question, context, suggestedPaths, conversationHistory, onDelta: writeDelta });
     }
     res.write('event: done\n');
     res.write('data: {}\n\n');

@@ -1351,12 +1351,24 @@ function build_sienna_context_search_text(string $question, array $conversationH
   return trim(implode(' ', array_filter([$question, implode(' ', $recent)])));
 }
 
+function is_sienna_small_talk_question(string $question): bool {
+  $normalized = compact_ai_name($question);
+  if ($normalized === '') return false;
+  $caseTerms = preg_match('/\b(expediente|herencia|hereda|heredero|arbol|familia|familiar|padre|madre|herman|prima|primo|miembro|documento|hallazgo|linaje|alessandro|sangiovanni|reparto|monto|porcentaje)\b/i', $normalized);
+  if ($caseTerms) return false;
+  return (bool)(
+    preg_match('/^(hola|saludos|buenas|buen dia|buenos dias|buenas tardes|buenas noches|hey|hello|hi)( sienna)?$/i', $normalized)
+    || preg_match('/^(hola )?(como estas|como te va|que tal|todo bien)( sienna)?$/i', $normalized)
+  );
+}
+
 function classify_sienna_assistant_intent(string $question, array $conversationHistory = []): array {
   $normalized = normalize_ai_text($question);
   $hasHistory = count(sanitize_sienna_conversation_history($conversationHistory)) > 0;
   $type = 'general_guidance';
 
   if (is_internal_sienna_ai_request($question)) $type = 'internal_protected';
+  elseif (is_sienna_small_talk_question($question)) $type = 'small_talk_greeting';
   elseif (preg_match('/\b(hermanos|hermanas|herman[ao]s?)\b/i', $normalized)) $type = 'family_siblings';
   elseif (preg_match('/\b(padres|papas|progenitores)\b/i', $normalized)) $type = 'family_parents';
   elseif (preg_match('/\b(hijos|hijas|hij[ao]s?)\b/i', $normalized)) $type = 'family_children';
@@ -1368,6 +1380,7 @@ function classify_sienna_assistant_intent(string $question, array $conversationH
 
   $deterministic = in_array($type, [
     'internal_protected',
+    'small_talk_greeting',
     'family_siblings',
     'family_parents',
     'family_children',
@@ -1639,6 +1652,7 @@ function sienna_assistant_paths(): array {
 }
 
 function suggest_sienna_assistant_paths(string $question): array {
+  if (is_sienna_small_talk_question($question)) return [];
   $normalized = mb_strtolower($question, 'UTF-8');
   $scored = [];
   foreach (sienna_assistant_paths() as $item) {
@@ -1941,6 +1955,11 @@ function build_deterministic_sienna_assistant_answer(string $question, array $co
   $children = $context['user']['memberContext']['immediateFamily']['children'] ?? [];
   $spouse = $context['user']['memberContext']['immediateFamily']['spouse'] ?? null;
   $relevantFamily = $context['relevantFamily'] ?? [];
+
+  if ($intentType === 'small_talk_greeting') {
+    return ($firstName ? 'Hola, ' . $firstName . '. ' : 'Hola. ')
+      . 'Estoy aquí contigo. Pregúntame por una persona, una rama, un documento, un hallazgo o el reparto del expediente y te ayudo a ubicarlo sin cambiar nada.';
+  }
 
   if ($intentType === 'family_siblings') {
     if (!count($siblings)) {
@@ -3429,6 +3448,7 @@ try {
       current_user(),
       $conversationHistory
     );
+    $deterministicAnswer = build_deterministic_sienna_assistant_answer($question, $context);
 
     header('Content-Type: text/event-stream; charset=utf-8');
     header('Cache-Control: no-cache, no-transform');
@@ -3439,7 +3459,7 @@ try {
 
     send_sienna_sse_event('meta', [
       'model' => env_value('OPENAI_MODEL') ?: sienna_ai_default_model(),
-      'mode' => is_internal_sienna_ai_request($question) ? 'fallback' : 'openai',
+      'mode' => is_internal_sienna_ai_request($question) ? 'fallback' : ($deterministicAnswer ? 'deterministic' : 'openai'),
       'guardrails' => sienna_ai_guardrails(),
       'suggested_paths' => $suggestedPaths,
     ]);
