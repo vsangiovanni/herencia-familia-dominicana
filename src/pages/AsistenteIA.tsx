@@ -6,6 +6,7 @@ import SiennaPageLayout from '@/components/sienna/SiennaPageLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
+import { useAuth } from '@/context/AuthContext';
 import { useSiennaPersonalization } from '@/hooks/useSiennaPersonalization';
 import { api, SiennaAiAssistantResponse, SiennaConversationMessage } from '@/lib/api';
 
@@ -16,11 +17,16 @@ type ChatMessage = {
 };
 
 const SIENNA_CONVERSATION_STORAGE_KEY = 'herenciard:sienna-ai:last-conversation:v1';
+const SIENNA_CONVERSATION_STORAGE_PREFIX = 'herenciard:sienna-ai:last-conversation:user:';
 
-const loadStoredConversation = (): ChatMessage[] => {
+const conversationStorageKey = (userId?: string | null) =>
+  userId ? `${SIENNA_CONVERSATION_STORAGE_PREFIX}${userId}:v1` : null;
+
+const loadStoredConversation = (storageKey: string | null): ChatMessage[] => {
   if (typeof window === 'undefined') return [];
+  if (!storageKey) return [];
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(SIENNA_CONVERSATION_STORAGE_KEY) || '[]');
+    const parsed = JSON.parse(window.localStorage.getItem(storageKey) || '[]');
     if (!Array.isArray(parsed)) return [];
     return parsed
       .filter((message) => message && (message.role === 'user' || message.role === 'assistant') && String(message.content || '').trim())
@@ -84,14 +90,15 @@ const renderAnswer = (answer: string) => {
 
 const AsistenteIA = () => {
   const location = useLocation();
+  const { userProfile, user } = useAuth();
   const personalization = useSiennaPersonalization();
-  const initialStoredConversation = useMemo(() => loadStoredConversation(), []);
+  const storageKey = useMemo(() => conversationStorageKey(userProfile?.id || user?.id), [user?.id, userProfile?.id]);
   const animationChainRef = useRef<Promise<void>>(Promise.resolve());
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const previousConversationRef = useRef<ChatMessage[]>(initialStoredConversation);
+  const previousConversationRef = useRef<ChatMessage[]>([]);
   const [question, setQuestion] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [hasStoredContext, setHasStoredContext] = useState(() => previousConversationRef.current.length > 0);
+  const [hasStoredContext, setHasStoredContext] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -102,6 +109,18 @@ const AsistenteIA = () => {
   }, [messages, isSending]);
 
   useEffect(() => {
+    const storedConversation = loadStoredConversation(storageKey);
+    previousConversationRef.current = storedConversation;
+    setMessages([]);
+    setHasStoredContext(storedConversation.length > 0);
+    setError(null);
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem(SIENNA_CONVERSATION_STORAGE_KEY);
+    }
+  }, [storageKey]);
+
+  useEffect(() => {
+    if (!storageKey) return;
     if (typeof window === 'undefined') return;
     const persistable = messages
       .filter((message) => message.content.trim())
@@ -114,16 +133,17 @@ const AsistenteIA = () => {
     if (!persistable.length) {
       return;
     }
-    window.localStorage.setItem(SIENNA_CONVERSATION_STORAGE_KEY, JSON.stringify(persistable));
+    window.localStorage.setItem(storageKey, JSON.stringify(persistable));
     setHasStoredContext(true);
-  }, [messages]);
+  }, [messages, storageKey]);
 
   const clearConversation = () => {
     previousConversationRef.current = [];
     setMessages([]);
     setHasStoredContext(false);
     setError(null);
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && storageKey) {
+      window.localStorage.removeItem(storageKey);
       window.localStorage.removeItem(SIENNA_CONVERSATION_STORAGE_KEY);
     }
   };
