@@ -15,44 +15,6 @@ type ChatMessage = {
   response?: SiennaAiAssistantResponse;
 };
 
-const STARTER_BANK = [
-  'Sienna, ¿por qué esta persona aparece como heredera?',
-  'Ayúdame a entender esta ruta familiar.',
-  '¿Dónde reviso si una persona participa por doble linaje?',
-  '¿Qué hallazgo merece atención primero?',
-  '¿Qué documentos fortalecen mejor esta rama familiar?',
-  'Explícame con calma qué significa esta convergencia.',
-  '¿Dónde puedo revisar los soportes de esta persona?',
-  '¿Qué parte del expediente debería mirar antes de decidir?',
-  '¿Hay algo pendiente que pueda afectar esta lectura familiar?',
-  'Quiero entender por qué esta rama llega al reparto.',
-  '¿Dónde veo la conexión entre estas dos ramas?',
-  '¿Qué detalle del árbol conviene validar primero?',
-  'Sienna, guíame por los hallazgos más importantes.',
-  '¿Cómo reviso si esta línea familiar está completa?',
-  '¿Qué pantalla me ayuda a explicar esto a la familia?',
-  '¿Qué debo mirar si una relación familiar no cuadra?',
-];
-
-const EMPTY_STATE_PROMPTS = [
-  'Hazme una pregunta y te guío con calma, sin alterar el expediente.',
-  'Cuéntame qué quieres entender del expediente y lo revisamos paso a paso.',
-  'Pregúntame por una persona, una rama o un hallazgo y te ayudo a ubicarlo.',
-  'Estoy lista para ayudarte a leer el expediente sin cambiar ningún dato.',
-  'Dime qué parte del legado quieres aclarar y te llevo a la pantalla correcta.',
-];
-
-const pickRotatingItems = (items: string[], count: number) => {
-  const seed = Date.now() + Math.random();
-  return [...items]
-    .sort((left, right) => {
-      const leftScore = Math.sin(seed + left.length * 97 + left.charCodeAt(0));
-      const rightScore = Math.sin(seed + right.length * 97 + right.charCodeAt(0));
-      return leftScore - rightScore;
-    })
-    .slice(0, count);
-};
-
 const MENU_LABEL_BY_ROUTE: Record<string, string> = {
   '/sienna/arbol': 'Árbol genealógico',
   '/sienna/arbol-genealogico': 'Árbol genealógico',
@@ -108,8 +70,6 @@ const AsistenteIA = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [starterQuestions] = useState(() => pickRotatingItems(STARTER_BANK, 4));
-  const [emptyPrompt] = useState(() => pickRotatingItems(EMPTY_STATE_PROMPTS, 1)[0]);
 
   const canSend = useMemo(() => question.trim().length >= 3 && !isSending, [question, isSending]);
 
@@ -214,19 +174,6 @@ const AsistenteIA = () => {
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
           <Card className="legacy-surface">
             <CardContent className="flex min-h-[560px] flex-col p-4 sm:p-5">
-              <div className="mb-4 grid gap-2 sm:grid-cols-2">
-                {starterQuestions.map((starter) => (
-                  <button
-                    key={starter}
-                    type="button"
-                    onClick={() => void ask(starter)}
-                    className="rounded-md border border-legal-blue/10 bg-white/70 p-3 text-left text-sm font-medium text-legal-blue transition-colors hover:border-legal-gold/40 hover:bg-[#FFF6D8] dark:border-white/10 dark:bg-white/[0.04] dark:text-[#F5F7FA] dark:hover:bg-white/[0.08]"
-                  >
-                    {starter}
-                  </button>
-                ))}
-              </div>
-
               <div className="flex-1 space-y-3 overflow-y-auto rounded-md border border-legal-blue/10 bg-white/55 p-3 dark:border-white/10 dark:bg-[#0F1726]/70">
                 {messages.length === 0 ? (
                   <div className="grid h-full place-items-center text-center text-sm text-gray-600 dark:text-muted-foreground">
@@ -234,7 +181,7 @@ const AsistenteIA = () => {
 	                      <Bot className="mx-auto mb-3 h-10 w-10 text-legal-gold" />
 	                      {personalization.isLinkedMember
 	                        ? `${personalization.firstName}, pregúntame por tu rama familiar, tus documentos o una ruta del expediente.`
-	                        : emptyPrompt}
+	                        : 'Escríbeme con tus palabras lo que quieres entender del expediente.'}
 	                    </div>
                   </div>
                 ) : (
@@ -279,7 +226,7 @@ const AsistenteIA = () => {
                 <Textarea
                   value={question}
                   onChange={(event) => setQuestion(event.target.value)}
-                  placeholder="Ej.: ¿Dónde reviso si María participa por doble linaje?"
+                  placeholder="Escribe tu pregunta sobre el expediente..."
                   className="min-h-[64px] flex-1 resize-none"
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
