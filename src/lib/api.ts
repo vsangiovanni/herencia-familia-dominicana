@@ -164,7 +164,7 @@ export interface SiennaAiAssistantResponse {
   model: string;
   mode: "openai" | "fallback" | "deterministic";
   guardrails: string[];
-  suggested_paths: Array<{ label: string; path: string; reason: string }>;
+  suggested_paths: Array<{ label: string; path: string; reason: string; purpose?: string }>;
 }
 
 export interface SiennaAiCuriositiesResponse {
