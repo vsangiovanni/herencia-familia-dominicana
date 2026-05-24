@@ -725,6 +725,18 @@ function parse_sienna_year_for_analysis($value): ?int {
   return null;
 }
 
+function parse_sienna_date_value($value): ?int {
+  $text = trim((string)($value ?? ''));
+  if (preg_match('/\b(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})\b/', $text, $m)) {
+    return ((int)$m[3]) * 10000 + ((int)$m[2]) * 100 + (int)$m[1];
+  }
+  if (preg_match('/\b(\d{4})[\/.-](\d{1,2})[\/.-](\d{1,2})\b/', $text, $m)) {
+    return ((int)$m[1]) * 10000 + ((int)$m[2]) * 100 + (int)$m[3];
+  }
+  $year = parse_sienna_year_for_analysis($text);
+  return $year ? $year * 10000 : null;
+}
+
 function parent_ids_for_dual_analysis(array $member, array $membersById, array $links): array {
   $ids = [];
   $parentId = normalized_member_id($member['parent_id'] ?? '');
@@ -1372,6 +1384,7 @@ function classify_sienna_assistant_intent(string $question, array $conversationH
   if (is_internal_sienna_ai_request($question)) $type = 'internal_protected';
   elseif (is_sienna_small_talk_question($question)) $type = 'small_talk_greeting';
   elseif (preg_match('/\b(hermanos|hermanas|herman[ao]s?)\b/i', $normalized)) $type = 'family_siblings';
+  elseif ((family_relation_query($question)['relation'] ?? null) === 'cousins') $type = 'family_cousins';
   elseif (preg_match('/\b(padres|papas|progenitores)\b/i', $normalized)) $type = 'family_parents';
   elseif (preg_match('/\b(hijos|hijas|hij[ao]s?)\b/i', $normalized)) $type = 'family_children';
   elseif (preg_match('/\b(conyuge|espos[ao]|pareja)\b/i', $normalized)) $type = 'family_spouse';
@@ -1384,6 +1397,7 @@ function classify_sienna_assistant_intent(string $question, array $conversationH
     'internal_protected',
     'small_talk_greeting',
     'family_siblings',
+    'family_cousins',
     'family_parents',
     'family_children',
     'family_spouse',
@@ -1518,6 +1532,19 @@ function kinship_word(array $member, string $masculine, string $feminine): strin
   return kinship_gender($member) === 'f' ? $feminine : $masculine;
 }
 
+function family_relation_query(string $question): ?array {
+  $normalized = normalize_ai_text($question);
+  $asksCousins = preg_match('/\bprim[ao]s?\b|\bprimas\b|\bprimos\b/i', $normalized);
+  if (!$asksCousins) return null;
+  return [
+    'relation' => 'cousins',
+    'gender' => preg_match('/\bprimas\b|\bprima\b/i', $normalized) ? 'f' : (preg_match('/\b(primos varones|primos hombres|primos masculinos)\b/i', $normalized) ? 'm' : 'all'),
+    'age' => preg_match('/\b(menor|menores|mas joven|mas jovenes|menor que yo|menores que yo)\b/i', $normalized)
+      ? 'younger'
+      : (preg_match('/\b(mayor|mayores|mas viejo|mas viejos|mayor que yo|mayores que yo)\b/i', $normalized) ? 'older' : 'all'),
+  ];
+}
+
 function resolve_kinship_label(?string $sourceMemberId, ?string $targetMemberId, array $members): ?string {
   $sourceId = normalized_member_id($sourceMemberId ?? '');
   $targetId = normalized_member_id($targetMemberId ?? '');
@@ -1570,6 +1597,42 @@ function format_family_people_list(array $items): string {
     $lines[] = '- **' . $item['name'] . '**' . (count($dates) ? ' (' . implode(', ', $dates) . ')' : '');
   }
   return implode("\n", $lines);
+}
+
+function build_cousin_context(?array $member, array $members, string $question): array {
+  if (!$member || empty($member['id'])) return ['items' => [], 'omittedUnknownBirth' => 0, 'query' => family_relation_query($question)];
+  $query = family_relation_query($question) ?? ['relation' => 'cousins', 'gender' => 'all', 'age' => 'all'];
+  $sourceId = normalized_member_id($member['id'] ?? '');
+  $sourceBirthValue = parse_sienna_date_value($member['birth'] ?? null);
+  $omittedUnknownBirth = 0;
+  $items = [];
+  foreach ($members as $item) {
+    if (normalized_member_id($item['id'] ?? '') === $sourceId) continue;
+    $relation = resolve_kinship_label($sourceId, $item['id'] ?? null, $members);
+    if ($relation !== 'tu primo' && $relation !== 'tu prima') continue;
+    if (($query['gender'] ?? 'all') !== 'all' && kinship_gender($item) !== $query['gender']) continue;
+    if (($query['age'] ?? 'all') !== 'all') {
+      $birthValue = parse_sienna_date_value($item['birth'] ?? null);
+      if (!$sourceBirthValue || !$birthValue) {
+        $omittedUnknownBirth++;
+        continue;
+      }
+      if (($query['age'] ?? '') === 'younger' && $birthValue <= $sourceBirthValue) continue;
+      if (($query['age'] ?? '') === 'older' && $birthValue >= $sourceBirthValue) continue;
+    }
+    $item['relation'] = $relation;
+    $items[] = $item;
+  }
+  usort($items, fn($a, $b) => (parse_sienna_date_value($a['birth'] ?? null) ?: 99999999) <=> (parse_sienna_date_value($b['birth'] ?? null) ?: 99999999));
+  $items = array_map(fn($item) => [
+    'name' => $item['name'] ?? '',
+    'relation' => $item['relation'] ?? '',
+    'birth' => $item['birth'] ?? null,
+    'death' => $item['death'] ?? null,
+    'inheritanceStatus' => $item['inheritance_status'] ?? null,
+    'inheritanceReason' => $item['inheritance_reason'] ?? null,
+  ], array_slice($items, 0, 24));
+  return ['items' => $items, 'omittedUnknownBirth' => $omittedUnknownBirth, 'query' => $query, 'sourceBirth' => $member['birth'] ?? null];
 }
 
 function format_higher_inheritance_reasons(array $items): string {
@@ -1643,13 +1706,13 @@ function build_immediate_family_context(?array $member, array $members): ?array 
 function sienna_assistant_paths(): array {
   return [
     ['label' => 'Caso Alessandro', 'path' => '/sienna', 'purpose' => 'resumen ejecutivo del expediente, estado general, métricas y próximos puntos de revisión', 'keywords' => ['resumen', 'inicio', 'dashboard', 'portada', 'estado']],
-    ['label' => 'Árbol genealógico', 'path' => '/sienna/arbol', 'purpose' => 'visualizar ramas, ascendencia, descendencia y conexiones familiares', 'keywords' => ['arbol', 'árbol', 'ruta', 'rama', 'genealogia', 'genealogía', 'familia']],
-    ['label' => 'Miembros del árbol', 'path' => '/sienna/miembros', 'purpose' => 'consultar fichas de personas, parentescos, fechas, filiación y relaciones registradas', 'keywords' => ['miembro', 'persona', 'padre', 'madre', 'conyuge', 'cónyuge', 'editar', 'filiacion', 'filiación']],
+    ['label' => 'Árbol genealógico', 'path' => '/sienna/arbol', 'purpose' => 'visualizar ramas, ascendencia, descendencia y conexiones familiares', 'keywords' => ['arbol', 'árbol', 'ruta', 'rama', 'genealogia', 'genealogía', 'familia', 'primo', 'prima', 'primos', 'primas']],
+    ['label' => 'Miembros del árbol', 'path' => '/sienna/miembros', 'purpose' => 'consultar fichas de personas, parentescos, fechas, filiación y relaciones registradas', 'keywords' => ['miembro', 'persona', 'padre', 'madre', 'conyuge', 'cónyuge', 'editar', 'filiacion', 'filiación', 'primo', 'prima', 'primos', 'primas', 'menor', 'mayor']],
     ['label' => 'Documentos probatorios', 'path' => '/sienna/documentos', 'purpose' => 'revisar actas, soportes, OCR, evidencias y documentos asociados al expediente', 'keywords' => ['documento', 'acta', 'evidencia', 'certificado', 'archivo', 'ocr', 'prueba']],
     ['label' => 'Explicación herederos', 'path' => '/sienna/explicacion', 'purpose' => 'entender herederos finales, porcentajes, montos, rutas familiares y razones del reparto', 'keywords' => ['hereda', 'heredero', 'reparto', 'monto', 'porcentaje', 'explicar', 'dinero']],
     ['label' => 'Dobles linajes', 'path' => '/sienna/linajes', 'purpose' => 'analizar convergencias, doble participación y cruces entre ramas familiares', 'keywords' => ['doble', 'linaje', 'convergencia', 'cruce', 'dos ramas']],
     ['label' => 'Hallazgos', 'path' => '/sienna/hallazgos', 'purpose' => 'ver pendientes, inconsistencias, validaciones y acciones sugeridas', 'keywords' => ['pendiente', 'inconsistencia', 'hallazgo', 'validacion', 'validación', 'error']],
-    ['label' => 'Filiación', 'path' => '/sienna/filiacion', 'purpose' => 'calcular o revisar relaciones de parentesco y conexiones genealógicas', 'keywords' => ['filiacion', 'filiación', 'parentesco', 'calculo', 'cálculo']],
+    ['label' => 'Filiación', 'path' => '/sienna/filiacion', 'purpose' => 'calcular o revisar relaciones de parentesco y conexiones genealógicas', 'keywords' => ['filiacion', 'filiación', 'parentesco', 'calculo', 'cálculo', 'primo', 'prima', 'primos', 'primas']],
   ];
 }
 
@@ -1782,6 +1845,9 @@ function build_compact_sienna_assistant_context(string $question, array $fullCon
     }
   }
   $familyContext = $detectedMemberRecord ? build_immediate_family_context($detectedMemberRecord, $fullContext['members_index'] ?? []) : null;
+  $extendedFamilyContext = ($detectedMemberRecord && (($contextPlan['intent']['type'] ?? '') === 'family_cousins'))
+    ? ['cousins' => build_cousin_context($detectedMemberRecord, $fullContext['members_index'] ?? [], $question)]
+    : null;
 
   $matchingHeirs = [];
   foreach ($activeHeirs as $heir) {
@@ -1900,6 +1966,7 @@ function build_compact_sienna_assistant_context(string $question, array $fullCon
       : 'pregunta actual clasificada por intención',
     'includesPersonalMemberContext' => (bool)$detectedMember,
     'includesImmediateFamily' => (bool)$familyContext,
+    'includesExtendedFamily' => (bool)$extendedFamilyContext,
     'includesRelevantFamily' => count($relevantFamily) > 0,
     'includesInheritanceComparison' => (bool)$userHeir || count($heirsMoreThanUser) > 0,
     'includesFindings' => count($selectedFindings) > 0,
@@ -1925,6 +1992,7 @@ function build_compact_sienna_assistant_context(string $question, array $fullCon
         'inheritanceShare' => $userHeir['share_percent'] ?? null,
         'inheritanceAmount' => $userHeir['amount'] ?? null,
         'immediateFamily' => $familyContext,
+        'extendedFamily' => $extendedFamilyContext,
       ] : ['isDetectedMember' => false],
     ] : ['personalizedLanguageAllowed' => false],
     'currentScreen' => $currentPath ? screen_label_for_path($currentPath) : null,
@@ -1982,6 +2050,7 @@ function build_deterministic_sienna_assistant_answer(string $question, array $co
   $siblings = $context['user']['memberContext']['immediateFamily']['siblings'] ?? [];
   $children = $context['user']['memberContext']['immediateFamily']['children'] ?? [];
   $spouse = $context['user']['memberContext']['immediateFamily']['spouse'] ?? null;
+  $cousinContext = $context['user']['memberContext']['extendedFamily']['cousins'] ?? null;
   $relevantFamily = $context['relevantFamily'] ?? [];
 
   if ($intentType === 'small_talk_greeting') {
@@ -2000,6 +2069,26 @@ function build_deterministic_sienna_assistant_answer(string $question, array $co
       '',
       'Puedes revisar sus fichas en **Miembros del árbol**.',
     ]);
+  }
+
+  if ($intentType === 'family_cousins') {
+    if (!($context['user']['memberContext']['isDetectedMember'] ?? false)) {
+      return ($firstName ? $firstName . ', ' : '') . 'para responder eso necesito tener tu usuario asociado a un miembro del árbol. Puedes revisar esa asociación en **Administración de usuarios**.';
+    }
+    $items = $cousinContext['items'] ?? [];
+    $query = $cousinContext['query'] ?? [];
+    $genderText = ($query['gender'] ?? '') === 'f' ? 'primas' : ((($query['gender'] ?? '') === 'm') ? 'primos varones' : 'primos y primas');
+    $ageText = ($query['age'] ?? '') === 'younger' ? 'menores que tú' : ((($query['age'] ?? '') === 'older') ? 'mayores que tú' : 'registrados');
+    if (!count($items)) {
+      $unknownText = !empty($cousinContext['omittedUnknownBirth']) ? ' Hay familiares que no pude comparar porque les falta fecha de nacimiento.' : '';
+      return ($firstName ? $firstName . ', ' : '') . 'no veo ' . $genderText . ' ' . $ageText . ' con los datos actuales del árbol.' . $unknownText . ' Puedes confirmarlo en **Miembros del árbol**.';
+    }
+    return implode("\n", array_filter([
+      ($firstName ? $firstName . ', ' : '') . 'según las conexiones familiares y fechas registradas, tus ' . $genderText . ' ' . $ageText . ' son:',
+      '',
+      format_family_people_list($items),
+      !empty($cousinContext['omittedUnknownBirth']) ? "\nNo incluí familiares sin fecha de nacimiento porque no se puede comparar la edad con seguridad." : '',
+    ]));
   }
 
   if ($intentType === 'family_parents') {

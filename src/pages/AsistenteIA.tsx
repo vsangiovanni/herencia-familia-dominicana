@@ -1,6 +1,6 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Bot, LockKeyhole, Route, Send, ShieldCheck } from 'lucide-react';
+import { Bot, LockKeyhole, RefreshCcw, Route, Send, ShieldCheck } from 'lucide-react';
 import PageHelp from '@/components/PageHelp';
 import SiennaPageLayout from '@/components/sienna/SiennaPageLayout';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,26 @@ type ChatMessage = {
   role: 'user' | 'assistant';
   content: string;
   response?: SiennaAiAssistantResponse;
+};
+
+const SIENNA_CONVERSATION_STORAGE_KEY = 'herenciard:sienna-ai:last-conversation:v1';
+
+const loadStoredConversation = (): ChatMessage[] => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(SIENNA_CONVERSATION_STORAGE_KEY) || '[]');
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((message) => message && (message.role === 'user' || message.role === 'assistant') && String(message.content || '').trim())
+      .slice(-20)
+      .map((message) => ({
+        role: message.role,
+        content: String(message.content || '').slice(0, 2400),
+        response: message.response,
+      }));
+  } catch {
+    return [];
+  }
 };
 
 const MENU_LABEL_BY_ROUTE: Record<string, string> = {
@@ -67,11 +87,36 @@ const AsistenteIA = () => {
   const personalization = useSiennaPersonalization();
   const animationChainRef = useRef<Promise<void>>(Promise.resolve());
   const [question, setQuestion] = useState('');
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => loadStoredConversation());
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const canSend = useMemo(() => question.trim().length >= 3 && !isSending, [question, isSending]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const persistable = messages
+      .filter((message) => message.content.trim())
+      .slice(-20)
+      .map((message) => ({
+        role: message.role,
+        content: message.content.slice(0, 2400),
+        response: message.response,
+      }));
+    if (!persistable.length) {
+      window.localStorage.removeItem(SIENNA_CONVERSATION_STORAGE_KEY);
+      return;
+    }
+    window.localStorage.setItem(SIENNA_CONVERSATION_STORAGE_KEY, JSON.stringify(persistable));
+  }, [messages]);
+
+  const clearConversation = () => {
+    setMessages([]);
+    setError(null);
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem(SIENNA_CONVERSATION_STORAGE_KEY);
+    }
+  };
 
   const appendAssistantText = (delta: string) => {
     if (!delta) return Promise.resolve();
@@ -174,6 +219,14 @@ const AsistenteIA = () => {
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
           <Card className="legacy-surface">
             <CardContent className="flex min-h-[560px] flex-col p-4 sm:p-5">
+              {messages.length > 0 && (
+                <div className="mb-3 flex justify-end">
+                  <Button type="button" variant="outline" size="sm" className="btn-secondary" onClick={clearConversation}>
+                    <RefreshCcw className="mr-1.5 h-3.5 w-3.5" />
+                    Nueva conversación
+                  </Button>
+                </div>
+              )}
               <div className="flex-1 space-y-3 overflow-y-auto rounded-md border border-legal-blue/10 bg-white/55 p-3 dark:border-white/10 dark:bg-[#0F1726]/70">
                 {messages.length === 0 ? (
                   <div className="grid h-full place-items-center text-center text-sm text-gray-600 dark:text-muted-foreground">

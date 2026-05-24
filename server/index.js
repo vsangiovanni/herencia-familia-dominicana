@@ -571,6 +571,16 @@ const parseSiennaYear = (value) => {
   return match ? Number(match[1]) : null;
 };
 
+const parseSiennaDateValue = (value) => {
+  const text = String(value || '').trim();
+  const dayFirst = text.match(/\b(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})\b/);
+  if (dayFirst) return Number(dayFirst[3]) * 10000 + Number(dayFirst[2]) * 100 + Number(dayFirst[1]);
+  const yearFirst = text.match(/\b(\d{4})[\/.-](\d{1,2})[\/.-](\d{1,2})\b/);
+  if (yearFirst) return Number(yearFirst[1]) * 10000 + Number(yearFirst[2]) * 100 + Number(yearFirst[3]);
+  const year = parseSiennaYear(text);
+  return year ? year * 10000 : null;
+};
+
 const getParentIdsForAnalysis = (member, membersById, links) => {
   const ids = new Set();
   if (member.parent_id && membersById.has(normalizedMemberId(member.parent_id))) {
@@ -1011,13 +1021,13 @@ const SIENNA_INTERNAL_REQUEST_PATTERNS = [
 
 const SIENNA_ASSISTANT_PATHS = [
   { label: 'Caso Alessandro', path: '/sienna', purpose: 'resumen ejecutivo del expediente, estado general, métricas y próximos puntos de revisión', keywords: ['resumen', 'inicio', 'dashboard', 'portada', 'estado'] },
-  { label: 'Árbol genealógico', path: '/sienna/arbol', purpose: 'visualizar ramas, ascendencia, descendencia y conexiones familiares', keywords: ['arbol', 'árbol', 'ruta', 'rama', 'genealogia', 'genealogía', 'familia'] },
-  { label: 'Miembros del árbol', path: '/sienna/miembros', purpose: 'consultar fichas de personas, parentescos, fechas, filiación y relaciones registradas', keywords: ['miembro', 'persona', 'padre', 'madre', 'conyuge', 'cónyuge', 'editar', 'filiacion', 'filiación'] },
+  { label: 'Árbol genealógico', path: '/sienna/arbol', purpose: 'visualizar ramas, ascendencia, descendencia y conexiones familiares', keywords: ['arbol', 'árbol', 'ruta', 'rama', 'genealogia', 'genealogía', 'familia', 'primo', 'prima', 'primos', 'primas'] },
+  { label: 'Miembros del árbol', path: '/sienna/miembros', purpose: 'consultar fichas de personas, parentescos, fechas, filiación y relaciones registradas', keywords: ['miembro', 'persona', 'padre', 'madre', 'conyuge', 'cónyuge', 'editar', 'filiacion', 'filiación', 'primo', 'prima', 'primos', 'primas', 'menor', 'mayor'] },
   { label: 'Documentos probatorios', path: '/sienna/documentos', purpose: 'revisar actas, soportes, OCR, evidencias y documentos asociados al expediente', keywords: ['documento', 'acta', 'evidencia', 'certificado', 'archivo', 'ocr', 'prueba'] },
   { label: 'Explicación herederos', path: '/sienna/explicacion', purpose: 'entender herederos finales, porcentajes, montos, rutas familiares y razones del reparto', keywords: ['hereda', 'heredero', 'reparto', 'monto', 'porcentaje', 'explicar', 'dinero'] },
   { label: 'Dobles linajes', path: '/sienna/linajes', purpose: 'analizar convergencias, doble participación y cruces entre ramas familiares', keywords: ['doble', 'linaje', 'convergencia', 'cruce', 'dos ramas'] },
   { label: 'Hallazgos', path: '/sienna/hallazgos', purpose: 'ver pendientes, inconsistencias, validaciones y acciones sugeridas', keywords: ['pendiente', 'inconsistencia', 'hallazgo', 'validacion', 'validación', 'error'] },
-  { label: 'Filiación', path: '/sienna/filiacion', purpose: 'calcular o revisar relaciones de parentesco y conexiones genealógicas', keywords: ['filiacion', 'filiación', 'parentesco', 'calculo', 'cálculo'] },
+  { label: 'Filiación', path: '/sienna/filiacion', purpose: 'calcular o revisar relaciones de parentesco y conexiones genealógicas', keywords: ['filiacion', 'filiación', 'parentesco', 'calculo', 'cálculo', 'primo', 'prima', 'primos', 'primas'] },
 ];
 
 const suggestSiennaAssistantPaths = (question = '') => {
@@ -1239,6 +1249,7 @@ const classifySiennaAssistantIntent = (question = '', conversationHistory = []) 
   if (isInternalSiennaAiRequest(question)) type = 'internal_protected';
   else if (isSiennaSmallTalkQuestion(question)) type = 'small_talk_greeting';
   else if (/\b(hermanos|hermanas|herman[ao]s?)\b/.test(normalized)) type = 'family_siblings';
+  else if (familyRelationQuery(question)?.relation === 'cousins') type = 'family_cousins';
   else if (/\b(padres|pap[aá]s|progenitores)\b/.test(normalized)) type = 'family_parents';
   else if (/\b(hijos|hijas|hij[ao]s?)\b/.test(normalized)) type = 'family_children';
   else if (/\b(c[oó]nyuge|espos[ao]|pareja)\b/.test(normalized)) type = 'family_spouse';
@@ -1251,6 +1262,7 @@ const classifySiennaAssistantIntent = (question = '', conversationHistory = []) 
     'internal_protected',
     'small_talk_greeting',
     'family_siblings',
+    'family_cousins',
     'family_parents',
     'family_children',
     'family_spouse',
@@ -1305,6 +1317,19 @@ const kinshipGender = (member = {}) => {
 };
 
 const kinshipWord = (member, masculine, feminine) => kinshipGender(member) === 'f' ? feminine : masculine;
+
+const familyRelationQuery = (question = '') => {
+  const normalized = normalizeAiText(question);
+  const asksCousins = /\bprim[ao]s?\b|\bprimas\b|\bprimos\b/.test(normalized);
+  if (!asksCousins) return null;
+  return {
+    relation: 'cousins',
+    gender: /\bprimas\b|\bprima\b/.test(normalized) ? 'f' : (/\b(primos varones|primos hombres|primos masculinos)\b/.test(normalized) ? 'm' : 'all'),
+    age: /\b(menor|menores|mas joven|mas jovenes|menor que yo|menores que yo)\b/.test(normalized)
+      ? 'younger'
+      : (/\b(mayor|mayores|mas viejo|mas viejos|mayor que yo|mayores que yo)\b/.test(normalized) ? 'older' : 'all'),
+  };
+};
 
 const resolveKinshipLabel = (sourceMemberId, targetMemberId, members = []) => {
   const sourceId = normalizedMemberId(sourceMemberId);
@@ -1363,6 +1388,42 @@ const formatFamilyPeopleList = (items = []) => items
     return '- **' + item.name + '**' + (dates ? ' (' + dates + ')' : '');
   })
   .join('\n');
+
+const buildCousinContext = (member, members = [], question = '') => {
+  if (!member?.id) return { items: [], omittedUnknownBirth: 0, query: familyRelationQuery(question) };
+  const query = familyRelationQuery(question) || { relation: 'cousins', gender: 'all', age: 'all' };
+  const sourceId = normalizedMemberId(member.id);
+  const sourceBirthValue = parseSiennaDateValue(member.birth);
+  let omittedUnknownBirth = 0;
+  const items = members
+    .filter((item) => normalizedMemberId(item.id) !== sourceId)
+    .map((item) => {
+      const relation = resolveKinshipLabel(sourceId, item.id, members);
+      return relation === 'tu primo' || relation === 'tu prima' ? { ...item, relation } : null;
+    })
+    .filter(Boolean)
+    .filter((item) => query.gender === 'all' || kinshipGender(item) === query.gender)
+    .filter((item) => {
+      if (query.age === 'all') return true;
+      const birthValue = parseSiennaDateValue(item.birth);
+      if (!sourceBirthValue || !birthValue) {
+        omittedUnknownBirth += 1;
+        return false;
+      }
+      return query.age === 'younger' ? birthValue > sourceBirthValue : birthValue < sourceBirthValue;
+    })
+    .sort((left, right) => (parseSiennaDateValue(left.birth) || 99999999) - (parseSiennaDateValue(right.birth) || 99999999))
+    .slice(0, 24)
+    .map((item) => ({
+      name: item.name,
+      relation: item.relation,
+      birth: item.birth || null,
+      death: item.death || null,
+      inheritanceStatus: item.inheritance_status || null,
+      inheritanceReason: item.inheritance_reason || null,
+    }));
+  return { items, omittedUnknownBirth, query, sourceBirth: member.birth || null };
+};
 
 const formatHigherInheritanceReasons = (items = []) => items
   .slice(0, 3)
@@ -1431,6 +1492,9 @@ function buildCompactSiennaAssistantContext({ question, conversationHistory = []
     : null;
   const familyContext = detectedMemberRecord
     ? buildImmediateFamilyContext(detectedMemberRecord, fullContext.members_index || [])
+    : null;
+  const extendedFamilyContext = detectedMemberRecord && contextPlan.intent?.type === 'family_cousins'
+    ? { cousins: buildCousinContext(detectedMemberRecord, fullContext.members_index || [], question) }
     : null;
   const matchingHeirs = activeHeirs
     .map((heir) => ({
@@ -1523,6 +1587,7 @@ function buildCompactSiennaAssistantContext({ question, conversationHistory = []
       : 'pregunta actual clasificada por intención',
     includesPersonalMemberContext: Boolean(detectedMember),
     includesImmediateFamily: Boolean(familyContext),
+    includesExtendedFamily: Boolean(extendedFamilyContext),
     includesRelevantFamily: relevantFamily.length > 0,
     includesInheritanceComparison: Boolean(userHeir) || heirsMoreThanUser.length > 0,
     includesFindings: selectedFindings.length > 0,
@@ -1548,6 +1613,7 @@ function buildCompactSiennaAssistantContext({ question, conversationHistory = []
         inheritanceShare: userHeir ? userHeir.share_percent : null,
         inheritanceAmount: userHeir ? userHeir.amount : null,
         immediateFamily: familyContext,
+        extendedFamily: extendedFamilyContext,
       } : { isDetectedMember: false },
     } : { personalizedLanguageAllowed: false },
     currentScreen: currentPath ? screenLabelForPath(currentPath) : null,
@@ -1605,6 +1671,7 @@ const buildDeterministicSiennaAssistantAnswer = (question, context) => {
   const siblings = context?.user?.memberContext?.immediateFamily?.siblings || [];
   const children = context?.user?.memberContext?.immediateFamily?.children || [];
   const spouse = context?.user?.memberContext?.immediateFamily?.spouse || null;
+  const cousinContext = context?.user?.memberContext?.extendedFamily?.cousins || null;
   const relevantFamily = context?.relevantFamily || [];
 
   if (intentType === 'small_talk_greeting') {
@@ -1623,6 +1690,26 @@ const buildDeterministicSiennaAssistantAnswer = (question, context) => {
       '',
       'Puedes revisar sus fichas en **Miembros del árbol**.',
     ].join('\n');
+  }
+
+  if (intentType === 'family_cousins') {
+    if (!context?.user?.memberContext?.isDetectedMember) {
+      return (firstName ? firstName + ', ' : '') + 'para responder eso necesito tener tu usuario asociado a un miembro del árbol. Puedes revisar esa asociación en **Administración de usuarios**.';
+    }
+    const items = cousinContext?.items || [];
+    const query = cousinContext?.query || {};
+    const genderText = query.gender === 'f' ? 'primas' : (query.gender === 'm' ? 'primos varones' : 'primos y primas');
+    const ageText = query.age === 'younger' ? 'menores que tú' : (query.age === 'older' ? 'mayores que tú' : 'registrados');
+    if (!items.length) {
+      const unknownText = cousinContext?.omittedUnknownBirth ? ' Hay familiares que no pude comparar porque les falta fecha de nacimiento.' : '';
+      return (firstName ? firstName + ', ' : '') + 'no veo ' + genderText + ' ' + ageText + ' con los datos actuales del árbol.' + unknownText + ' Puedes confirmarlo en **Miembros del árbol**.';
+    }
+    return [
+      (firstName ? firstName + ', ' : '') + 'según las conexiones familiares y fechas registradas, tus ' + genderText + ' ' + ageText + ' son:',
+      '',
+      formatFamilyPeopleList(items),
+      cousinContext?.omittedUnknownBirth ? '\nNo incluí familiares sin fecha de nacimiento porque no se puede comparar la edad con seguridad.' : '',
+    ].filter(Boolean).join('\n');
   }
 
   if (intentType === 'family_parents') {
