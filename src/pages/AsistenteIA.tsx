@@ -87,6 +87,7 @@ const AsistenteIA = () => {
   const personalization = useSiennaPersonalization();
   const initialStoredConversation = useMemo(() => loadStoredConversation(), []);
   const animationChainRef = useRef<Promise<void>>(Promise.resolve());
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const previousConversationRef = useRef<ChatMessage[]>(initialStoredConversation);
   const [question, setQuestion] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -95,6 +96,10 @@ const AsistenteIA = () => {
   const [error, setError] = useState<string | null>(null);
 
   const canSend = useMemo(() => question.trim().length >= 3 && !isSending, [question, isSending]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ block: 'end' });
+  }, [messages, isSending]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -202,7 +207,7 @@ const AsistenteIA = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#F6F2E8] dark:bg-background">
+    <div className="min-h-dvh overflow-x-hidden bg-[#F6F2E8] dark:bg-background">
       <SiennaPageLayout>
         <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
@@ -210,7 +215,7 @@ const AsistenteIA = () => {
               <Bot className="h-3.5 w-3.5 text-legal-gold" />
               Sienna contigo
             </div>
-            <h1 className="font-serif text-3xl font-bold text-legal-blue dark:text-[#F5F7FA]">
+            <h1 className="font-serif text-2xl font-bold text-legal-blue dark:text-[#F5F7FA] sm:text-3xl">
               {personalization.isLinkedMember ? `${personalization.firstName}, hablemos de tu expediente` : 'Hablemos del expediente'}
             </h1>
             <p className="mt-2 max-w-3xl text-sm leading-relaxed text-gray-700 dark:text-muted-foreground">
@@ -223,8 +228,8 @@ const AsistenteIA = () => {
         </div>
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <Card className="legacy-surface">
-            <CardContent className="flex min-h-[560px] flex-col p-4 sm:p-5">
+          <Card className="legacy-surface overflow-hidden">
+            <CardContent className="flex h-[calc(100dvh-15rem)] min-h-[420px] min-w-0 flex-col p-3 sm:h-[calc(100dvh-12rem)] sm:min-h-[560px] sm:p-5 xl:h-[calc(100dvh-6rem)] xl:max-h-[820px]">
               {(messages.length > 0 || hasStoredContext) && (
                 <div className="mb-3 flex justify-end">
                   <Button type="button" variant="outline" size="sm" className="btn-secondary" onClick={clearConversation}>
@@ -233,7 +238,7 @@ const AsistenteIA = () => {
                   </Button>
                 </div>
               )}
-              <div className="flex-1 space-y-3 overflow-y-auto rounded-md border border-legal-blue/10 bg-white/55 p-3 dark:border-white/10 dark:bg-[#0F1726]/70">
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain rounded-md border border-legal-blue/10 bg-white/55 p-3 dark:border-white/10 dark:bg-[#0F1726]/70">
                 {messages.length === 0 ? (
                   <div className="grid h-full place-items-center text-center text-sm text-gray-600 dark:text-muted-foreground">
                     <div>
@@ -247,19 +252,19 @@ const AsistenteIA = () => {
                   messages.filter((message) => message.role !== 'assistant' || message.content).map((message, index) => (
                     <div
                       key={index}
-                      className={message.role === 'user' ? 'ml-auto max-w-[82%]' : 'mr-auto max-w-[92%]'}
+                      className={message.role === 'user' ? 'ml-auto min-w-0 max-w-[88%] sm:max-w-[82%]' : 'mr-auto min-w-0 max-w-[94%] sm:max-w-[92%]'}
                     >
                       <div
                         className={
                           message.role === 'user'
-                            ? 'rounded-md bg-legal-blue px-4 py-3 text-sm leading-relaxed text-white'
-                            : 'rounded-md border border-legal-gold/25 bg-[#FFFDF7] px-4 py-3 text-sm leading-relaxed text-[#1B2430] dark:bg-[#162033] dark:text-[#F5F7FA]'
+                            ? 'whitespace-pre-wrap break-words rounded-md bg-legal-blue px-4 py-3 text-sm leading-relaxed text-white'
+                            : 'whitespace-pre-wrap break-words rounded-md border border-legal-gold/25 bg-[#FFFDF7] px-4 py-3 text-sm leading-relaxed text-[#1B2430] dark:bg-[#162033] dark:text-[#F5F7FA]'
                         }
                       >
                         {message.role === 'assistant' ? renderAnswer(message.content) : message.content}
                       </div>
                       {message.response?.suggested_paths?.length ? (
-                        <div className="mt-2 flex flex-wrap gap-2">
+                        <div className="mt-2 flex max-w-full flex-wrap gap-2">
                           {message.response.suggested_paths.map((item) => (
                             <Button key={item.path} asChild size="sm" variant="outline" className="btn-secondary">
                               <Link to={item.path}>
@@ -278,6 +283,7 @@ const AsistenteIA = () => {
                     Estoy revisando el expediente...
                   </div>
                 )}
+                <div ref={messagesEndRef} />
               </div>
 
               {error && <p className="mt-3 text-sm font-medium text-red-600">{error}</p>}
