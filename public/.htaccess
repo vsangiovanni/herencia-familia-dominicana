@@ -19,6 +19,9 @@
   <FilesMatch "^og-image\.png$">
     Header set Cache-Control "public, max-age=300, must-revalidate"
   </FilesMatch>
+  <FilesMatch "^(sw\.js|manifest\.webmanifest)$">
+    Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+  </FilesMatch>
 </IfModule>
 
 <Files ".env">
