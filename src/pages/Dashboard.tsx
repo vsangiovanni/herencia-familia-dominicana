@@ -857,7 +857,13 @@ const Dashboard = () => {
   const { data: familyData } = useSiennaFamily();
   const summary = analysisSummary?.summary;
   const realtimeCalculation = realtimeCalculationData?.calculation;
-  const recognizedHeirsTotal = confirmedHeirsData?.heirs?.length ?? summary?.active_heir_count ?? 0;
+  const calculatedFinalHeirsTotal =
+    realtimeCalculation?.active_heir_count ??
+    realtimeCalculation?.active_heirs?.length ??
+    summary?.active_heir_count ??
+    confirmedHeirsData?.heirs?.length ??
+    0;
+  const recognizedRegistryTotal = confirmedHeirsData?.heirs?.length ?? 0;
 
   const firstName = useMemo(() => {
     const fullName = userProfile?.full_name?.trim();
@@ -899,9 +905,9 @@ const Dashboard = () => {
         tone: 'purple',
       },
       {
-        label: 'Herederos reconocidos',
-        value: formatCompactNumber(recognizedHeirsTotal),
-        detail: 'Registrados en el expediente',
+        label: 'Herederos finales',
+        value: formatCompactNumber(calculatedFinalHeirsTotal),
+        detail: `${formatCompactNumber(recognizedRegistryTotal)} registros documentales`,
         icon: Landmark,
         tone: 'green',
       },
@@ -920,7 +926,7 @@ const Dashboard = () => {
         tone: 'green',
       },
     ],
-    [recognizedHeirsTotal, summary]
+    [calculatedFinalHeirsTotal, recognizedRegistryTotal, summary]
   );
 
   const priority = useMemo(
@@ -934,10 +940,10 @@ const Dashboard = () => {
         pendingValidation: Number(summary?.pending_validation_total || 0),
         dualLineageTotal: Number(summary?.dual_lineage_total || 0),
         totalShare: Number(summary?.total_share || 0),
-        heirsTotal: recognizedHeirsTotal,
+        heirsTotal: calculatedFinalHeirsTotal,
         estateAmount: Number(summary?.estate?.distributableAmount || 0),
       }),
-    [hasAccess, isAdmin, recognizedHeirsTotal, summary]
+    [calculatedFinalHeirsTotal, hasAccess, isAdmin, summary]
   );
 
   const curiosityFacts = useMemo(
