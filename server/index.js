@@ -1225,6 +1225,9 @@ const sanitizeSiennaConversationHistory = (history = []) => {
 
 const isSiennaConversationalFollowUp = (question = '') => {
   const normalized = normalizeAiText(question);
+  const compact = compactAiName(question);
+  const pronounRelationFollowUp = /^(y\s+)?(su|sus|el|la|los|las)\s+(herman[ao]s?|hermanas|hermanos|padre|madre|abuel[oa]s?|bisabuel[oa]s?|hij[ao]s?|prim[ao]s?|ti[ao]s?|sobrin[ao]s?)\b/.test(compact);
+  if (pronounRelationFollowUp) return true;
   const mentionsSpecificRole = /\b(padre|madre|herman[ao]|prim[ao]|hij[ao]|conyuge|c[oó]nyuge|espos[ao])\b/.test(normalized);
   const hasNamedCue = nameTokensForMemberMatch(question).length >= 2;
   const followUpCue = /\b(ese|esa|eso|esta persona|esa persona|el|ella|su|sus|cuando|cu[aá]ndo|donde|d[oó]nde|y que|y cuanto|y cu[aá]nto|tambien|también)\b/.test(normalized);
@@ -1321,9 +1324,10 @@ const kinshipWord = (member, masculine, feminine) => kinshipGender(member) === '
 
 const familyRelationQuery = (question = '') => {
   const normalized = normalizeAiText(question);
-  const siblingChain = normalized.match(/\b(herman[ao]s?|hermanas|hermanos)\b.*\b(mi|mis|de mi)\b.*\b(bisabuel[oa]s?|bisabuelas|bisabuelos|abuel[oa]s?|abuelas|abuelos|padres|madre|padre|mama|papa)\b/);
+  const siblingChain = normalized.match(/\b(herman[ao]s?|hermanas|hermanos)\b.*\b(mi|mis|de mi)\b.*\b(bisabuel[oa]s?|bisabuelas|bisabuelos|abuel[oa]s?|abuelas|abuelos|padres|madre|padre|mama|papa)\b/)
+    || normalized.match(/\b(bisabuel[oa]s?|bisabuelas|bisabuelos|abuel[oa]s?|abuelas|abuelos|padres|madre|padre|mama|papa)\b.*\b(su|sus|el|la|los|las)?\s*(herman[ao]s?|hermanas|hermanos)\b/);
   if (siblingChain) {
-    const targetText = siblingChain[3] || '';
+    const targetText = normalized;
     const baseRelation = /bisabuel/.test(targetText)
       ? 'great_grandparents'
       : (/abuel/.test(targetText) ? 'grandparents' : 'parents');
@@ -1347,11 +1351,12 @@ const familyRelationQuery = (question = '') => {
   ];
   const matched = relationMatchers.find(([, pattern]) => pattern.test(normalized));
   if (!matched) return null;
+  const femaleCue = /\b(abuelas|bisabuelas|madre|mama|hermanas|hijas|esposa|tias|sobrinas|primas|bisabuela|abuela|hermana|hija|tia|sobrina|prima)\b/.test(normalized);
+  const maleCue = /\b(varones|hombres|masculinos)\b/.test(normalized)
+    || /\b(bisabuelo|abuelo|padre|papa|hermano|hijo|esposo|tio|sobrino|primo)\b/.test(normalized);
   return {
     relation: matched[0],
-    gender: /\b(abuelas|bisabuelas|madre|mama|hermanas|hijas|esposa|tias|sobrinas|primas|prima)\b/.test(normalized)
-      ? 'f'
-      : (/\b(abuelos|bisabuelos|padre|papa|hermanos varones|hijos varones|esposo|tios|sobrinos|primos varones|primos hombres|primos masculinos)\b/.test(normalized) ? 'm' : 'all'),
+    gender: femaleCue ? 'f' : (maleCue ? 'm' : 'all'),
     age: /\b(menor|menores|mas joven|mas jovenes|menor que yo|menores que yo)\b/.test(normalized)
       ? 'younger'
       : (/\b(mayor|mayores|mas viejo|mas viejos|mayor que yo|mayores que yo)\b/.test(normalized) ? 'older' : 'all'),
@@ -1493,8 +1498,25 @@ const buildRelationshipContext = (member, members = [], question = '') => {
     if (query.baseRelation === 'great_grandparents') return relation === 'tu bisabuelo' || relation === 'tu bisabuela';
     return false;
   };
+  const ancestorCandidates = query.relation === 'sibling_of_ancestor'
+    ? sourceRelatedMembers.filter((item) => ancestorRelationMatches(item.relation))
+    : [];
+  const ancestorNameStopTokens = new Set([
+    'quien', 'quienes', 'hermano', 'hermana', 'hermanos', 'hermanas',
+    'bisabuelo', 'bisabuela', 'bisabuelos', 'bisabuelas', 'abuelo', 'abuela', 'abuelos', 'abuelas',
+    'padre', 'madre', 'figura', 'arbol', 'familiar', 'registrado', 'registrada', 'registrados', 'registradas',
+    'sangiovanni',
+  ]);
+  const questionTokens = nameTokensForMemberMatch(question).filter((token) => !ancestorNameStopTokens.has(token));
+  const namedAncestorCandidates = ancestorCandidates
+    .map((item) => ({
+      ...item,
+      questionScore: scoreAiTextMatch(questionTokens, item.name || ''),
+    }))
+    .filter((item) => item.questionScore > 0);
+  const anchorCandidates = namedAncestorCandidates.length ? namedAncestorCandidates : ancestorCandidates;
   const anchorIds = query.relation === 'sibling_of_ancestor'
-    ? sourceRelatedMembers.filter((item) => ancestorRelationMatches(item.relation)).map((item) => normalizedMemberId(item.id))
+    ? anchorCandidates.map((item) => normalizedMemberId(item.id))
     : [];
   const candidateItems = query.relation === 'sibling_of_ancestor'
     ? members
@@ -1654,7 +1676,7 @@ function buildCompactSiennaAssistantContext({ question, conversationHistory = []
     ? buildImmediateFamilyContext(detectedMemberRecord, fullContext.members_index || [])
     : null;
   const extendedFamilyContext = detectedMemberRecord && contextPlan.intent?.type === 'family_relationship'
-    ? { relationship: buildRelationshipContext(detectedMemberRecord, fullContext.members_index || [], question) }
+    ? { relationship: buildRelationshipContext(detectedMemberRecord, fullContext.members_index || [], contextPlan.searchText) }
     : null;
   const matchingHeirs = activeHeirs
     .map((heir) => ({

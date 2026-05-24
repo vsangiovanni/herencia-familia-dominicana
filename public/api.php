@@ -1353,6 +1353,9 @@ function name_tokens_for_member_match(string $value): array {
 
 function is_sienna_conversational_follow_up(string $question): bool {
   $normalized = normalize_ai_text($question);
+  $compact = compact_ai_name($question);
+  $pronounRelationFollowUp = preg_match('/^(y\s+)?(su|sus|el|la|los|las)\s+(herman[ao]s?|hermanas|hermanos|padre|madre|abuel[oa]s?|bisabuel[oa]s?|hij[ao]s?|prim[ao]s?|ti[ao]s?|sobrin[ao]s?)\b/i', $compact);
+  if ($pronounRelationFollowUp) return true;
   $mentionsSpecificRole = preg_match('/\b(padre|madre|herman[ao]|prim[ao]|hij[ao]|conyuge|espos[ao])\b/i', $normalized);
   $hasNamedCue = count(name_tokens_for_member_match($question)) >= 2;
   $followUpCue = preg_match('/\b(ese|esa|eso|esta persona|esa persona|el|ella|su|sus|cuando|donde|y que|y cuanto|tambien)\b/i', $normalized);
@@ -1535,8 +1538,11 @@ function kinship_word(array $member, string $masculine, string $feminine): strin
 
 function family_relation_query(string $question): ?array {
   $normalized = normalize_ai_text($question);
-  if (preg_match('/\b(herman[ao]s?|hermanas|hermanos)\b.*\b(mi|mis|de mi)\b.*\b(bisabuel[oa]s?|bisabuelas|bisabuelos|abuel[oa]s?|abuelas|abuelos|padres|madre|padre|mama|papa)\b/i', $normalized, $chain)) {
-    $targetText = $chain[3] ?? '';
+  if (
+    preg_match('/\b(herman[ao]s?|hermanas|hermanos)\b.*\b(mi|mis|de mi)\b.*\b(bisabuel[oa]s?|bisabuelas|bisabuelos|abuel[oa]s?|abuelas|abuelos|padres|madre|padre|mama|papa)\b/i', $normalized, $chain)
+    || preg_match('/\b(bisabuel[oa]s?|bisabuelas|bisabuelos|abuel[oa]s?|abuelas|abuelos|padres|madre|padre|mama|papa)\b.*\b(su|sus|el|la|los|las)?\s*(herman[ao]s?|hermanas|hermanos)\b/i', $normalized, $chain)
+  ) {
+    $targetText = $normalized;
     $baseRelation = preg_match('/bisabuel/i', $targetText) ? 'great_grandparents' : (preg_match('/abuel/i', $targetText) ? 'grandparents' : 'parents');
     return [
       'relation' => 'sibling_of_ancestor',
@@ -1564,11 +1570,12 @@ function family_relation_query(string $question): ?array {
     }
   }
   if (!$matched) return null;
+  $femaleCue = preg_match('/\b(abuelas|bisabuelas|madre|mama|hermanas|hijas|esposa|tias|sobrinas|primas|bisabuela|abuela|hermana|hija|tia|sobrina|prima)\b/i', $normalized);
+  $maleCue = preg_match('/\b(varones|hombres|masculinos)\b/i', $normalized)
+    || preg_match('/\b(bisabuelo|abuelo|padre|papa|hermano|hijo|esposo|tio|sobrino|primo)\b/i', $normalized);
   return [
     'relation' => $matched,
-    'gender' => preg_match('/\b(abuelas|bisabuelas|madre|mama|hermanas|hijas|esposa|tias|sobrinas|primas|prima)\b/i', $normalized)
-      ? 'f'
-      : (preg_match('/\b(abuelos|bisabuelos|padre|papa|hermanos varones|hijos varones|esposo|tios|sobrinos|primos varones|primos hombres|primos masculinos)\b/i', $normalized) ? 'm' : 'all'),
+    'gender' => $femaleCue ? 'f' : ($maleCue ? 'm' : 'all'),
     'age' => preg_match('/\b(menor|menores|mas joven|mas jovenes|menor que yo|menores que yo)\b/i', $normalized)
       ? 'younger'
       : (preg_match('/\b(mayor|mayores|mas viejo|mas viejos|mayor que yo|mayores que yo)\b/i', $normalized) ? 'older' : 'all'),
@@ -1712,8 +1719,26 @@ function build_relationship_context(?array $member, array $members, string $ques
   };
   $anchorIds = [];
   if (($query['relation'] ?? '') === 'sibling_of_ancestor') {
+    $ancestorCandidates = [];
     foreach ($sourceRelatedMembers as $sourceRelated) {
-      if ($ancestorRelationMatches($sourceRelated['relation'] ?? null)) $anchorIds[] = normalized_member_id($sourceRelated['id'] ?? '');
+      if ($ancestorRelationMatches($sourceRelated['relation'] ?? null)) $ancestorCandidates[] = $sourceRelated;
+    }
+    $ancestorNameStopTokens = [
+      'quien' => true, 'quienes' => true, 'hermano' => true, 'hermana' => true, 'hermanos' => true, 'hermanas' => true,
+      'bisabuelo' => true, 'bisabuela' => true, 'bisabuelos' => true, 'bisabuelas' => true, 'abuelo' => true, 'abuela' => true, 'abuelos' => true, 'abuelas' => true,
+      'padre' => true, 'madre' => true, 'figura' => true, 'arbol' => true, 'familiar' => true, 'registrado' => true, 'registrada' => true, 'registrados' => true, 'registradas' => true,
+      'sangiovanni' => true,
+    ];
+    $questionTokens = array_values(array_filter(name_tokens_for_member_match($question), fn($token) => !isset($ancestorNameStopTokens[$token])));
+    $namedAncestorCandidates = [];
+    foreach ($ancestorCandidates as $ancestorCandidate) {
+      if (score_ai_text_match($questionTokens, (string)($ancestorCandidate['name'] ?? '')) > 0) {
+        $namedAncestorCandidates[] = $ancestorCandidate;
+      }
+    }
+    $anchorCandidates = count($namedAncestorCandidates) ? $namedAncestorCandidates : $ancestorCandidates;
+    foreach ($anchorCandidates as $sourceRelated) {
+      $anchorIds[] = normalized_member_id($sourceRelated['id'] ?? '');
     }
   }
   $candidateItems = [];
@@ -2028,7 +2053,7 @@ function build_compact_sienna_assistant_context(string $question, array $fullCon
   }
   $familyContext = $detectedMemberRecord ? build_immediate_family_context($detectedMemberRecord, $fullContext['members_index'] ?? []) : null;
   $extendedFamilyContext = ($detectedMemberRecord && (($contextPlan['intent']['type'] ?? '') === 'family_relationship'))
-    ? ['relationship' => build_relationship_context($detectedMemberRecord, $fullContext['members_index'] ?? [], $question)]
+    ? ['relationship' => build_relationship_context($detectedMemberRecord, $fullContext['members_index'] ?? [], $contextPlan['searchText'] ?? $question)]
     : null;
 
   $matchingHeirs = [];
