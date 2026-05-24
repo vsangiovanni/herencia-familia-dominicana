@@ -390,13 +390,6 @@ export const classifyMemberByDominicanLaw = (
     };
   }
 
-  if (share) {
-    return {
-      inheritance_status: member.inheritance_status === 'confirmado' ? 'confirmado' : 'posible_heredero',
-      inheritance_reason: share.reason,
-    };
-  }
-
   if (knownIntermediates.has(name)) {
     return {
       inheritance_status: 'no_hereda',
@@ -419,6 +412,13 @@ export const classifyMemberByDominicanLaw = (
     };
   }
 
+  if (share) {
+    return {
+      inheritance_status: member.inheritance_status === 'confirmado' ? 'confirmado' : 'posible_heredero',
+      inheritance_reason: share.reason,
+    };
+  }
+
   return {
     inheritance_status: member.inheritance_status || 'requiere_revision',
     inheritance_reason: member.inheritance_reason || 'No hay suficiente información del expediente para clasificarlo automáticamente.',
@@ -431,7 +431,7 @@ export const resolveEffectiveInheritanceStatus = (
   genealogy?: SiennaGenealogyBundle,
   plan?: InheritancePlan
 ): InheritanceStatus => {
-  if (member.inheritance_status && member.inheritance_status !== 'requiere_revision') {
+  if (!isDeceased(member) && member.inheritance_status && member.inheritance_status !== 'requiere_revision') {
     return member.inheritance_status;
   }
   return classifyMemberByDominicanLaw(member, members, genealogy, plan).inheritance_status;

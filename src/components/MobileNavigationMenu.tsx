@@ -11,10 +11,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Menu, User } from "lucide-react";
+import { LogOut, Menu, User } from "lucide-react";
 
 const MobileNavigationMenu = () => {
-  const { user, isAdmin, hasAccess } = useAuth();
+  const { user, isAdmin, hasAccess, signOut } = useAuth();
   const navigate = useNavigate();
 
   const can = (path: string) => isAdmin || hasAccess(path);
@@ -25,7 +25,7 @@ const MobileNavigationMenu = () => {
         <Button
           variant="ghost"
           onClick={() => navigate('/auth')}
-          className="text-gray-900 hover:text-legal-blue px-3 py-2 text-sm font-medium transition-colors"
+          className="px-3 py-2 text-sm font-medium text-gray-900 transition-colors hover:text-legal-blue dark:text-foreground"
         >
           <User size={18} className="mr-2" />
           Iniciar Sesión
@@ -34,16 +34,18 @@ const MobileNavigationMenu = () => {
     );
   }
 
-  const showGenealogy =
-    can('/arbol-genealogico') || can('/arbol-genealogico-clasico') || can('/lineas-familiares');
   const showSienna =
-    can('/hallazgos') ||
-    can('/calculo-filiacion') ||
-    can('/documentos-probatorios') ||
-    can('/sienna/arbol-genealogico') ||
-    can('/sienna/dobles-linajes') ||
-    can('/sienna/miembros-arbol') ||
-    can('/sienna/explicacion-herederos');
+    can('/sienna/arbol') ||
+    can('/sienna/hallazgos') ||
+    can('/sienna/linajes') ||
+    can('/sienna/documentos') ||
+    can('/sienna/miembros') ||
+    can('/sienna/explicacion') ||
+    can('/sienna/filiacion');
+  const showLegacy =
+    can('/legacy/arbol-genealogico') ||
+    can('/legacy/arbol-clasico') ||
+    can('/legacy/lineas-familiares');
 
   return (
     <div className="flex items-center md:hidden">
@@ -53,89 +55,105 @@ const MobileNavigationMenu = () => {
             <Menu className="h-5 w-5" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-56" align="end" forceMount>
+        <DropdownMenuContent className="max-h-[calc(100vh-5rem)] w-64 overflow-y-auto overscroll-contain" align="end" forceMount>
           <DropdownMenuLabel>Navegación</DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => navigate('/dashboard')}>
-            Dashboard
+          <DropdownMenuItem onClick={() => navigate('/sienna')}>
+            Archivo vivo
           </DropdownMenuItem>
-          {can('/arbol-genealogico') && (
-            <DropdownMenuItem onClick={() => navigate('/arbol-genealogico')}>
-              Árbol Completo
-            </DropdownMenuItem>
-          )}
-          {can('/arbol-genealogico-clasico') && (
-            <DropdownMenuItem onClick={() => navigate('/arbol-genealogico-clasico')}>
-              Árbol Clásico
-            </DropdownMenuItem>
-          )}
-          {can('/lineas-familiares') && (
-            <DropdownMenuItem onClick={() => navigate('/lineas-familiares')}>
-              Líneas Familiares
-            </DropdownMenuItem>
-          )}
-          {can('/determinacion-herederos') && (
-            <DropdownMenuItem onClick={() => navigate('/determinacion-herederos')}>
-              Determinación de Herederos
-            </DropdownMenuItem>
-          )}
-          {showGenealogy && showSienna && <DropdownMenuSeparator />}
           {showSienna && (
             <DropdownMenuLabel className="text-xs uppercase tracking-wide text-legal-gray">
               Sienna
             </DropdownMenuLabel>
           )}
-          {can('/hallazgos') && (
-            <DropdownMenuItem onClick={() => navigate('/hallazgos')}>
+          {can('/sienna/arbol') && (
+            <DropdownMenuItem onClick={() => navigate('/sienna/arbol')}>
+              Árbol
+            </DropdownMenuItem>
+          )}
+          {can('/sienna/hallazgos') && (
+            <DropdownMenuItem onClick={() => navigate('/sienna/hallazgos')}>
               Hallazgos
             </DropdownMenuItem>
           )}
-          {can('/calculo-filiacion') && (
-            <DropdownMenuItem onClick={() => navigate('/calculo-filiacion')}>
-              Cálculo por Filiación
+          {can('/sienna/linajes') && (
+            <DropdownMenuItem onClick={() => navigate('/sienna/linajes')}>
+              Linajes
             </DropdownMenuItem>
           )}
-          {can('/documentos-probatorios') && (
-            <DropdownMenuItem onClick={() => navigate('/documentos-probatorios')}>
-              Documentos Probatorios
+          {can('/sienna/documentos') && (
+            <DropdownMenuItem onClick={() => navigate('/sienna/documentos')}>
+              Documentos
             </DropdownMenuItem>
           )}
-          {can('/sienna/arbol-genealogico') && (
-            <DropdownMenuItem onClick={() => navigate('/sienna/arbol-genealogico')}>
-              Árbol Sienna
+          {can('/sienna/miembros') && (
+            <DropdownMenuItem onClick={() => navigate('/sienna/miembros')}>
+              Miembros
             </DropdownMenuItem>
           )}
-          {can('/sienna/dobles-linajes') && (
-            <DropdownMenuItem onClick={() => navigate('/sienna/dobles-linajes')}>
-              Dobles Linajes
+          {can('/sienna/explicacion') && (
+            <DropdownMenuItem onClick={() => navigate('/sienna/explicacion')}>
+              Explicación herederos
             </DropdownMenuItem>
           )}
-          {can('/sienna/miembros-arbol') && (
-            <DropdownMenuItem onClick={() => navigate('/sienna/miembros-arbol')}>
-              Miembros del Árbol
+          {can('/sienna/filiacion') && (
+            <DropdownMenuItem onClick={() => navigate('/sienna/filiacion')}>
+              Filiación
             </DropdownMenuItem>
           )}
-          {can('/sienna/explicacion-herederos') && (
-            <DropdownMenuItem onClick={() => navigate('/sienna/explicacion-herederos')}>
-              Explicación Herederos
+          {can('/caso/determinacion-herederos') && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel className="text-xs uppercase tracking-wide text-legal-gray">
+                Caso
+              </DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => navigate('/caso/determinacion-herederos')}>
+                Determinación de herederos
+              </DropdownMenuItem>
+            </>
+          )}
+          {showLegacy && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel className="text-xs uppercase tracking-wide text-legal-gray">
+                Legacy
+              </DropdownMenuLabel>
+            </>
+          )}
+          {can('/legacy/arbol-genealogico') && (
+            <DropdownMenuItem onClick={() => navigate('/legacy/arbol-genealogico')}>
+              Árbol completo legacy
+            </DropdownMenuItem>
+          )}
+          {can('/legacy/arbol-clasico') && (
+            <DropdownMenuItem onClick={() => navigate('/legacy/arbol-clasico')}>
+              Árbol clásico legacy
+            </DropdownMenuItem>
+          )}
+          {can('/legacy/lineas-familiares') && (
+            <DropdownMenuItem onClick={() => navigate('/legacy/lineas-familiares')}>
+              Líneas familiares legacy
             </DropdownMenuItem>
           )}
           {isAdmin && (
             <>
               <DropdownMenuSeparator />
-              {can('/calculo-herencias') && (
-                <DropdownMenuItem onClick={() => navigate('/calculo-herencias')}>
-                  Cálculo de Herencias
+              <DropdownMenuLabel className="text-xs uppercase tracking-wide text-legal-gray">
+                Admin
+              </DropdownMenuLabel>
+              {can('/admin/calculo-herencias') && (
+                <DropdownMenuItem onClick={() => navigate('/admin/calculo-herencias')}>
+                  Cálculo técnico
                 </DropdownMenuItem>
               )}
-              {can('/admin-users') && (
-                <DropdownMenuItem onClick={() => navigate('/admin-users')}>
-                  Admin Usuarios
+              {can('/admin/usuarios') && (
+                <DropdownMenuItem onClick={() => navigate('/admin/usuarios')}>
+                  Usuarios
                 </DropdownMenuItem>
               )}
               {can('/admin/settings') && (
                 <DropdownMenuItem onClick={() => navigate('/admin/settings')}>
-                  Settings
+                  Configuración
                 </DropdownMenuItem>
               )}
             </>
@@ -143,6 +161,16 @@ const MobileNavigationMenu = () => {
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => navigate('/perfil')}>
             Mi Perfil
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="text-red-600 focus:text-red-600"
+            onClick={async () => {
+              await signOut();
+              navigate('/');
+            }}
+          >
+            <LogOut className="mr-2 h-4 w-4" />
+            Cerrar sesión
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

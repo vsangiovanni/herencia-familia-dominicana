@@ -24,6 +24,7 @@ import {
   Clock3,
   RefreshCw,
   ShieldCheck,
+  Pencil,
   UserCheck,
   UserCog,
   UserPlus,
@@ -31,6 +32,7 @@ import {
   Users,
   Trash2,
 } from 'lucide-react';
+import { dominicanDayKey, formatDominicanDateTime, parseApiDate } from '@/lib/dateTime';
 
 interface UserData {
   id: string;
@@ -38,6 +40,7 @@ interface UserData {
   full_name: string | null;
   role: 'admin' | 'regular';
   is_approved: boolean;
+  can_edit: boolean;
   created_at: string;
   permissions?: {
     page_id: string;
@@ -67,17 +70,11 @@ type RoleFilter = 'all' | 'admin' | 'regular';
 type StatusFilter = 'all' | 'approved' | 'pending';
 
 const formatDateTime = (value?: string | null) => {
-  if (!value) return 'Sin actividad';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Fecha inválida';
-  return date.toLocaleString('es-DO');
+  return formatDominicanDateTime(value);
 };
 
 const toDayKey = (value?: string | null) => {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toISOString().slice(0, 10);
+  return dominicanDayKey(value);
 };
 
 const subtractDays = (days: number) => {
@@ -108,6 +105,7 @@ const AdminUsers = () => {
     full_name: '',
     password: '',
     is_approved: true,
+    can_edit: false,
   });
 
   const fetchUsers = async () => {
@@ -195,6 +193,51 @@ const AdminUsers = () => {
         variant: 'destructive',
         title: 'Error de rol',
         description: error instanceof Error ? error.message : 'No se pudo actualizar el rol.',
+      });
+    }
+  };
+
+  const toggleCanEdit = async (user: UserData) => {
+    try {
+      const nextStatus = !user.can_edit;
+      await api.updateUser(user.id, { can_edit: nextStatus });
+      setUsers((current) =>
+        current.map((item) => (item.id === user.id ? { ...item, can_edit: nextStatus } : item))
+      );
+      toast({
+        title: 'Permiso de edición actualizado',
+        description: nextStatus
+          ? `${user.email} ahora puede modificar información.`
+          : `${user.email} queda en modo solo lectura.`,
+      });
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error de permiso',
+        description: error instanceof Error ? error.message : 'No se pudo actualizar el permiso de edición.',
+      });
+    }
+  };
+
+  const renameUser = async (user: UserData) => {
+    const nextName = window.prompt('Nuevo nombre del usuario', user.full_name || '');
+    if (nextName === null) return;
+    const normalizedName = nextName.trim();
+
+    try {
+      await api.updateUser(user.id, { full_name: normalizedName || null });
+      setUsers((current) =>
+        current.map((item) => (item.id === user.id ? { ...item, full_name: normalizedName || null } : item))
+      );
+      toast({
+        title: 'Nombre actualizado',
+        description: normalizedName ? `El usuario ahora figura como ${normalizedName}.` : 'El usuario quedó sin nombre visible.',
+      });
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error actualizando nombre',
+        description: error instanceof Error ? error.message : 'No se pudo actualizar el nombre del usuario.',
       });
     }
   };
@@ -287,8 +330,9 @@ const AdminUsers = () => {
         password: newUser.password,
         role: 'regular',
         is_approved: newUser.is_approved,
+        can_edit: newUser.can_edit,
       });
-      setNewUser({ email: '', full_name: '', password: '', is_approved: true });
+      setNewUser({ email: '', full_name: '', password: '', is_approved: true, can_edit: false });
       setCreateDialogOpen(false);
       await fetchUsers();
       toast({
@@ -333,8 +377,8 @@ const AdminUsers = () => {
         const userVisits = visitsByUserId.get(user.id) || [];
         const uniquePages = new Set(userVisits.map((visit) => visit.page_path));
         const visits7d = userVisits.filter((visit) => {
-          const date = new Date(visit.visited_at);
-          return !Number.isNaN(date.getTime()) && date >= subtractDays(7);
+          const date = parseApiDate(visit.visited_at);
+          return Boolean(date && date >= subtractDays(7));
         }).length;
         const lastVisit = userVisits[0]?.visited_at || null;
         return {
@@ -382,8 +426,8 @@ const AdminUsers = () => {
     const admins = users.filter((user) => user.role === 'admin').length;
     const activeUsers7d = usersWithAudit.filter((item) => item.visits7d > 0).length;
     const visits24h = visits.filter((visit) => {
-      const date = new Date(visit.visited_at);
-      return !Number.isNaN(date.getTime()) && date >= subtractDays(1);
+      const date = parseApiDate(visit.visited_at);
+      return Boolean(date && date >= subtractDays(1));
     }).length;
     return {
       totalUsers: users.length,
@@ -535,7 +579,8 @@ const AdminUsers = () => {
                           <th className="border px-3 py-2 text-left">Usuario</th>
                           <th className="border px-3 py-2 text-left">Estado</th>
                           <th className="border px-3 py-2 text-left">Rol</th>
-                          <th className="border px-3 py-2 text-left">Permisos</th>
+                          <th className="border px-3 py-2 text-left">Edición</th>
+                          <th className="border px-3 py-2 text-left">Pantallas</th>
                           <th className="border px-3 py-2 text-left">Última actividad</th>
                           <th className="border px-3 py-2 text-left">Uso</th>
                           <th className="border px-3 py-2 text-left">Acciones</th>
@@ -560,6 +605,18 @@ const AdminUsers = () => {
                               </Badge>
                             </td>
                             <td className="border px-3 py-2">
+                              <div className="flex items-center gap-2">
+                                <Switch
+                                  checked={item.user.role === 'admin' || Boolean(item.user.can_edit)}
+                                  disabled={item.user.role === 'admin'}
+                                  onCheckedChange={() => toggleCanEdit(item.user)}
+                                />
+                                <span className="text-xs text-gray-600">
+                                  {item.user.role === 'admin' || item.user.can_edit ? 'Puede modificar' : 'Solo lectura'}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="border px-3 py-2">
                               <p className="text-sm">{item.user.permissions?.length || 0} página(s)</p>
                             </td>
                             <td className="border px-3 py-2 text-sm">
@@ -577,6 +634,9 @@ const AdminUsers = () => {
                                 </Button>
                                 <Button size="sm" variant="outline" onClick={() => toggleRole(item.user)}>
                                   <UserCog className="h-4 w-4" />
+                                </Button>
+                                <Button size="sm" variant="outline" onClick={() => renameUser(item.user)}>
+                                  <Pencil className="h-4 w-4" />
                                 </Button>
                                 <Button size="sm" variant="default" onClick={() => openPermissionsDialog(item.user)}>
                                   <CheckCheck className="h-4 w-4" />
@@ -830,6 +890,16 @@ const AdminUsers = () => {
               <Switch
                 checked={newUser.is_approved}
                 onCheckedChange={(checked) => setNewUser({ ...newUser, is_approved: checked })}
+              />
+            </div>
+            <div className="flex items-center justify-between rounded-md border p-3">
+              <div>
+                <p className="font-medium">Puede modificar información</p>
+                <p className="text-sm text-gray-500">Si está apagado, entra en modo solo lectura.</p>
+              </div>
+              <Switch
+                checked={newUser.can_edit}
+                onCheckedChange={(checked) => setNewUser({ ...newUser, can_edit: checked })}
               />
             </div>
           </div>

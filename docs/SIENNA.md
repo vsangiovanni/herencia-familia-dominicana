@@ -51,6 +51,7 @@ Endpoints canónicos actuales:
 - `/hallazgos`: la vista funciona como bandeja de corrección; la acción detallada de resolver se abre solo cuando hace falta.
 - `/sienna/dobles-linajes`: el encabezado y KPIs se reducen para apoyar una lectura master-detail de los casos.
 - `/sienna/calculo-filiacion`: rutas largas y nota jurídica quedan resumidas/colapsadas para reducir ruido visual.
+- `/sienna/arbol-genealogico`: los montos visibles salen únicamente del cálculo activo del API; registros históricos de herederos confirmados ya no pueden hacer que una persona fallecida aparezca cobrando.
 
 ## Documentos probatorios (vinculación)
 
@@ -204,15 +205,22 @@ pnpm run check:prod   # solo después de deploy autorizado
 
 Estado de la última validación local: PHP OK, build OK, pruebas Sienna OK, lint sin errores (quedan warnings no bloqueantes de Fast Refresh/hooks).
 
-## PDF de explicación (mosaico de soporte)
+## PDF individual de herencia
 
-- En `siennaHeirExplain.ts`, el mosaico de documentos soporta:
-  - imagen en `data:image/...`,
+- En `siennaHeirExplain.ts`, el PDF individual sigue el formato premium del **Legado Sangiovanni**:
+  - encabezado/portada con logo, título `REPORTE INDIVIDUAL DE HERENCIA`, ficha del heredero, foto, estado, monto heredado estimado y validación;
+  - página 1 con resumen ejecutivo, resumen hereditario y explicación simple;
+  - página 2 con rutas genealógicas, análisis de doble linaje cuando aplica, tabla de vínculos y hallazgos;
+  - páginas posteriores con documentos relacionados, mosaico visual, timeline, validación del sistema, observaciones y pie de página.
+- El mosaico de documentos soporta:
+  - imágenes de actas en `data:image/...`,
   - base64 crudo con detección de mime (`jpeg/png/gif/webp`),
-  - fallback textual para PDF u otros formatos.
+  - primera página renderizada para documentos PDF mediante `pdfjs-dist`,
+  - fallback textual para PDF u otros formatos cuando el navegador no puede renderizar el archivo.
 - El render usa normalización proporcional para evitar imágenes deformadas o invisibles.
 - Si el heredero tiene doble linaje, el PDF imprime las rutas separadas por fuente y porcentaje.
 - Si el miembro está fallecido, el PDF imprime marcador de fallecido con fecha.
+- La regla de soporte documental considera **verificado** al heredero cuando tiene al menos un documento marcado como `confirma heredero` o un acta/documento de nacimiento vinculado directamente.
 
 ## Pruebas manuales recomendadas
 

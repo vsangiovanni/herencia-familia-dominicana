@@ -13,8 +13,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { RefreshCw, Eye, Calendar } from 'lucide-react';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { formatDominicanDateTime } from '@/lib/dateTime';
 
 interface PageVisit {
   id: string;
@@ -173,7 +172,7 @@ const PageVisitsStats = () => {
                           <div className="flex items-center gap-1">
                             <Calendar className="h-4 w-4 text-gray-400" />
                             <span className="text-sm">
-                              {format(new Date(stat.last_visit), 'dd/MM/yyyy HH:mm', { locale: es })}
+                              {formatDominicanDateTime(stat.last_visit, { timeStyle: 'short' })}
                             </span>
                           </div>
                         )}
@@ -217,7 +216,7 @@ const PageVisitsStats = () => {
                         <div className="flex items-center gap-1">
                           <Calendar className="h-4 w-4 text-gray-400" />
                           <span className="text-sm">
-                            {format(new Date(visit.visited_at), 'dd/MM/yyyy HH:mm:ss', { locale: es })}
+                            {formatDominicanDateTime(visit.visited_at)}
                           </span>
                         </div>
                       </TableCell>

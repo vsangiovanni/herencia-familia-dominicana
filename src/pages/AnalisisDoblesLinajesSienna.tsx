@@ -615,8 +615,8 @@ const AnalisisDoblesLinajesSienna = () => {
                   className={cn(
                     'w-full min-w-0 rounded-md border p-3 text-left transition sm:p-4',
                     selectedCase?.member.id === item.member.id
-                      ? 'border-legal-gold bg-legal-gold/10 shadow-sm'
-                      : 'border-legal-blue/15 bg-white hover:border-legal-gold/60'
+                      ? 'border-legal-gold bg-legal-gold/10 shadow-sm dark:bg-[#1B2A44]'
+                      : 'border-legal-blue/15 bg-white hover:border-legal-gold/60 dark:bg-[#162338]'
                   )}
                 >
                   <div className="flex gap-3">
@@ -641,12 +641,12 @@ const AnalisisDoblesLinajesSienna = () => {
                           {item.inheritance_amount != null && item.inheritance_amount > 0 ? (
                             <Badge
                               variant="outline"
-                              className="max-w-full whitespace-normal border-legal-gold/40 bg-legal-gold/10 text-legal-blue"
+                              className="max-w-full whitespace-normal border-legal-gold/50 bg-legal-gold/15 font-bold text-legal-blue dark:border-[#D4AF37]/70 dark:bg-[#D4AF37] dark:text-[#08101F] dark:shadow-[0_0_18px_rgb(212_175_55_/_0.24)]"
                             >
                               {formatMoney(item.inheritance_amount)}
                             </Badge>
                           ) : (
-                            <Badge variant="secondary" className="bg-legal-blue/10 text-legal-blue">
+                            <Badge variant="secondary" className="bg-legal-blue/10 text-legal-blue dark:bg-white/10 dark:text-[#F5F7FA]">
                               Vínculo
                             </Badge>
                           )}

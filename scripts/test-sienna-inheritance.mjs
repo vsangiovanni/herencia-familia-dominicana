@@ -24,6 +24,7 @@ await writeFile(
   entryPath,
   [
     'export { applySiennaCaseConfig, buildDominicanInheritancePlan } from ' + JSON.stringify(path.join(root, 'src/lib/dominicanInheritance.ts')) + ';',
+    'export { classifyMemberByDominicanLaw, resolveEffectiveInheritanceStatus } from ' + JSON.stringify(path.join(root, 'src/lib/dominicanInheritance.ts')) + ';',
     'export { calculateHeirAmount, resolveEstateAmounts } from ' + JSON.stringify(path.join(root, 'src/lib/siennaCalculation.ts')) + ';',
   ].join('\n')
 );
@@ -41,7 +42,9 @@ await esbuild.build({
 const {
   applySiennaCaseConfig,
   buildDominicanInheritancePlan,
+  classifyMemberByDominicanLaw,
   calculateHeirAmount,
+  resolveEffectiveInheritanceStatus,
   resolveEstateAmounts,
 } = await import(pathToFileURL(bundlePath));
 
@@ -103,6 +106,22 @@ try {
   assert.equal(shareByName(redistributionPlan, 'Hija viva'), 50);
   assert.equal(shareByName(redistributionPlan, 'Nieta representada'), 50);
   assert.equal(shareByName(redistributionPlan, 'Hijo fallecido sin descendencia'), 0);
+
+  const manuallyConfirmedDeceased = member('manual-deceased', 'Fallecido confirmado manual', {
+    parent_id: 'c',
+    relationship_to_parent: 'hijo',
+    death: '2024',
+    inheritance_status: 'confirmado',
+  });
+  const deceasedMembers = [member('c', 'Causante redistribucion'), manuallyConfirmedDeceased];
+  assert.equal(
+    classifyMemberByDominicanLaw(manuallyConfirmedDeceased, deceasedMembers).inheritance_status,
+    'no_hereda'
+  );
+  assert.equal(
+    resolveEffectiveInheritanceStatus(manuallyConfirmedDeceased, deceasedMembers),
+    'no_hereda'
+  );
 
   applySiennaCaseConfig({
     causante_name: 'Causante sin descendencia registrada',

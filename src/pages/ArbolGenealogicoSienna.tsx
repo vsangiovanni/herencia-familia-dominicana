@@ -161,22 +161,19 @@ const ClassicNode = ({
 }) => {
   const heir = heirsByMemberId.get(member.id) || heirsByName.get(normalizeName(member.name));
   const inheritanceShare = inheritancePlan.sharesById.get(member.id);
-  const savedAmount = Number(heir?.inheritance_amount || 0);
-  const isHeir = Boolean(heir || inheritanceShare);
-  const inheritanceStatus = heir
-    ? 'confirmado'
-    : inheritanceShare
-      ? 'posible_heredero'
-      : getMemberEffectiveInheritanceStatus(member);
+  const isActivePaymentHeir = Boolean(inheritanceShare);
+  const isHeir = isActivePaymentHeir;
+  const inheritanceStatus = inheritanceShare
+    ? 'posible_heredero'
+    : getMemberEffectiveInheritanceStatus(member);
   const inheritanceReason =
     inheritanceShare?.reason ||
-    heir?.relationship_summary ||
     getMemberEffectiveInheritanceReason(member) ||
     null;
   const role = inheritanceShare?.role || explanationRole(inheritanceStatus);
   const calculatedAmount =
     inheritanceShare ? calculationAmountsByMemberId.get(member.id) || 0 : 0;
-  const amount = calculatedAmount > 0 ? calculatedAmount : savedAmount;
+  const amount = calculatedAmount;
   const referenceTotal = estateAmount > 0 ? estateAmount : total;
   const share = inheritanceShare?.share || (referenceTotal > 0 && amount > 0 ? (amount / referenceTotal) * 100 : 0);
   const parent = member.parent_id ? membersById.get(normalizedMemberId(member.parent_id)) || null : null;
@@ -310,7 +307,7 @@ const ClassicNode = ({
             )}
           </div>
 
-          {isHeir && (
+          {isActivePaymentHeir && (
             <div className="mt-3 space-y-2 border-t border-legal-gold/30 pt-3">
               <div className="flex flex-wrap justify-center gap-1">
                 {(heir?.line_vincenzo || inheritanceShare?.sources.includes('Vincenzo/Vicente')) && <Badge variant="outline">Vincenzo/Vicente</Badge>}

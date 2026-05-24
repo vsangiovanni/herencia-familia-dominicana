@@ -1,4 +1,5 @@
 import jsPDF from 'jspdf';
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url';
 import { ConfirmedHeir, EvidenceDocument, SiennaFamilyMember } from '@/lib/api';
 import { caseCausanteName, getSiennaCaseConfig, InheritanceShare, normalizeName } from '@/lib/dominicanInheritance';
 import { resolveSpouseDisplayLabel, SiennaGenealogyBundle } from '@/lib/siennaGenealogy';
@@ -62,6 +63,15 @@ export const evaluateEvidenceSupport = (
 ): EvidenceTrafficState => {
   const issues = detectMemberDateConflicts(member, members);
   const confirmedDocs = documents.filter((document) => document.confirms_heir);
+  const birthCertificateDocs = documents.filter((document) =>
+    [document.document_type, document.title]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .match(/acta|nacimiento|birth/)
+  );
   const hasConflict = issues.length > 0;
 
   if (hasConflict) {
@@ -74,10 +84,10 @@ export const evaluateEvidenceSupport = (
     };
   }
 
-  if (documents.length >= 2 && confirmedDocs.length >= 1) {
+  if (confirmedDocs.length >= 1 || birthCertificateDocs.length >= 1) {
     return {
       level: 'green',
-      label: 'Sólido',
+      label: 'Verificado',
       value: 100,
       className: 'border-emerald-200 bg-emerald-50 text-emerald-700',
       issues: [],
@@ -90,7 +100,7 @@ export const evaluateEvidenceSupport = (
       label: 'En progreso',
       value: 62,
       className: 'border-amber-200 bg-amber-50 text-amber-700',
-      issues: ['Falta al menos un documento adicional que respalde el vínculo.'],
+      issues: ['Hay un documento vinculado, pero falta marcarlo como confirmación del heredero o clasificarlo como acta de nacimiento.'],
     };
   }
 
@@ -247,6 +257,59 @@ const resolveImageDataUrl = (evidence: EvidenceDocument): string | null => {
   return `data:${mimeType};base64,${raw}`;
 };
 
+const isPdfDocument = (document: EvidenceDocument) =>
+  (document.file_type || '').toLowerCase() === 'application/pdf' ||
+  (document.file_data || '').trim().startsWith('data:application/pdf');
+
+const resolvePdfBase64 = (document: EvidenceDocument): string | null => {
+  const raw = (document.file_data || '').trim();
+  if (!raw) return null;
+  if (raw.startsWith('data:application/pdf')) {
+    const [, base64] = raw.split(',');
+    return base64 || null;
+  }
+  if ((document.file_type || '').toLowerCase() === 'application/pdf') {
+    return raw.startsWith('data:') ? null : raw;
+  }
+  return null;
+};
+
+const base64ToUint8Array = (base64: string) => {
+  const binary = window.atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
+};
+
+const renderPdfFirstPageThumbnail = async (evidence: EvidenceDocument): Promise<string | null> => {
+  const base64 = resolvePdfBase64(evidence);
+  if (!base64) return null;
+
+  try {
+    const pdfjs = await import('pdfjs-dist');
+    pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+    const pdf = await pdfjs.getDocument({ data: base64ToUint8Array(base64) }).promise;
+    const page = await pdf.getPage(1);
+    const baseViewport = page.getViewport({ scale: 1 });
+    const scale = Math.min(1000 / baseViewport.width, 700 / baseViewport.height, 2);
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.ceil(viewport.width);
+    canvas.height = Math.ceil(viewport.height);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    return canvas.toDataURL('image/jpeg', 0.86);
+  } catch {
+    return null;
+  }
+};
+
 const normalizeImageForPdf = async (dataUrl: string): Promise<string | null> => {
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -277,6 +340,22 @@ const normalizeImageForPdf = async (dataUrl: string): Promise<string | null> => 
   }
 };
 
+const loadImageDataUrl = async (path: string): Promise<string | null> => {
+  try {
+    const response = await fetch(path);
+    if (!response.ok) return null;
+    const blob = await response.blob();
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+};
+
 export const downloadHeirBriefPdf = async (brief: HeirBriefExport, netAmount: number) => {
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
   const pageWidth = 216;
@@ -288,6 +367,15 @@ export const downloadHeirBriefPdf = async (brief: HeirBriefExport, netAmount: nu
   const ensureSpace = (neededHeight: number) => {
     if (y + neededHeight <= pageHeight - margin) return;
     pdf.addPage();
+    y = margin;
+    pdf.setFillColor(250, 246, 238);
+    pdf.rect(0, 0, pageWidth, pageHeight, 'F');
+  };
+
+  const startNewPage = () => {
+    pdf.addPage();
+    pdf.setFillColor(250, 246, 238);
+    pdf.rect(0, 0, pageWidth, pageHeight, 'F');
     y = margin;
   };
 
@@ -308,28 +396,30 @@ export const downloadHeirBriefPdf = async (brief: HeirBriefExport, netAmount: nu
   };
 
   const drawSectionTitle = (title: string) => {
-    ensureSpace(10);
-    pdf.setFillColor(242, 246, 252);
-    pdf.roundedRect(margin, y - 1.5, contentWidth, 8, 2, 2, 'F');
+    ensureSpace(11);
+    pdf.setDrawColor(215, 186, 118);
+    pdf.line(margin, y - 2, pageWidth - margin, y - 2);
+    pdf.setFillColor(255, 253, 248);
+    pdf.roundedRect(margin, y, contentWidth, 8.5, 1.5, 1.5, 'F');
     pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(11);
-    pdf.setTextColor(26, 62, 108);
-    pdf.text(title, margin + 3, y + 3.5);
-    y += 10;
+    pdf.setFontSize(10.5);
+    pdf.setTextColor(9, 27, 58);
+    pdf.text(title.toUpperCase(), margin + 3, y + 5.4);
+    y += 11.5;
   };
 
   const drawMetricCard = (x: number, cardTitle: string, value: string, subtitle?: string) => {
     const cardWidth = (contentWidth - 4) / 2;
-    pdf.setFillColor(249, 250, 252);
-    pdf.setDrawColor(224, 231, 242);
+    pdf.setFillColor(255, 253, 248);
+    pdf.setDrawColor(226, 210, 170);
     pdf.roundedRect(x, y, cardWidth, 19, 2, 2, 'FD');
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(8.5);
-    pdf.setTextColor(99, 112, 130);
+    pdf.setTextColor(91, 82, 65);
     pdf.text(cardTitle, x + 2.5, y + 5);
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(11);
-    pdf.setTextColor(28, 70, 122);
+    pdf.setTextColor(9, 27, 58);
     pdf.text(value, x + 2.5, y + 11.5);
     if (subtitle) {
       pdf.setFont('helvetica', 'normal');
@@ -377,8 +467,7 @@ export const downloadHeirBriefPdf = async (brief: HeirBriefExport, netAmount: nu
     pdf.text(`m. ${brief.share.member.death}`, x + 11, markerY + 9.2);
   };
 
-  const drawRouteTreeCopy = () => {
-    const lineageRoutes =
+  const getLineageRoutes = () =>
       brief.share.sourceBreakdown.length > 0
         ? brief.share.sourceBreakdown.flatMap((segment) =>
             segment.routes.map((route) => ({
@@ -395,10 +484,164 @@ export const downloadHeirBriefPdf = async (brief: HeirBriefExport, netAmount: nu
             },
           ];
 
+  const lineageRoutes = getLineageRoutes();
+  const primaryRoute = lineageRoutes[0]?.route || brief.share.route;
+  const primaryRouteNodes = primaryRoute
+    .split('->')
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const generationsInvolved = Math.max(1, primaryRouteNodes.length);
+  const confidencePercent = brief.traffic.level === 'green' ? 95 : brief.traffic.level === 'amber' ? 72 : 45;
+  const alertCount = brief.traffic.issues.length;
+
+  const drawMiniMetricGrid = () => {
+    drawSectionTitle('3. Resumen hereditario');
+    const metrics = [
+      ['Estado', brief.traffic.label],
+      ['Participacion', formatPercent(brief.simulatedShare)],
+      ['Monto heredado', formatMoney(brief.simulatedAmount)],
+      ['Rutas', String(lineageRoutes.length || 1)],
+      ['Generaciones', String(generationsInvolved)],
+      ['Confianza', `${confidencePercent}%`],
+    ];
+    const columns = 3;
+    const gap = 3;
+    const cardWidth = (contentWidth - gap * (columns - 1)) / columns;
+    const cardHeight = 18;
+    metrics.forEach(([label, value], index) => {
+      const col = index % columns;
+      const row = Math.floor(index / columns);
+      const x = margin + col * (cardWidth + gap);
+      const cardY = y + row * (cardHeight + 3);
+      pdf.setFillColor(255, 253, 248);
+      pdf.setDrawColor(226, 210, 170);
+      pdf.roundedRect(x, cardY, cardWidth, cardHeight, 2, 2, 'FD');
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(7.4);
+      pdf.setTextColor(91, 82, 65);
+      pdf.text(label, x + 2.5, cardY + 5);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(10.5);
+      pdf.setTextColor(9, 27, 58);
+      pdf.text(value, x + 2.5, cardY + 12.5);
+    });
+    y += (cardHeight + 3) * 2 + 3;
+  };
+
+  const drawDoubleLineageAnalysis = () => {
+    if (lineageRoutes.length < 2 && brief.share.sources.length < 2) return;
+    drawSectionTitle('6. Analisis de doble linaje');
+    const commonAncestor = primaryRouteNodes.length > 1 ? primaryRouteNodes[1] : 'Ancestro comun por documentar';
+    const explanation =
+      `${brief.share.member.name} presenta mas de una ruta familiar dentro del legado. El sistema detecta convergencia entre ${brief.share.sources.join(' y ') || 'las ramas documentadas'}, lo que explica la doble participacion o doble vinculacion en el caso.`;
+    const rows = [
+      ['Tipo de convergencia', 'Por rutas familiares documentadas'],
+      ['Ancestro comun', commonAncestor],
+      ['Profundidad generacional', `${generationsInvolved} generaciones`],
+      ['Validacion del sistema', brief.traffic.label],
+    ];
+    rows.forEach(([label, value]) => {
+      ensureSpace(7);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(8.2);
+      pdf.setTextColor(9, 27, 58);
+      pdf.text(label + ':', margin + 3, y);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(45, 49, 57);
+      pdf.text(pdf.splitTextToSize(value, 105), margin + 48, y);
+      y += 6;
+    });
+    writeParagraph(explanation, { size: 9, lineHeight: 4.4 });
+  };
+
+  const drawLinksTable = () => {
+    drawSectionTitle('7. Tabla de vinculos');
+    const rows = [
+      ['Heredero', brief.share.member.name, brief.traffic.label],
+      ['Rama principal', brief.share.sources[0] || 'Ruta documentada', 'Detectada'],
+      brief.share.sources[1] ? ['Rama secundaria', brief.share.sources[1], 'Detectada'] : null,
+      ['Ruta sucesoral', primaryRouteNodes.slice(0, 3).join(' -> ') || 'Por documentar', 'Registrada'],
+    ].filter(Boolean) as string[][];
+    const widths = [42, 106, 40];
+    ensureSpace(10 + rows.length * 8);
+    pdf.setFillColor(9, 27, 58);
+    pdf.roundedRect(margin, y, contentWidth, 8, 1.5, 1.5, 'F');
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(7.6);
+    pdf.setTextColor(255, 255, 255);
+    pdf.text('RELACION', margin + 3, y + 5.2);
+    pdf.text('PERSONA / RUTA', margin + widths[0] + 3, y + 5.2);
+    pdf.text('ESTADO', margin + widths[0] + widths[1] + 3, y + 5.2);
+    y += 8;
+    rows.forEach((row) => {
+      pdf.setDrawColor(226, 210, 170);
+      pdf.line(margin, y, pageWidth - margin, y);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(7.6);
+      pdf.setTextColor(45, 49, 57);
+      pdf.text(row[0], margin + 3, y + 5.2);
+      pdf.text(pdf.splitTextToSize(row[1], widths[1] - 4).slice(0, 1), margin + widths[0] + 3, y + 5.2);
+      pdf.text(row[2], margin + widths[0] + widths[1] + 3, y + 5.2);
+      y += 8;
+    });
+    y += 3;
+  };
+
+  const drawFindings = () => {
+    drawSectionTitle('8. Hallazgos importantes');
+    const findings = brief.traffic.issues.length
+      ? brief.traffic.issues
+      : ['No se detectan inconsistencias criticas para este heredero.', 'Documentacion vinculada al expediente familiar.', 'Se recomienda preservar y digitalizar cualquier soporte adicional disponible.'];
+    findings.forEach((finding) => writeParagraph(`- ${finding}`, { size: 9, lineHeight: 4.4 }));
+  };
+
+  const drawDocumentList = () => {
+    drawSectionTitle('9. Documentos relacionados');
+    if (!brief.documents.length) {
+      writeParagraph('No hay documentos asociados directamente a este heredero.', { size: 9 });
+      return;
+    }
+    brief.documents.slice(0, 8).forEach((document) => {
+      const label = [
+        document.title || 'Documento',
+        document.document_type || null,
+        document.event_date || null,
+      ].filter(Boolean).join(' - ');
+      writeParagraph(`- ${label}`, { size: 8.8, lineHeight: 4.2 });
+    });
+  };
+
+  const drawTimeline = () => {
+    drawSectionTitle('10. Timeline familiar');
+    const timeline = buildMemberLifeTimeline(brief.share.member, brief.share).slice(0, 5);
+    if (!timeline.length) {
+      writeParagraph('No hay eventos familiares fechados para mostrar en esta ficha.', { size: 9 });
+      return;
+    }
+    timeline.forEach((event) => {
+      writeParagraph(`${event.date} · ${event.label}${event.detail ? ` — ${event.detail}` : ''}`, {
+        size: 8.8,
+        lineHeight: 4.2,
+      });
+    });
+  };
+
+  const drawSystemValidation = () => {
+    drawSectionTitle('11. Validacion del sistema');
+    [
+      ['Fecha de calculo', new Date().toLocaleString('es-DO')],
+      ['Version del motor', 'Sienna Genealogy Engine'],
+      ['API utilizada', 'Sienna backend / datos reales del expediente'],
+      ['Estado del analisis', brief.traffic.level === 'green' ? 'Completo y actualizado' : 'Requiere revision documental'],
+    ].forEach(([label, value]) => writeParagraph(`${label}: ${value}`, { size: 8.8, lineHeight: 4.2 }));
+  };
+
+  const drawRouteTreeCopy = () => {
+
     drawSectionTitle(
       lineageRoutes.length > 1
-        ? 'Copia del arbol Sienna (rutas de doble linaje)'
-        : 'Copia del arbol Sienna (ruta del heredero)'
+        ? '5. Rutas genealogicas'
+        : '5. Ruta genealogica'
     );
 
     lineageRoutes.forEach((lineage, lineageIndex) => {
@@ -479,14 +722,18 @@ export const downloadHeirBriefPdf = async (brief: HeirBriefExport, netAmount: nu
       pdf.setDrawColor(216, 225, 237);
       pdf.roundedRect(previewX, previewY, previewW, previewH, 1.5, 1.5, 'FD');
 
+      const isPdf = isPdfDocument(document);
       const resolvedImageDataUrl = resolveImageDataUrl(document);
       const normalizedImage = resolvedImageDataUrl
         ? await normalizeImageForPdf(resolvedImageDataUrl)
         : null;
+      const pdfThumbnail = !normalizedImage && isPdf
+        ? await renderPdfFirstPageThumbnail(document)
+        : null;
 
-      if (normalizedImage) {
+      if (normalizedImage || pdfThumbnail) {
         try {
-          pdf.addImage(normalizedImage, 'JPEG', previewX + 0.8, previewY + 0.8, previewW - 1.6, previewH - 1.6);
+          pdf.addImage(normalizedImage || pdfThumbnail || '', 'JPEG', previewX + 0.8, previewY + 0.8, previewW - 1.6, previewH - 1.6);
         } catch {
           const fallbackLines = buildTextPreview(document);
           pdf.setFont('helvetica', 'normal');
@@ -496,17 +743,43 @@ export const downloadHeirBriefPdf = async (brief: HeirBriefExport, netAmount: nu
           pdf.text(lines.slice(0, 3), previewX + 2, previewY + 8);
         }
       } else {
-        const isPdf = (document.file_type || '').toLowerCase() === 'application/pdf' || (document.file_data || '').startsWith('data:application/pdf');
-        pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(8);
-        pdf.setTextColor(57, 73, 97);
-        const previewHeader = isPdf ? 'PDF - Vista resumida' : 'Vista resumida';
-        pdf.text(previewHeader, previewX + 2, previewY + 7);
-        pdf.setFont('helvetica', 'normal');
-        pdf.setFontSize(7.5);
-        pdf.setTextColor(95, 108, 126);
-        const lines = pdf.splitTextToSize(buildTextPreview(document).join(' '), previewW - 4);
-        pdf.text(lines.slice(0, 3), previewX + 2, previewY + 13);
+        if (isPdf) {
+          pdf.setFillColor(255, 255, 255);
+          pdf.setDrawColor(200, 65, 65);
+          pdf.roundedRect(previewX + 3, previewY + 4, 18, 22, 1.5, 1.5, 'FD');
+          pdf.setFillColor(200, 65, 65);
+          pdf.roundedRect(previewX + 5, previewY + 15, 14, 6, 1, 1, 'F');
+          pdf.setFont('helvetica', 'bold');
+          pdf.setFontSize(6.8);
+          pdf.setTextColor(255, 255, 255);
+          pdf.text('PDF', previewX + 7.1, previewY + 19.2);
+
+          pdf.setFont('helvetica', 'bold');
+          pdf.setFontSize(8.2);
+          pdf.setTextColor(57, 73, 97);
+          pdf.text('PDF adjunto al expediente', previewX + 25, previewY + 8);
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(7.2);
+          pdf.setTextColor(95, 108, 126);
+          const pdfPreview = [
+            document.file_name ? `Archivo: ${document.file_name}` : null,
+            ...buildTextPreview(document),
+          ]
+            .filter(Boolean)
+            .join(' ');
+          const lines = pdf.splitTextToSize(pdfPreview, previewW - 29);
+          pdf.text(lines.slice(0, 3), previewX + 25, previewY + 14);
+        } else {
+          pdf.setFont('helvetica', 'bold');
+          pdf.setFontSize(8);
+          pdf.setTextColor(57, 73, 97);
+          pdf.text('Vista resumida', previewX + 2, previewY + 7);
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(7.5);
+          pdf.setTextColor(95, 108, 126);
+          const lines = pdf.splitTextToSize(buildTextPreview(document).join(' '), previewW - 4);
+          pdf.text(lines.slice(0, 3), previewX + 2, previewY + 13);
+        }
       }
 
       pdf.setFont('helvetica', 'bold');
@@ -534,70 +807,158 @@ export const downloadHeirBriefPdf = async (brief: HeirBriefExport, netAmount: nu
     }
   };
 
-  // Encabezado moderno
-  pdf.setFillColor(24, 61, 109);
-  pdf.rect(0, 0, pageWidth, 27, 'F');
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(14);
-  pdf.setTextColor(255, 255, 255);
-  pdf.text('HerenciaRD · Informe de Explicacion Sucesoral', margin, 11);
-  pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(9);
-  pdf.text('Salida oficial para entrega al heredero', margin, 17);
-  pdf.text(`Fecha: ${new Date().toLocaleString('es-DO')}`, margin, 22);
+  pdf.setFillColor(250, 246, 238);
+  pdf.rect(0, 0, pageWidth, pageHeight, 'F');
 
-  y = 32;
-  drawTrafficBadge();
-
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(16);
-  pdf.setTextColor(29, 64, 106);
-  pdf.text(brief.share.member.name, margin, y + 2);
-  drawDeceasedMarker(pageWidth - margin - 48, y - 3);
-  y += 8;
-
-  if (brief.photoData?.startsWith('data:image')) {
-    ensureSpace(33);
+  const logoData = await loadImageDataUrl('/legado-sangiovanni-logo-transparent.png');
+  if (logoData) {
     try {
-      const format = brief.photoData.includes('image/png') ? 'PNG' : 'JPEG';
-      pdf.addImage(brief.photoData, format, margin, y, 24, 24);
+      pdf.addImage(logoData, 'PNG', margin + 4, 8, 48, 32);
     } catch {
-      // omitir imagen incompatible
+      // omitir logo incompatible
     }
   }
 
-  const cardsY = y;
-  const cardsX = margin + 28;
-  drawMetricCard(cardsX, 'Participacion estimada', formatPercent(brief.simulatedShare), `Ramas: ${brief.share.sources.join(' + ') || 'N/A'}`);
-  drawMetricCard(cardsX + ((contentWidth - 4) / 2) + 4, 'Monto estimado', formatMoney(brief.simulatedAmount), `Neto usado: ${formatMoney(netAmount)}`);
-  y = cardsY + 22;
+  pdf.setFont('times', 'bold');
+  pdf.setFontSize(22);
+  pdf.setTextColor(9, 27, 58);
+  pdf.text('REPORTE INDIVIDUAL', margin + 64, 19);
+  pdf.text('DE HERENCIA', margin + 64, 29);
+  pdf.setDrawColor(196, 157, 73);
+  pdf.line(margin + 64, 34, margin + 122, 34);
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(8.5);
+  pdf.setTextColor(61, 65, 72);
+  pdf.text('Documento familiar generado para el Legado Sangiovanni', margin + 64, 40);
+  pdf.text('Gracias por preservar la historia, los documentos y la memoria de la familia.', margin + 64, 45);
 
-  drawSectionTitle('Por que heredo');
+  pdf.setFontSize(7.5);
+  pdf.setTextColor(85, 88, 95);
+  pdf.text(`Generado: ${new Date().toLocaleString('es-DO')}`, pageWidth - margin - 49, 12);
+
+  y = 54;
+  pdf.setFillColor(255, 253, 248);
+  pdf.setDrawColor(218, 190, 129);
+  pdf.roundedRect(margin, y, contentWidth, 34, 2.5, 2.5, 'FD');
+
+  const avatarX = margin + 5;
+  const avatarY = y + 6;
+  pdf.setFillColor(9, 27, 58);
+  pdf.setDrawColor(196, 157, 73);
+  pdf.circle(avatarX + 11, avatarY + 11, 11, 'FD');
+  if (brief.photoData?.startsWith('data:image')) {
+    try {
+      const format = brief.photoData.includes('image/png') ? 'PNG' : 'JPEG';
+      pdf.addImage(brief.photoData, format, avatarX, avatarY, 22, 22);
+    } catch {
+      pdf.setFont('times', 'bold');
+      pdf.setFontSize(11);
+      pdf.setTextColor(212, 175, 55);
+      pdf.text(brief.share.member.name.split(' ').slice(0, 2).map((part) => part[0]).join('').toUpperCase(), avatarX + 5, avatarY + 14);
+    }
+  } else {
+    pdf.setFont('times', 'bold');
+    pdf.setFontSize(11);
+    pdf.setTextColor(212, 175, 55);
+    pdf.text(brief.share.member.name.split(' ').slice(0, 2).map((part) => part[0]).join('').toUpperCase(), avatarX + 5, avatarY + 14);
+  }
+
+  pdf.setFont('times', 'bold');
+  pdf.setFontSize(14);
+  pdf.setTextColor(9, 27, 58);
+  const nameLines = pdf.splitTextToSize(brief.share.member.name.toUpperCase(), 80);
+  pdf.text(nameLines.slice(0, 2), margin + 32, y + 12);
+  drawDeceasedMarker(margin + 32, y + 21);
+
+  const badgeY = y + 22;
+  const badges = [
+    'HEREDERO FINAL',
+    brief.share.sources.length > 1 ? 'DOBLE LINAJE' : brief.share.sources[0] || 'RUTA DOCUMENTADA',
+    brief.traffic.label.toUpperCase(),
+  ];
+  let badgeX = margin + 32;
+  badges.forEach((badge, index) => {
+    const width = Math.max(20, badge.length * 1.7);
+    pdf.setFillColor(index === 1 ? 28 : index === 2 ? 38 : 155, index === 1 ? 105 : index === 2 ? 74 : 118, index === 1 ? 88 : index === 2 ? 125 : 45);
+    pdf.roundedRect(badgeX, badgeY, width, 5.5, 0.8, 0.8, 'F');
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(5.8);
+    pdf.setTextColor(255, 255, 255);
+    pdf.text(badge, badgeX + 1.8, badgeY + 3.8);
+    badgeX += width + 2;
+  });
+
+  pdf.setDrawColor(218, 190, 129);
+  pdf.line(pageWidth - margin - 84, y + 5, pageWidth - margin - 84, y + 29);
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(7.5);
+  pdf.setTextColor(9, 27, 58);
+  pdf.text('Fecha de generacion:', pageWidth - margin - 78, y + 9);
+  pdf.text('Nivel de validacion:', pageWidth - margin - 78, y + 17);
+  pdf.text('Monto heredado estimado:', pageWidth - margin - 78, y + 25);
+  pdf.setFont('helvetica', 'normal');
+  pdf.setTextColor(45, 49, 57);
+  pdf.text(new Date().toLocaleDateString('es-DO'), pageWidth - margin - 25, y + 9);
+  pdf.text(brief.traffic.label, pageWidth - margin - 25, y + 17);
+  pdf.text(formatMoney(brief.simulatedAmount), pageWidth - margin - 25, y + 25);
+
+  y += 43;
+
+  drawSectionTitle('2. Resumen ejecutivo');
+  writeParagraph(
+    `Este documento presenta el analisis genealogico y hereditario correspondiente a ${brief.share.member.name}, incluyendo sus rutas familiares, vinculos de herencia, validaciones y hallazgos detectados dentro del caso Alessandro de Paola Sangiovanni.`,
+    { size: 9.5, lineHeight: 4.6 }
+  );
+
+  drawMiniMetricGrid();
+
+  const cardsY = y;
+  drawMetricCard(margin, 'Participacion detectada', formatPercent(brief.simulatedShare), `Ramas: ${brief.share.sources.join(' + ') || 'N/A'}`);
+  drawMetricCard(margin + ((contentWidth - 4) / 2) + 4, 'Monto heredado estimado', formatMoney(brief.simulatedAmount), `Neto usado: ${formatMoney(netAmount)}`);
+  y = cardsY + 24;
+
+  drawSectionTitle('4. Por que aparece esta persona en la herencia');
   writeParagraph(buildWhyIInheritText(brief.share, brief.simulatedShare, brief.simulatedAmount), {
     size: 10,
     lineHeight: 4.9,
   });
 
+  startNewPage();
   drawRouteTreeCopy();
+
+  drawDoubleLineageAnalysis();
+
+  drawLinksTable();
+
+  drawFindings();
+
+  startNewPage();
+  drawDocumentList();
 
   await drawDocumentMosaic();
 
-  if (brief.traffic.issues.length) {
-    drawSectionTitle('Observaciones');
-    brief.traffic.issues.forEach((issue) =>
-      writeParagraph(`- ${issue}`, { size: 9.5, color: [125, 52, 52], lineHeight: 4.6 })
-    );
-  }
+  drawTimeline();
 
-  ensureSpace(12);
-  pdf.setFont('helvetica', 'italic');
-  pdf.setFontSize(8);
-  pdf.setTextColor(124, 132, 143);
-  pdf.text(
-    'Documento generado por HerenciaRD. Este informe resume la explicacion del reparto segun la configuracion activa del expediente.',
-    margin,
-    pageHeight - margin
+  drawSystemValidation();
+
+  drawSectionTitle('12. Observaciones');
+  const observations = brief.traffic.issues.length
+    ? brief.traffic.issues
+    : ['Se recomienda preservar los documentos familiares originales y mantener actualizada cualquier validacion historica o legal adicional.'];
+  observations.forEach((issue) =>
+    writeParagraph(`- ${issue}`, { size: 9.2, color: brief.traffic.issues.length ? [125, 52, 52] : [45, 49, 57], lineHeight: 4.4 })
   );
+
+  pdf.setFillColor(9, 27, 58);
+  pdf.rect(0, pageHeight - 11, pageWidth, 11, 'F');
+  pdf.setFont('times', 'bold');
+  pdf.setFontSize(8.5);
+  pdf.setTextColor(212, 175, 55);
+  pdf.text('EL LEGADO SANGIOVANNI', margin, pageHeight - 4.2);
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(7.5);
+  pdf.setTextColor(255, 253, 248);
+  pdf.text('Raices que nos unen. Legado que trasciende.', pageWidth - margin - 61, pageHeight - 4.2);
 
   const safeName = brief.share.member.name.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
   pdf.save(`ficha-sienna-${safeName || 'heredero'}.pdf`);

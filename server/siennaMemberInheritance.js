@@ -53,13 +53,6 @@ const classifyMemberByDominicanLaw = (
     };
   }
 
-  if (share) {
-    return {
-      inheritance_status: member.inheritance_status === 'confirmado' ? 'confirmado' : 'posible_heredero',
-      inheritance_reason: share.reason,
-    };
-  }
-
   if (knownIntermediates.has(name)) {
     return {
       inheritance_status: 'no_hereda',
@@ -83,6 +76,13 @@ const classifyMemberByDominicanLaw = (
     };
   }
 
+  if (share) {
+    return {
+      inheritance_status: member.inheritance_status === 'confirmado' ? 'confirmado' : 'posible_heredero',
+      inheritance_reason: share.reason,
+    };
+  }
+
   return {
     inheritance_status: member.inheritance_status || 'requiere_revision',
     inheritance_reason:
@@ -92,7 +92,7 @@ const classifyMemberByDominicanLaw = (
 
 const resolveEffectiveInheritance = (member, classified) => {
   const storedStatus = member.inheritance_status || 'requiere_revision';
-  if (storedStatus && storedStatus !== 'requiere_revision') {
+  if (!String(member.death || '').trim() && storedStatus && storedStatus !== 'requiere_revision') {
     return {
       inheritance_status: storedStatus,
       inheritance_reason:

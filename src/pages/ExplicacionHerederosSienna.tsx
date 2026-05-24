@@ -454,7 +454,7 @@ const ExplicacionHerederosSienna = () => {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="por-que" className="space-y-4">
+          <TabsContent value="por-que" className="space-y-4 pb-24 sm:pb-0">
             {loading && (
               <Card>
                 <CardContent className="p-8 text-center text-legal-gray">
@@ -468,7 +468,7 @@ const ExplicacionHerederosSienna = () => {
             {!loading &&
               briefs.map((brief) => (
                 <Card key={brief.share.member.id} className="border border-legal-gold/20">
-                  <CardContent className="grid gap-4 p-4 md:grid-cols-[auto_1fr_auto]">
+                  <CardContent className="grid items-start gap-5 p-4 sm:p-5 md:grid-cols-[auto_minmax(0,1fr)_minmax(180px,auto)]">
                     <MemberPhoto
                       name={brief.share.member.name}
                       memberId={brief.share.member.id}
@@ -476,9 +476,9 @@ const ExplicacionHerederosSienna = () => {
                       size="lg"
                       className="border-2 border-legal-gold/40"
                     />
-                    <div>
+                    <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-serif text-xl font-bold text-legal-blue">{brief.share.member.name}</h3>
+                        <h3 className="break-words font-serif text-xl font-bold leading-tight text-legal-blue">{brief.share.member.name}</h3>
                         {brief.share.member.death && (
                           <Badge variant="outline" className="border-gray-400 bg-gray-50 text-gray-800">
                             Fallecido
@@ -487,10 +487,10 @@ const ExplicacionHerederosSienna = () => {
                         <Badge variant="outline">{formatPercent(brief.simulatedShare)}</Badge>
                         <Badge className={brief.traffic.className}>{brief.traffic.label}</Badge>
                       </div>
-                      <p className="mt-3 line-clamp-3 rounded-md bg-legal-gold/10 p-3 text-sm leading-relaxed text-gray-800">
+                      <p className="mt-3 whitespace-normal break-words rounded-md bg-legal-gold/10 p-3 text-sm leading-relaxed text-gray-800">
                         {buildWhyIInheritText(brief.share, brief.simulatedShare, brief.simulatedAmount)}
                       </p>
-                      <details className="mt-2">
+                      <details className="mt-3">
                         <summary className="cursor-pointer text-xs font-semibold text-legal-blue">
                           Ver ruta genealógica y base
                         </summary>
@@ -529,14 +529,14 @@ const ExplicacionHerederosSienna = () => {
                         </div>
                       </details>
                     </div>
-                    <div className="space-y-3 rounded-md border border-legal-blue/15 bg-white p-4 md:min-w-[190px]">
+                    <div className="w-full space-y-3 rounded-md border border-legal-blue/15 bg-white p-4 md:w-auto md:min-w-[190px]">
                       <div>
                         <p className="text-xs uppercase text-legal-gray">Monto estimado</p>
                         <p className="text-lg font-bold text-legal-blue">{formatMoney(brief.simulatedAmount)}</p>
                       </div>
                       <Button
                         variant="outline"
-                        className="w-full"
+                        className="h-auto min-h-10 w-full whitespace-normal text-center leading-snug"
                         onClick={() =>
                           downloadHeirBriefPdf(
                             {

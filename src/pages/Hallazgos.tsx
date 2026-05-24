@@ -297,11 +297,11 @@ const Hallazgos = () => {
           </CardHeader>
           <CardContent className="space-y-4 p-6">
             {rows.length === 0 ? (
-              <div className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50/80 p-4">
-                <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-700" />
+              <div className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50/80 p-4 dark:border-[#3FA37C]/55 dark:bg-[#3FA37C]/18 dark:shadow-[0_0_24px_rgb(63_163_124_/_0.16)]">
+                <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-700 dark:text-[#7EE0B8]" />
                 <div>
-                  <p className="font-semibold text-emerald-900">Árbol consistente</p>
-                  <p className="mt-1 text-sm text-emerald-800">
+                  <p className="font-semibold text-emerald-900 dark:text-[#F5F7FA]">Árbol consistente</p>
+                  <p className="mt-1 text-sm text-emerald-800 dark:text-[#B8C0CC]">
                     No hay pendientes de cónyuge, filiación ni ramas cortadas detectados. Cálculo distribuido:{' '}
                     {summary.distributedPercent.toFixed(2)}%.
                   </p>

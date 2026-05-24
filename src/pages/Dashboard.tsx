@@ -1,18 +1,23 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import PageHelp from '@/components/PageHelp';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { useConfirmedHeirs, useSiennaAnalysisSummary, useSiennaCalculation, useSiennaFamily } from '@/hooks/useSiennaData';
+import type { FamilyUnion, MemberParentLink, SiennaFamilyMember } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import {
   ArrowRight,
+  BadgeDollarSign,
   Calculator,
+  CheckCircle2,
   FileText,
   GitMerge,
   Landmark,
   ScrollText,
   Settings,
+  Sparkles,
   TreePine,
   Users,
 } from 'lucide-react';
@@ -27,45 +32,94 @@ type DashboardLink = {
   adminOnly?: boolean;
 };
 
+type SiennaPersona = {
+  label: string;
+  headline: string;
+  curiosity: string;
+  message: string;
+  focus: string;
+  priorityPath: string;
+  priorityCta: string;
+};
+
+type StatCard = {
+  label: string;
+  value: string;
+  detail: string;
+  icon: React.ComponentType<{ className?: string }>;
+  tone: 'purple' | 'green' | 'gold' | 'blue';
+};
+
+type BranchDistribution = {
+  source: string;
+  share: number;
+  amount: number;
+  heirs: number;
+};
+
+const formatCompactNumber = (value: number | null | undefined) =>
+  new Intl.NumberFormat('es-DO', { maximumFractionDigits: 0 }).format(Number(value || 0));
+
+const formatMoney = (value: number | null | undefined) =>
+  new Intl.NumberFormat('es-DO', {
+    style: 'currency',
+    currency: 'DOP',
+    maximumFractionDigits: 0,
+  }).format(Number(value || 0));
+
+const statToneClasses: Record<StatCard['tone'], string> = {
+  purple: 'border-[#7B61FF]/35 bg-[#7B61FF]/14 text-[#7B61FF]',
+  green: 'border-[#3FA37C]/35 bg-[#3FA37C]/14 text-[#3FA37C]',
+  gold: 'border-[#D4AF37]/45 bg-[#D4AF37]/15 text-[#9B7418] dark:text-[#E6C768]',
+  blue: 'border-[#355C9A]/35 bg-[#355C9A]/14 text-[#355C9A] dark:text-[#B8C0CC]',
+};
+
 const HEIR_LINKS: DashboardLink[] = [
   {
-    title: 'Árbol de la familia',
-    description: 'Vea cómo están relacionados los miembros de la familia y quiénes heredan.',
-    path: '/sienna/arbol-genealogico',
+    title: 'Árbol vivo',
+    description: 'Explora la familia, los enlaces, fallecidos, herederos activos y montos del reparto.',
+    path: '/sienna/arbol',
     icon: TreePine,
-    cta: 'Ver árbol',
+    cta: 'Entrar al árbol',
     primary: true,
   },
   {
-    title: 'Mi herencia',
-    description: 'Consulte cuánto le corresponde y el detalle de su parte en la sucesión.',
-    path: '/sienna/explicacion-herederos',
+    title: 'Reparto claro',
+    description: 'Porcentaje, monto, ruta familiar y explicación lista para conversar con herederos.',
+    path: '/sienna/explicacion',
     icon: Landmark,
-    cta: 'Ver mi parte',
+    cta: 'Ver reparto',
     primary: true,
   },
   {
-    title: 'Líneas de parentesco',
-    description: 'Si está vinculado por más de una rama familiar, aquí puede verlo con claridad.',
-    path: '/sienna/dobles-linajes',
+    title: 'Dobles linajes',
+    description: 'Detecta convergencias, rutas cruzadas y vocaciones acumuladas por rama familiar.',
+    path: '/sienna/linajes',
     icon: GitMerge,
-    cta: 'Ver conexiones',
+    cta: 'Analizar linajes',
     primary: true,
   },
   {
-    title: 'Documentos',
-    description: 'Actas, certificados y papeles que respaldan el expediente.',
-    path: '/documentos-probatorios',
+    title: 'Expediente probatorio',
+    description: 'Actas, certificados y evidencias conectadas directamente con cada miembro.',
+    path: '/sienna/documentos',
     icon: ScrollText,
     cta: 'Ver documentos',
     primary: true,
   },
   {
-    title: 'Determinación de herederos',
-    description: 'Documento formal del caso sucesorio.',
-    path: '/determinacion-herederos',
+    title: 'Determinación formal',
+    description: 'Salida legal del caso, separada de la experiencia principal del legado.',
+    path: '/caso/determinacion-herederos',
     icon: FileText,
     cta: 'Abrir documento',
+  },
+  {
+    title: 'Hallazgos',
+    description: 'Pendientes, inconsistencias y alertas accionables del expediente familiar.',
+    path: '/sienna/hallazgos',
+    icon: CheckCircle2,
+    cta: 'Revisar hallazgos',
   },
 ];
 
@@ -73,7 +127,7 @@ const ADMIN_LINKS: DashboardLink[] = [
   {
     title: 'Miembros del árbol',
     description: 'Editar personas y relaciones familiares.',
-    path: '/sienna/miembros-arbol',
+    path: '/sienna/miembros',
     icon: Users,
     cta: 'Gestionar',
     adminOnly: true,
@@ -81,7 +135,7 @@ const ADMIN_LINKS: DashboardLink[] = [
   {
     title: 'Cálculo de herencias',
     description: 'Montos y reparto interno.',
-    path: '/calculo-herencias',
+    path: '/admin/calculo-herencias',
     icon: Calculator,
     cta: 'Abrir',
     adminOnly: true,
@@ -89,7 +143,7 @@ const ADMIN_LINKS: DashboardLink[] = [
   {
     title: 'Usuarios',
     description: 'Cuentas y permisos de acceso.',
-    path: '/admin-users',
+    path: '/admin/usuarios',
     icon: Users,
     cta: 'Administrar',
     adminOnly: true,
@@ -104,27 +158,54 @@ const ADMIN_LINKS: DashboardLink[] = [
   },
 ];
 
+const LEGACY_LINKS: DashboardLink[] = [
+  {
+    title: 'Caso formal',
+    description: 'Documento de determinación sucesoral y lectura legal del expediente.',
+    path: '/caso/determinacion-herederos',
+    icon: FileText,
+    cta: 'Abrir caso',
+  },
+  {
+    title: 'Árbol legacy',
+    description: 'Vista anterior conservada para comparación y continuidad operativa.',
+    path: '/legacy/arbol-genealogico',
+    icon: TreePine,
+    cta: 'Abrir legacy',
+  },
+  {
+    title: 'Líneas familiares',
+    description: 'Consulta tradicional por ramas y generaciones.',
+    path: '/legacy/lineas-familiares',
+    icon: GitMerge,
+    cta: 'Consultar',
+  },
+];
+
 const HeirActionCard = ({ item }: { item: DashboardLink }) => {
   const Icon = item.icon;
 
   return (
     <Card
       className={cn(
-        'border shadow-sm transition-shadow hover:shadow-md',
-        item.primary ? 'border-legal-gold/35 bg-legal-gold/[0.05]' : 'border-legal-blue/10 bg-white'
+        'legacy-surface group overflow-hidden transition-all hover:-translate-y-0.5 hover:shadow-md',
+        item.primary ? 'border-legal-gold/35' : 'border-legal-blue/10'
       )}
     >
       <CardContent className="flex h-full flex-col gap-4 p-5 sm:p-6">
         <div className="flex items-start gap-4">
-          <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-legal-gold/30 bg-white text-legal-blue">
+          <div className={cn(
+            'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border text-legal-blue transition-colors',
+            item.primary ? 'border-legal-gold/35 bg-[#D4AF37]/10 group-hover:bg-[#E6C768]/20' : 'border-legal-blue/15 bg-[#3FA37C]/10'
+          )}>
             <Icon className="h-5 w-5" />
           </div>
           <div className="min-w-0">
-            <h2 className="font-serif text-xl font-bold text-legal-blue">{item.title}</h2>
-            <p className="mt-1 text-sm leading-relaxed text-gray-600">{item.description}</p>
+            <h2 className="font-serif text-xl font-bold text-legal-blue dark:text-[#F5F7FA]">{item.title}</h2>
+            <p className="mt-1 text-sm leading-relaxed text-gray-600 dark:text-muted-foreground">{item.description}</p>
           </div>
         </div>
-        <Button asChild className="mt-auto w-full bg-legal-blue hover:bg-legal-blue/90 sm:w-auto sm:self-start">
+        <Button asChild className="btn-primary mt-auto w-full sm:w-auto sm:self-start">
           <Link to={item.path}>
             {item.cta}
             <ArrowRight className="ml-2 h-4 w-4" />
@@ -135,14 +216,658 @@ const HeirActionCard = ({ item }: { item: DashboardLink }) => {
   );
 };
 
+const SiennaStatCard = ({ item }: { item: StatCard }) => {
+  const Icon = item.icon;
+
+  return (
+    <Card className="legacy-surface border border-legal-blue/10">
+      <CardContent className="flex items-center justify-between gap-4 p-5 sm:p-6">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold uppercase tracking-wide text-legal-gray dark:text-[#8C97A8]">{item.label}</p>
+          <p className="mt-3 max-w-full break-words font-serif text-[clamp(1.35rem,1.75vw,1.8rem)] font-bold leading-tight text-legal-blue dark:text-[#D4AF37]">
+            {item.value}
+          </p>
+          <p className="mt-2 text-sm text-gray-600 dark:text-[#B8C0CC]">{item.detail}</p>
+        </div>
+        <div className={cn('inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-full border shadow-[0_0_24px_rgb(212_175_55_/_0.10)]', statToneClasses[item.tone])}>
+          <Icon className="h-6 w-6" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+const DonutChart = ({
+  value,
+  label,
+  sublabel,
+}: {
+  value: number;
+  label: string;
+  sublabel: string;
+}) => {
+  const normalized = Math.max(0, Math.min(100, Number(value || 0)));
+  const degrees = normalized * 3.6;
+  const background = 'conic-gradient(#D4AF37 0deg ' + degrees + 'deg, #3FA37C22 ' + degrees + 'deg 360deg)';
+
+  return (
+    <div className="flex items-center gap-4">
+      <div
+        className="grid h-28 w-28 shrink-0 place-items-center rounded-full border border-legal-gold/30"
+        style={{ background }}
+        aria-label={label + ': ' + formatCompactNumber(normalized) + '%'}
+      >
+        <div className="grid h-20 w-20 place-items-center rounded-full bg-white text-center shadow-inner dark:bg-[#162033]">
+          <span className="font-serif text-2xl font-bold text-legal-blue dark:text-[#F5F7FA]">{formatCompactNumber(normalized)}%</span>
+        </div>
+      </div>
+      <div className="min-w-0">
+        <p className="text-xs font-semibold uppercase tracking-wide text-legal-gray">{label}</p>
+        <p className="mt-1 text-sm leading-relaxed text-gray-700 dark:text-muted-foreground">{sublabel}</p>
+      </div>
+    </div>
+  );
+};
+
+const MiniBars = ({
+  rows,
+}: {
+  rows: Array<{ label: string; value: number; color: string }>;
+}) => {
+  const max = Math.max(1, ...rows.map((row) => row.value));
+
+  return (
+    <div className="space-y-3">
+      {rows.map((row) => (
+        <div key={row.label}>
+          <div className="mb-1 flex items-center justify-between gap-2 text-xs">
+            <span className="font-medium text-gray-700 dark:text-muted-foreground">{row.label}</span>
+            <span className="font-semibold text-legal-blue dark:text-[#F5F7FA]">{formatCompactNumber(row.value)}</span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-muted">
+            <div
+              className="h-full rounded-full"
+              style={{ width: Math.max(8, (row.value / max) * 100) + '%', background: row.color }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const BranchDistributionChart = ({ rows }: { rows: BranchDistribution[] }) => {
+  const colors = ['#D4AF37', '#3FA37C', '#355C9A', '#7B61FF', '#C05656'];
+  const displayRows = rows.length
+    ? rows
+    : [{ source: 'Sin ramas calculadas', share: 0, amount: 0, heirs: 0 }];
+  const total = Math.max(1, displayRows.reduce((sum, row) => sum + row.share, 0));
+  let cursor = 0;
+  const segments = displayRows.map((row, index) => {
+    const start = (cursor / total) * 360;
+    cursor += row.share;
+    const end = (cursor / total) * 360;
+    return colors[index % colors.length] + ' ' + start + 'deg ' + end + 'deg';
+  });
+  const background = 'conic-gradient(' + segments.join(', ') + ')';
+
+  return (
+    <div className="grid gap-4 md:grid-cols-[150px_1fr]">
+      <div className="mx-auto grid h-36 w-36 place-items-center rounded-full border border-legal-gold/30" style={{ background }}>
+        <div className="grid h-24 w-24 place-items-center rounded-full bg-white text-center shadow-inner dark:bg-[#162033]">
+          <div>
+            <p className="font-serif text-xl font-bold text-legal-blue dark:text-[#F5F7FA]">{formatCompactNumber(displayRows.length)}</p>
+            <p className="text-[11px] uppercase tracking-wide text-legal-gray">ramas</p>
+          </div>
+        </div>
+      </div>
+      <div className="space-y-3">
+        {displayRows.map((row, index) => (
+          <div key={row.source} className="legacy-surface rounded-md p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: colors[index % colors.length] }} />
+                  <p className="truncate text-sm font-semibold text-legal-blue dark:text-[#F5F7FA]">{row.source}</p>
+                </div>
+                <p className="mt-1 text-xs text-gray-600 dark:text-muted-foreground">{formatCompactNumber(row.heirs)} participación(es) de herederos</p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm font-bold text-legal-blue dark:text-[#F5F7FA]">{formatCompactNumber(row.share)}%</p>
+                <p className="text-xs text-gray-600 dark:text-muted-foreground">{formatMoney(row.amount)}</p>
+              </div>
+            </div>
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-muted">
+              <div
+                className="h-full rounded-full"
+                style={{ width: Math.max(6, (row.share / total) * 100) + '%', background: colors[index % colors.length] }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 text-xs leading-relaxed text-legal-gray">
+        Nota: una misma persona puede participar en más de una rama cuando tiene doble linaje; por eso estas
+        participaciones no se suman como personas únicas.
+      </p>
+    </div>
+  );
+};
+
+const ChartPanel = ({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) => (
+  <div className="legacy-surface rounded-lg p-4">
+    <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-legal-gray">{title}</p>
+    {children}
+  </div>
+);
+
+type DashboardPriority = {
+  label: string;
+  headline: string;
+  message: string;
+  focus: string;
+  path: string;
+  cta: string;
+};
+
+const chooseVariant = (seed: string, variants: string[]) => {
+  const index = Array.from(seed).reduce((total, char) => total + char.charCodeAt(0), 0) % variants.length;
+  return variants[index];
+};
+
+const shortName = (name: string) => name.split(' ').slice(0, 2).join(' ');
+
+const hashString = (value: string) =>
+  Array.from(value).reduce((hash, char) => ((hash << 5) - hash + char.charCodeAt(0)) | 0, 0);
+
+const uniqueFacts = (facts: string[]) => Array.from(new Set(facts.filter(Boolean)));
+
+const joinNames = (members: SiennaFamilyMember[], limit = 3) => {
+  const names = members.slice(0, limit).map((member) => shortName(member.name));
+  if (members.length > limit) names.push(String(members.length - limit) + ' más');
+  return names.length <= 1 ? names[0] || '' : names.slice(0, -1).join(', ') + ' y ' + names.at(-1);
+};
+
+const parseYear = (value?: string | null) => {
+  const match = value?.match(/(\d{4})/);
+  return match ? Number(match[1]) : null;
+};
+
+const buildMemberIndex = (members: SiennaFamilyMember[]) =>
+  new Map(members.map((member) => [member.id, member]));
+
+const getParentIds = (member: SiennaFamilyMember, parentLinks: MemberParentLink[]) => {
+  const ids = new Set<string>();
+  if (member.parent_id) ids.add(member.parent_id);
+  parentLinks
+    .filter((link) => link.child_member_id === member.id && !link.is_inconsistent)
+    .forEach((link) => ids.add(link.parent_member_id));
+  return Array.from(ids);
+};
+
+const getGrandparentIds = (
+  member: SiennaFamilyMember,
+  membersById: Map<string, SiennaFamilyMember>,
+  parentLinks: MemberParentLink[]
+) => {
+  const ids = new Set<string>();
+  getParentIds(member, parentLinks).forEach((parentId) => {
+    const parent = membersById.get(parentId);
+    if (!parent) return;
+    getParentIds(parent, parentLinks).forEach((grandparentId) => ids.add(grandparentId));
+  });
+  return Array.from(ids).sort();
+};
+
+const getChildrenByParent = (members: SiennaFamilyMember[], parentLinks: MemberParentLink[]) => {
+  const childrenByParent = new Map<string, SiennaFamilyMember[]>();
+
+  members.forEach((member) => {
+    if (!member.parent_id) return;
+    childrenByParent.set(member.parent_id, [...(childrenByParent.get(member.parent_id) || []), member]);
+  });
+
+  parentLinks
+    .filter((link) => !link.is_inconsistent)
+    .forEach((link) => {
+      const child = members.find((member) => member.id === link.child_member_id);
+      if (!child) return;
+      const current = childrenByParent.get(link.parent_member_id) || [];
+      if (!current.some((item) => item.id === child.id)) {
+        childrenByParent.set(link.parent_member_id, [...current, child]);
+      }
+    });
+
+  return childrenByParent;
+};
+
+const hasFormalUnion = (member: SiennaFamilyMember, unions: FamilyUnion[]) =>
+  unions.some(
+    (union) =>
+      union.partner_a_member_id === member.id ||
+      union.partner_b_member_id === member.id
+  );
+
+const buildLegacyCuriosities = ({
+  members,
+  unions,
+  parentLinks,
+  seed,
+}: {
+  members: SiennaFamilyMember[];
+  unions: FamilyUnion[];
+  parentLinks: MemberParentLink[];
+  seed: string;
+}) => {
+  if (!members.length) return ['Estoy preparando las curiosidades del árbol familiar; en cuanto carguen los datos, esta sección empieza a hablar con más vida.'];
+
+  const membersById = buildMemberIndex(members);
+  const facts: string[] = [];
+  const childrenByParent = getChildrenByParent(members, parentLinks);
+  const alessandro = members.find((member) => member.name.toLowerCase().includes('alessandro'));
+
+  if (alessandro && !alessandro.spouse && !alessandro.spouse_member_id && !hasFormalUnion(alessandro, unions)) {
+    facts.push('¿Sabías que Alessandro figura en el árbol sin matrimonio registrado? Es un detalle pequeño, pero cambia mucho cómo se lee su historia familiar.');
+  }
+
+  const sharedGrandparents = new Map<string, SiennaFamilyMember[]>();
+  members.forEach((member) => {
+    const grandparents = getGrandparentIds(member, membersById, parentLinks);
+    if (grandparents.length < 2) return;
+    const key = grandparents.join('|');
+    sharedGrandparents.set(key, [...(sharedGrandparents.get(key) || []), member]);
+  });
+
+  Array.from(sharedGrandparents.values())
+    .map((group) => group.filter((member) => !member.death))
+    .filter((group) => group.length >= 2)
+    .forEach((group) => {
+      const [first, second] = group;
+      facts.push(
+        'Es curioso: ' + shortName(first.name) + ' y ' + shortName(second.name) + ' comparten el mismo grupo de abuelos en el árbol. Ese tipo de cruce explica por qué algunas ramas se sienten tan cercanas.'
+      );
+      if (group.length > 2) {
+        facts.push('Hay un pequeño grupo familiar alrededor de los mismos abuelos: ' + joinNames(group) + ' aparecen conectados por esa raíz común.');
+      }
+    });
+
+  const parentPairs = new Map<string, SiennaFamilyMember[]>();
+  members.forEach((member) => {
+    const parents = getParentIds(member, parentLinks).sort();
+    if (parents.length < 2) return;
+    const key = parents.slice(0, 2).join('|');
+    parentPairs.set(key, [...(parentPairs.get(key) || []), member]);
+  });
+
+  Array.from(parentPairs.entries())
+    .filter(([, group]) => group.length >= 2)
+    .forEach(([key, group]) => {
+      const parentNames = key
+        .split('|')
+        .map((id) => membersById.get(id))
+        .filter(Boolean) as SiennaFamilyMember[];
+      if (parentNames.length < 2) return;
+      facts.push(
+        joinNames(group) + ' comparten ambos padres en el archivo: ' + shortName(parentNames[0].name) + ' y ' + shortName(parentNames[1].name) + '. Esa lectura ayuda a ver hermanos completos, no solo ramas sueltas.'
+      );
+    });
+
+  members
+    .map((member) => ({ member, children: childrenByParent.get(member.id) || [] }))
+    .filter(({ children }) => children.length >= 2)
+    .sort((left, right) => right.children.length - left.children.length)
+    .slice(0, 14)
+    .forEach(({ member, children }) => {
+      facts.push(
+        shortName(member.name) + ' conecta directamente con ' + children.length + ' descendiente' + (children.length === 1 ? '' : 's') + ' en el árbol: ' + joinNames(children) + '.'
+      );
+    });
+
+  unions
+    .filter((union) => !union.is_inconsistent)
+    .map((union) => ({
+      union,
+      first: membersById.get(union.partner_a_member_id),
+      second: union.partner_b_member_id ? membersById.get(union.partner_b_member_id) : null,
+    }))
+    .filter(({ first, second }) => first && second)
+    .slice(0, 14)
+    .forEach(({ union, first, second }) => {
+      const label = union.union_type === 'matrimonio' ? 'matrimonio' : union.union_type === 'union_libre' ? 'unión familiar' : 'relación familiar';
+      facts.push(
+        'El archivo reconoce la ' + label + ' entre ' + shortName(first!.name) + ' y ' + shortName(second!.name) + '. Es una de esas uniones que explican cómo se amarran las ramas.'
+      );
+    });
+
+  const livingByYear = new Map<number, SiennaFamilyMember[]>();
+  const bornByDecade = new Map<number, SiennaFamilyMember[]>();
+  members.forEach((member) => {
+    const year = parseYear(member.birth);
+    if (!year) return;
+    if (!member.death) livingByYear.set(year, [...(livingByYear.get(year) || []), member]);
+    const decade = Math.floor(year / 10) * 10;
+    bornByDecade.set(decade, [...(bornByDecade.get(decade) || []), member]);
+  });
+
+  Array.from(livingByYear.entries())
+    .filter(([, group]) => group.length >= 2)
+    .sort(([leftYear], [rightYear]) => leftYear - rightYear)
+    .slice(0, 10)
+    .forEach(([year, group]) => {
+      facts.push('Hay una coincidencia bonita en la generación de ' + year + ': ' + shortName(group[0].name) + ' y ' + shortName(group[1].name) + ' nacieron ese mismo año.');
+    });
+
+  Array.from(bornByDecade.entries())
+    .filter(([, group]) => group.length >= 3)
+    .sort(([, left], [, right]) => right.length - left.length)
+    .slice(0, 8)
+    .forEach(([decade, group]) => {
+      facts.push('La década de ' + decade + ' concentra ' + group.length + ' nacimiento' + (group.length === 1 ? '' : 's') + ' en el archivo. Ahí se siente una de las generaciones fuertes del legado.');
+    });
+
+  const highlighted = members.filter((member) => member.is_highlighted_ancestor);
+  highlighted.forEach((member) => {
+    facts.push(
+      shortName(member.name) + ' no está ahí como un nombre más: el árbol lo trata como una figura central para entender el legado Sangiovanni.'
+    );
+  });
+
+  const deceasedCount = members.filter((member) => member.death).length;
+  if (deceasedCount > 0) {
+    facts.push(
+      `El archivo ya conserva la memoria de ${formatCompactNumber(deceasedCount)} miembro${deceasedCount === 1 ? '' : 's'} fallecido${deceasedCount === 1 ? '' : 's'} con fecha registrada. Es parte de lo que hace que el árbol se sienta vivo, no solo calculado.`
+    );
+  }
+
+  members
+    .filter((member) => member.birth && member.death)
+    .slice(0, 14)
+    .forEach((member) => {
+      const birthYear = parseYear(member.birth);
+      const deathYear = parseYear(member.death);
+      if (birthYear && deathYear && deathYear >= birthYear) {
+        facts.push(shortName(member.name) + ' tiene una vida completa trazada en el archivo: nace en ' + birthYear + ' y fallece en ' + deathYear + '. Ese dato convierte una ficha en memoria familiar.');
+      }
+    });
+
+  const statusGroups = new Map<string, SiennaFamilyMember[]>();
+  members.forEach((member) => {
+    const status = member.effective_inheritance_status || member.inheritance_status;
+    if (!status) return;
+    statusGroups.set(status, [...(statusGroups.get(status) || []), member]);
+  });
+
+  const confirmed = statusGroups.get('confirmado') || [];
+  if (confirmed.length >= 2) {
+    facts.push('Entre los herederos confirmados aparecen ' + joinNames(confirmed) + '. No es solo una lista: son personas ya reconocidas por el expediente.');
+  }
+
+  const review = statusGroups.get('requiere_revision') || [];
+  if (review.length > 0) {
+    facts.push('Hay ' + review.length + ' persona' + (review.length === 1 ? '' : 's') + ' que todavía pide' + (review.length === 1 ? '' : 'n') + ' revisión en la lectura sucesoral. El árbol también sirve para no perder esos matices.');
+  }
+
+  const finalFacts = uniqueFacts(facts);
+  return finalFacts.length ? finalFacts : ['Todavía no veo una curiosidad fuerte en los datos actuales, pero el árbol ya tiene suficiente estructura para empezar a contar mejor la historia familiar.'];
+};
+
+const selectCuriosityCards = (facts: string[], seed: string, count = 3) => {
+  if (facts.length <= count) return facts;
+
+  const storageKey = 'sienna.dashboard.curiosityHistory.v2';
+  let recent: string[] = [];
+  try {
+    recent = JSON.parse(window.localStorage.getItem(storageKey) || '[]');
+  } catch {
+    recent = [];
+  }
+
+  const recentSet = new Set(recent);
+  const pool = facts.filter((fact) => !recentSet.has(fact));
+  const fallbackPool = facts.filter((fact) => !recent.slice(-count).includes(fact));
+  const usable = pool.length >= count ? pool : fallbackPool.length >= count ? fallbackPool : facts;
+  const shuffleSeed = seed + '-' + Date.now() + '-' + Math.random();
+  const selected = [...usable]
+    .sort((left, right) => hashString(shuffleSeed + left) - hashString(shuffleSeed + right))
+    .slice(0, count);
+
+  try {
+    const historyLimit = Math.min(Math.max(18, count * 6), Math.max(count, facts.length - count));
+    window.localStorage.setItem(storageKey, JSON.stringify([...recent, ...selected].slice(-historyLimit)));
+  } catch {
+    // La rotación sigue funcionando aunque el navegador bloquee localStorage.
+  }
+
+  return selected;
+};
+
+const buildDashboardPriority = ({
+  hasFindingsAccess,
+  hasDocumentAccess,
+  hasMemberAccess,
+  isAdmin,
+  pendingFindings,
+  pendingValidation,
+  dualLineageTotal,
+  totalShare,
+  heirsTotal,
+  estateAmount,
+}: {
+  hasFindingsAccess: boolean;
+  hasDocumentAccess: boolean;
+  hasMemberAccess: boolean;
+  isAdmin: boolean;
+  pendingFindings: number;
+  pendingValidation: number;
+  dualLineageTotal: number;
+  totalShare: number;
+  heirsTotal: number;
+  estateAmount: number;
+}): DashboardPriority => {
+  const roundedShare = Math.round(totalShare);
+
+  if (pendingFindings > 0 && hasFindingsAccess) {
+    return {
+      label: 'Hallazgos pendientes',
+      headline: `${formatCompactNumber(pendingFindings)} hallazgo${pendingFindings === 1 ? '' : 's'} necesita${pendingFindings === 1 ? '' : 'n'} revisión`,
+      message: 'El siguiente paso útil es limpiar las alertas abiertas antes de presentar o discutir el reparto.',
+      focus: 'Prioridad real: resolver hallazgos activos del expediente.',
+      path: '/sienna/hallazgos',
+      cta: 'Revisar hallazgos',
+    };
+  }
+
+  if (pendingValidation > 0 && hasFindingsAccess) {
+    return {
+      label: 'Validación genealógica',
+      headline: `${formatCompactNumber(pendingValidation)} validación${pendingValidation === 1 ? '' : 'es'} pendiente${pendingValidation === 1 ? '' : 's'}`,
+      message: 'Conviene confirmar vínculos y rutas familiares antes de usar el reparto como explicación final.',
+      focus: 'Prioridad real: validar relaciones que pueden afectar la lectura del árbol.',
+      path: '/sienna/linajes',
+      cta: 'Validar linajes',
+    };
+  }
+
+  if (roundedShare !== 100 && hasDocumentAccess) {
+    return {
+      label: 'Reparto por revisar',
+      headline: `Distribución calculada en ${formatCompactNumber(totalShare)}%`,
+      message: 'La suma del reparto no está cerrando exactamente en 100%; hay que revisar la explicación antes de presentarla.',
+      focus: 'Prioridad real: revisar porcentajes, rutas y base de cálculo.',
+      path: '/sienna/explicacion',
+      cta: 'Ver reparto',
+    };
+  }
+
+  if (estateAmount <= 0 && isAdmin) {
+    return {
+      label: 'Monto del caso',
+      headline: 'El expediente todavía no tiene monto neto activo',
+      message: 'Sin monto del caso, el archivo puede explicar porcentajes, pero no montos reales de reparto.',
+      focus: 'Prioridad real: configurar el monto antes de validar montos finales.',
+      path: '/admin/settings',
+      cta: 'Configurar monto',
+    };
+  }
+
+  if (heirsTotal <= 0 && hasMemberAccess) {
+    return {
+      label: 'Herederos',
+      headline: 'No hay herederos activos confirmados para mostrar',
+      message: 'Primero hay que revisar miembros, filiación y estado sucesoral para que el tablero tenga una base útil.',
+      focus: 'Prioridad real: confirmar herederos reconocidos.',
+      path: '/sienna/miembros',
+      cta: 'Revisar miembros',
+    };
+  }
+
+  if (dualLineageTotal > 0 && hasFindingsAccess) {
+    return {
+      label: 'Dobles linajes',
+      headline: `${formatCompactNumber(dualLineageTotal)} caso${dualLineageTotal === 1 ? '' : 's'} con doble linaje detectado${dualLineageTotal === 1 ? '' : 's'}`,
+      message: 'El archivo ya tiene estructura, pero los dobles linajes merecen una lectura aparte para evitar confusiones.',
+      focus: 'Prioridad real: explicar convergencias familiares con claridad.',
+      path: '/sienna/linajes',
+      cta: 'Analizar linajes',
+    };
+  }
+
+  if (hasDocumentAccess) {
+    return {
+      label: 'Expediente estable',
+      headline: 'El archivo está listo para una lectura clara del reparto',
+      message: 'No hay alertas críticas visibles en el resumen; el siguiente valor está en revisar evidencia y explicación.',
+      focus: 'Prioridad real: revisar documentos y dejar trazabilidad lista.',
+      path: '/sienna/documentos',
+      cta: 'Ver documentos',
+    };
+  }
+
+  return {
+    label: 'Acceso disponible',
+    headline: 'Tu vista está limitada a las áreas autorizadas',
+    message: 'El archivo adapta la navegación según permisos; cuando se habiliten más áreas, esta guía cambiará automáticamente.',
+    focus: 'Prioridad real: entrar por la primera sección disponible.',
+    path: '/',
+    cta: 'Ver inicio',
+  };
+};
+
+const buildSiennaPersona = ({
+  firstName,
+  isAdmin,
+  hasPrimaryLinks,
+  hasDocumentAccess,
+  hasMemberAccess,
+  hasFindingsAccess,
+  hasLegacyAccess,
+  priority,
+  curiosity,
+}: {
+  firstName: string;
+  isAdmin: boolean;
+  hasPrimaryLinks: boolean;
+  hasDocumentAccess: boolean;
+  hasMemberAccess: boolean;
+  hasFindingsAccess: boolean;
+  hasLegacyAccess: boolean;
+  priority: DashboardPriority;
+  curiosity: string;
+}): SiennaPersona => {
+  const seed = `${firstName}-${priority.label}-${new Date().toISOString().slice(0, 10)}`;
+
+  if (isAdmin) {
+    return {
+      label: priority.label,
+      headline: chooseVariant(seed, [
+        `Hola, ${firstName}. ${priority.headline}.`,
+        `${firstName}, hoy el Legado Sangiovanni pide atención aquí: ${priority.headline.toLowerCase()}.`,
+        `Vista directiva: ${priority.headline}.`,
+      ]),
+      curiosity,
+      message: `${priority.message} Tienes acceso completo, pero el tablero coloca primero lo que afecta la lectura del legado familiar.`,
+      focus: priority.focus,
+      priorityPath: priority.path,
+      priorityCta: priority.cta,
+    };
+  }
+
+  if (hasDocumentAccess && !hasMemberAccess) {
+    return {
+      label: priority.label,
+      headline: chooseVariant(seed, [
+        `Hola, ${firstName}. ${priority.headline}.`,
+        `${firstName}, tu lectura del legado empieza por esto: ${priority.headline.toLowerCase()}.`,
+      ]),
+      curiosity,
+      message: `${priority.message} Mantengo fuera lo administrativo para que la lectura sea limpia.`,
+      focus: priority.focus,
+      priorityPath: priority.path,
+      priorityCta: priority.cta,
+    };
+  }
+
+  if (hasMemberAccess || hasFindingsAccess) {
+    return {
+      label: priority.label,
+      headline: `Hola, ${firstName}. ${priority.headline}.`,
+      curiosity,
+      message: priority.message,
+      focus: priority.focus,
+      priorityPath: priority.path,
+      priorityCta: priority.cta,
+    };
+  }
+
+  if (hasPrimaryLinks) {
+    return {
+      label: priority.label,
+      headline: `Hola, ${firstName}. ${priority.headline}.`,
+      curiosity,
+      message: priority.message,
+      focus: priority.focus,
+      priorityPath: priority.path,
+      priorityCta: priority.cta,
+    };
+  }
+
+  return {
+    label: hasLegacyAccess ? 'Consulta legacy' : 'Acceso pendiente',
+    headline: `Hola, ${firstName}. Tu acceso todavía está limitado.`,
+    curiosity,
+    message:
+      'Te muestro solo las áreas disponibles para tu cuenta. Cuando se asignen más permisos, el archivo reorganizará esta pantalla automáticamente.',
+    focus: 'Prioridad real: pedir al administrador las pantallas que necesitas para tu rol.',
+    priorityPath: priority.path,
+    priorityCta: priority.cta,
+  };
+};
+
 const Dashboard = () => {
   const { user, userProfile, isAdmin, hasAccess } = useAuth();
+  const { data: analysisSummary } = useSiennaAnalysisSummary();
+  const { data: realtimeCalculationData } = useSiennaCalculation();
+  const { data: confirmedHeirsData } = useConfirmedHeirs(false);
+  const { data: familyData } = useSiennaFamily();
+  const summary = analysisSummary?.summary;
+  const realtimeCalculation = realtimeCalculationData?.calculation;
+  const recognizedHeirsTotal = confirmedHeirsData?.heirs?.length ?? summary?.active_heir_count ?? 0;
 
   const firstName = useMemo(() => {
     const fullName = userProfile?.full_name?.trim();
     if (fullName) return fullName.split(/\s+/)[0];
     return user?.email?.split('@')[0] || 'Bienvenido';
   }, [user?.email, userProfile?.full_name]);
+  const dashboardVisitSeed = useMemo(
+    () => `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    []
+  );
 
   const primaryLinks = useMemo(
     () => HEIR_LINKS.filter((item) => item.primary && hasAccess(item.path)),
@@ -159,21 +884,233 @@ const Dashboard = () => {
     [hasAccess, isAdmin]
   );
 
-  const hasAnyLink = primaryLinks.length > 0 || secondaryLinks.length > 0 || adminLinks.length > 0;
+  const legacyLinks = useMemo(
+    () => LEGACY_LINKS.filter((item) => hasAccess(item.path)),
+    [hasAccess]
+  );
+
+  const stats = useMemo<StatCard[]>(
+    () => [
+      {
+        label: 'Personas registradas',
+        value: formatCompactNumber(summary?.members_total),
+        detail: 'Base genealógica activa',
+        icon: Users,
+        tone: 'purple',
+      },
+      {
+        label: 'Herederos reconocidos',
+        value: formatCompactNumber(recognizedHeirsTotal),
+        detail: 'Registrados en el expediente',
+        icon: Landmark,
+        tone: 'green',
+      },
+      {
+        label: 'Neto a repartir',
+        value: formatMoney(summary?.estate?.distributableAmount),
+        detail: 'Monto usado por el archivo',
+        icon: BadgeDollarSign,
+        tone: 'gold',
+      },
+      {
+        label: 'Hallazgos',
+        value: formatCompactNumber(summary?.pending_findings_total),
+        detail: 'Pendientes por revisar',
+        icon: CheckCircle2,
+        tone: 'green',
+      },
+    ],
+    [recognizedHeirsTotal, summary]
+  );
+
+  const priority = useMemo(
+    () =>
+      buildDashboardPriority({
+        hasFindingsAccess: hasAccess('/sienna/hallazgos'),
+        hasDocumentAccess: hasAccess('/sienna/documentos'),
+        hasMemberAccess: hasAccess('/sienna/miembros'),
+        isAdmin,
+        pendingFindings: Number(summary?.pending_findings_total || 0),
+        pendingValidation: Number(summary?.pending_validation_total || 0),
+        dualLineageTotal: Number(summary?.dual_lineage_total || 0),
+        totalShare: Number(summary?.total_share || 0),
+        heirsTotal: recognizedHeirsTotal,
+        estateAmount: Number(summary?.estate?.distributableAmount || 0),
+      }),
+    [hasAccess, isAdmin, recognizedHeirsTotal, summary]
+  );
+
+  const curiosityFacts = useMemo(
+    () =>
+      buildLegacyCuriosities({
+        members: familyData?.members ?? [],
+        unions: familyData?.unions ?? [],
+        parentLinks: familyData?.parent_links ?? [],
+        seed: dashboardVisitSeed,
+      }),
+    [dashboardVisitSeed, familyData?.members, familyData?.parent_links, familyData?.unions]
+  );
+
+  const [curiosityCards, setCuriosityCards] = useState<string[]>(() => curiosityFacts.slice(0, 3));
+
+  useEffect(() => {
+    setCuriosityCards(selectCuriosityCards(curiosityFacts, dashboardVisitSeed, 3));
+  }, [curiosityFacts, dashboardVisitSeed]);
+
+  const curiosity = useMemo(() => {
+    if (curiosityCards.length) return curiosityCards[0];
+    return chooseVariant(`${firstName}-${priority.label}-curiosity-${dashboardVisitSeed}`, curiosityFacts);
+  }, [curiosityCards, curiosityFacts, dashboardVisitSeed, firstName, priority.label]);
+
+  const fallbackCuriosityCards = useMemo(() => {
+    const facts = buildLegacyCuriosities({
+      members: familyData?.members ?? [],
+      unions: familyData?.unions ?? [],
+      parentLinks: familyData?.parent_links ?? [],
+      seed: dashboardVisitSeed,
+    });
+    const offset = Math.abs(Array.from(dashboardVisitSeed).reduce((total, char) => total + char.charCodeAt(0), 0)) % Math.max(1, facts.length);
+    return [...facts.slice(offset), ...facts.slice(0, offset)].slice(0, 3);
+  }, [dashboardVisitSeed, familyData?.members, familyData?.parent_links, familyData?.unions]);
+
+  const displayCuriosityCards = curiosityCards.length ? curiosityCards : fallbackCuriosityCards;
+
+  const persona = useMemo(
+    () =>
+      buildSiennaPersona({
+        firstName,
+        isAdmin,
+        hasPrimaryLinks: primaryLinks.length > 0,
+        hasDocumentAccess: hasAccess('/sienna/documentos'),
+        hasMemberAccess: hasAccess('/sienna/miembros'),
+        hasFindingsAccess: hasAccess('/sienna/hallazgos'),
+        hasLegacyAccess: legacyLinks.length > 0,
+        priority,
+        curiosity,
+      }),
+    [firstName, hasAccess, isAdmin, legacyLinks.length, primaryLinks.length, priority, curiosity]
+  );
+
+  const branchDistribution = useMemo<BranchDistribution[]>(() => {
+    const distributableAmount = Number(realtimeCalculation?.estate?.distributableAmount || summary?.estate?.distributableAmount || 0);
+    const bySource = new Map<string, { source: string; share: number; heirs: Set<string> }>();
+
+    (realtimeCalculation?.active_heirs ?? []).forEach((row) => {
+      const breakdown = row.source_breakdown?.length
+        ? row.source_breakdown
+        : [{ source: row.sources.join(' + ') || 'Sin rama', share: row.share_percent }];
+
+      breakdown.forEach((segment) => {
+        const key = segment.source || 'Sin rama';
+        const current = bySource.get(key) || { source: key, share: 0, heirs: new Set<string>() };
+        current.share += Number(segment.share || 0);
+        current.heirs.add(row.member_id || row.heir_name);
+        bySource.set(key, current);
+      });
+    });
+
+    return Array.from(bySource.values())
+      .map((row) => ({
+        source: row.source,
+        share: row.share,
+        amount: distributableAmount * (row.share / 100),
+        heirs: row.heirs.size,
+      }))
+      .sort((left, right) => right.share - left.share || left.source.localeCompare(right.source, 'es'));
+  }, [realtimeCalculation?.active_heirs, realtimeCalculation?.estate?.distributableAmount, summary?.estate?.distributableAmount]);
+
+  const chartRows = useMemo(
+    () => [
+      {
+        label: 'Hallazgos',
+        value: Number(summary?.pending_findings_total || 0),
+        color: '#2E8B57',
+      },
+      {
+        label: 'Validaciones',
+        value: Number(summary?.pending_validation_total || 0),
+        color: '#D4AF37',
+      },
+      {
+        label: 'Dobles linajes',
+        value: Number(summary?.dual_lineage_total || 0),
+        color: '#3767A6',
+      },
+    ],
+    [summary]
+  );
+
+  const hasAnyLink = primaryLinks.length > 0 || secondaryLinks.length > 0 || adminLinks.length > 0 || legacyLinks.length > 0;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-legal-beige/60 via-white to-white">
-      <div className="app-shell py-8 sm:py-10">
-        <div className="relative mb-8 max-w-3xl pr-12">
-          <div className="absolute right-0 top-0">
-            <PageHelp helpKey="dashboard" />
+    <div className="min-h-screen bg-[#F6F2E8] dark:bg-background">
+      <section className="legacy-gradient border-b border-legal-blue/10 dark:border-[#243047]">
+        <div className="app-shell py-8 sm:py-10">
+          <div className="legacy-surface relative overflow-hidden rounded-lg p-5 sm:p-7">
+            <div className="relative max-w-4xl pr-12">
+              <div className="absolute right-0 top-0">
+                <PageHelp helpKey="dashboard" />
+              </div>
+              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-legal-gold/35 bg-[#FFF6D8] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[#0A1020]">
+                <Sparkles className="h-3.5 w-3.5 text-legal-gold" />
+                Curiosidades del legado
+              </div>
+              <h1 className="font-serif text-3xl font-bold text-legal-blue dark:text-[#F5F7FA] sm:text-5xl">
+                El archivo también cuenta historias.
+              </h1>
+              <div className="mt-5 grid max-w-5xl gap-3 lg:grid-cols-[1.35fr_1fr]">
+                <div className="rounded-md border border-legal-gold/25 bg-white/80 p-5 shadow-sm dark:border-[#D4AF37]/25 dark:bg-[#101827]/85">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[#9B7418] dark:text-[#E6C768]">
+                    Sabías que...
+                  </p>
+                  <p className="mt-2 text-xl font-semibold leading-relaxed text-legal-blue dark:text-[#F5F7FA] sm:text-2xl">
+                    {displayCuriosityCards[0] || persona.curiosity}
+                  </p>
+                </div>
+                <div className="grid gap-3">
+                  {(displayCuriosityCards.length > 1 ? displayCuriosityCards.slice(1) : [persona.curiosity]).map((fact, index) => (
+                    <div
+                      key={`legacy-curiosity-${index}-${fact}`}
+                      className="rounded-md border border-legal-blue/10 bg-[#FFF6D8]/80 p-4 text-sm font-medium leading-relaxed text-[#1B2430] shadow-sm dark:border-[#D4AF37]/20 dark:bg-[#162338] dark:text-[#F5F7FA]"
+                    >
+                      {fact}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="relative mt-6 grid gap-3 lg:grid-cols-[1.1fr_1fr_0.9fr]">
+              <ChartPanel title="Estado del reparto">
+                <DonutChart
+                  value={Number(summary?.total_share || 0)}
+                  label="Distribución calculada"
+                  sublabel={formatMoney(summary?.estate?.distributableAmount) + ' netos vinculados al legado.'}
+                />
+              </ChartPanel>
+              <ChartPanel title="Distribución por rama">
+                <BranchDistributionChart rows={branchDistribution} />
+              </ChartPanel>
+              <ChartPanel title="Salud del expediente">
+                <MiniBars rows={chartRows} />
+              </ChartPanel>
+            </div>
           </div>
-          <h1 className="font-serif text-3xl font-bold text-legal-blue sm:text-4xl">
-            Hola, {firstName}
-          </h1>
-          <p className="mt-3 text-base leading-relaxed text-gray-700 sm:text-lg">
-            Aquí puede consultar el árbol familiar, su parte en la herencia y los documentos del
-            expediente Sangiovanni.
+        </div>
+      </section>
+
+      <div className="app-shell py-10 sm:py-12">
+        <div className="mb-8 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+          {stats.map((item) => (
+            <SiennaStatCard key={item.label} item={item} />
+          ))}
+        </div>
+
+        <div className="mb-6 max-w-3xl">
+          <h2 className="font-serif text-2xl font-bold text-legal-blue dark:text-[#F5F7FA]">Explorar el legado</h2>
+          <p className="mt-2 text-sm leading-relaxed text-gray-600 dark:text-muted-foreground">
+            Las pantallas principales quedan arriba. Las herramientas formales, legacy y administrativas quedan
+            separadas para reducir ruido.
           </p>
         </div>
 
@@ -188,7 +1125,7 @@ const Dashboard = () => {
         {secondaryLinks.length > 0 && (
           <div className="mt-8">
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-legal-gray">
-              También disponible
+              También dentro del archivo
             </h2>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {secondaryLinks.map((item) => (
@@ -198,12 +1135,29 @@ const Dashboard = () => {
           </div>
         )}
 
+        {legacyLinks.length > 0 && (
+          <div className="legacy-surface mt-10 rounded-lg border-dashed p-4 sm:p-5">
+            <h2 className="mb-1 font-serif text-lg font-bold text-legal-blue dark:text-[#F5F7FA]">Caso y Legacy</h2>
+            <p className="mb-4 text-sm text-gray-600 dark:text-muted-foreground">
+              Quedan disponibles para consulta, pero ya no compiten con la experiencia principal.
+            </p>
+            <div className="grid gap-3 md:grid-cols-3">
+              {legacyLinks.map((item) => (
+                <HeirActionCard key={item.path} item={item} />
+              ))}
+            </div>
+          </div>
+        )}
+
         {adminLinks.length > 0 && (
-          <div className="mt-10 rounded-xl border border-legal-blue/10 bg-legal-blue/[0.03] p-4 sm:p-5">
-            <h2 className="mb-3 font-serif text-lg font-bold text-legal-blue">Administración</h2>
+          <div className="legacy-surface mt-10 rounded-lg p-4 sm:p-5">
+            <h2 className="mb-1 font-serif text-lg font-bold text-legal-blue dark:text-[#F5F7FA]">Mesa técnica</h2>
+            <p className="mb-3 text-sm text-gray-600 dark:text-muted-foreground">
+              Acceso administrativo separado de la experiencia familiar principal.
+            </p>
             <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
               {adminLinks.map((item) => (
-                <Button key={item.path} asChild variant="outline" className="justify-start bg-white">
+                <Button key={item.path} asChild variant="outline" className="btn-secondary justify-start">
                   <Link to={item.path}>{item.title}</Link>
                 </Button>
               ))}

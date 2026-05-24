@@ -15,7 +15,7 @@ const MemberDeceasedIndicator = ({ death, compact = false, className }: MemberDe
   >
     <span
       className={cn(
-        'inline-flex items-center justify-center rounded-full border border-gray-400/35 bg-white shadow-sm',
+        'inline-flex items-center justify-center rounded-full border border-gray-400/35 bg-white shadow-sm dark:border-[#D4AF37]/65 dark:bg-[#D4AF37]/15 dark:shadow-[0_0_16px_rgb(212_175_55_/_0.28)]',
         compact ? 'h-5 w-5' : 'h-6 w-6'
       )}
     >
@@ -24,7 +24,7 @@ const MemberDeceasedIndicator = ({ death, compact = false, className }: MemberDe
     <Badge
       variant="outline"
       className={cn(
-        'border-gray-400 bg-gray-50 text-gray-800',
+        'border-gray-400 bg-gray-50 text-gray-800 dark:border-[#D4AF37]/55 dark:bg-[#D4AF37]/12 dark:text-[#F5F7FA]',
         compact ? 'px-1.5 py-0 text-[10px]' : 'text-xs'
       )}
     >

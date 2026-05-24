@@ -43,7 +43,7 @@ const Auth = () => {
   };
 
   return (
-    <div className="min-h-[calc(100vh-8rem)] bg-gradient-to-b from-legal-beige/50 to-white">
+    <div className="legacy-gradient min-h-[calc(100vh-8rem)]">
       <div className="container relative mx-auto max-w-md px-4 py-8 sm:py-12">
         <div className="absolute right-4 top-8 z-10">
           <PageHelp helpKey="auth" />
@@ -53,10 +53,10 @@ const Auth = () => {
             ← Volver al inicio
           </Link>
         </div>
-        <div className="space-y-6 rounded-lg border border-legal-gold/20 bg-white p-6 shadow-md">
+        <div className="legacy-surface space-y-6 rounded-lg p-6">
           <div className="text-center">
-            <h1 className="font-serif text-2xl font-bold text-legal-blue">HerenciaRD</h1>
-            <p className="mt-2 text-legal-dark">Acceso al expediente familiar</p>
+            <h1 className="font-serif text-2xl font-bold text-legal-blue">Legado Sangiovanni</h1>
+            <p className="mt-2 text-legal-dark">Acceso privado al archivo vivo familiar</p>
           </div>
 
         <Form {...loginForm}>
@@ -89,13 +89,13 @@ const Auth = () => {
               )}
             />
 
-            <Button type="submit" className="w-full bg-legal-blue hover:bg-legal-blue/90" disabled={loading}>
+            <Button type="submit" className="btn-primary w-full" disabled={loading}>
               {loading ? "Iniciando sesión..." : "Iniciar Sesión"}
             </Button>
           </form>
         </Form>
 
-        <Alert className="mt-4 bg-legal-beige border-legal-gold/20">
+        <Alert className="mt-4 border-legal-gold/20 bg-legal-beige/70 dark:bg-[#162033]/70">
           <AlertDescription className="text-sm text-legal-dark">
             El acceso es privado. Solicita tus credenciales al administrador del expediente.
           </AlertDescription>

@@ -65,15 +65,15 @@ export default {
 					ring: 'hsl(var(--sidebar-ring))'
 				},
 				// Colores personalizados para la aplicación
-				'legal-blue': '#0A2463',
-				'legal-gold': '#D5A021',
-				'legal-beige': '#F2F0E6',
-				'legal-dark': '#1A1F2C',
-				'legal-gray': '#8E9196',
+				'legal-blue': 'hsl(var(--legal-blue))',
+				'legal-gold': 'hsl(var(--legal-gold))',
+				'legal-beige': 'hsl(var(--legal-beige))',
+				'legal-dark': 'hsl(var(--legal-dark))',
+				'legal-gray': 'hsl(var(--legal-gray))',
 			},
 			fontFamily: {
-				serif: ['Merriweather', 'serif'],
-				sans: ['Inter', 'sans-serif'],
+				serif: ['Cormorant Garamond', 'DM Serif Display', 'serif'],
+				sans: ['Plus Jakarta Sans', 'Inter', 'system-ui', 'sans-serif'],
 			},
 			borderRadius: {
 				lg: 'var(--radius)',

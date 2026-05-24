@@ -5,6 +5,7 @@ export interface UserProfile {
   phone?: string | null;
   role?: "admin" | "regular";
   is_approved?: boolean;
+  can_edit?: boolean;
   created_at?: string | null;
   updated_at?: string | null;
 }
@@ -359,12 +360,12 @@ export const api = {
   listPages: () => request<{ pages: UserPage[] }>("/api/pages"),
   listMyPages: () => request<{ pages: UserPage[] }>("/api/me/pages"),
   listUsers: () => request<{ users: Array<UserProfile & { permissions?: { page_id: string }[] }> }>("/api/users"),
-  createUser: (data: { email: string; password: string; full_name?: string | null; role?: "admin" | "regular"; is_approved?: boolean }) =>
+  createUser: (data: { email: string; password: string; full_name?: string | null; role?: "admin" | "regular"; is_approved?: boolean; can_edit?: boolean }) =>
     request<{ profile: UserProfile }>("/api/users", {
       method: "POST",
       body: JSON.stringify(data),
     }),
-  updateUser: (id: string, data: Partial<Pick<UserProfile, "is_approved" | "role">>) =>
+  updateUser: (id: string, data: Partial<Pick<UserProfile, "is_approved" | "role" | "full_name" | "can_edit">>) =>
     request<{ profile: UserProfile }>(`/api/users/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),

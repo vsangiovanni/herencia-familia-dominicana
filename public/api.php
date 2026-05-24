@@ -245,14 +245,6 @@ function classify_member_by_dominican_law(array $member, array $members, array $
     ];
   }
 
-  $share = $sharesById[(string)$member['id']] ?? null;
-  if ($share) {
-    return [
-      'inheritance_status' => (($member['inheritance_status'] ?? '') === 'confirmado') ? 'confirmado' : 'posible_heredero',
-      'inheritance_reason' => (string)($share['reason'] ?? 'Heredero por representación dentro de la estirpe sucesoral activa.'),
-    ];
-  }
-
   if (isset($knownIntermediates[$name])) {
     return [
       'inheritance_status' => 'no_hereda',
@@ -274,6 +266,14 @@ function classify_member_by_dominican_law(array $member, array $members, array $
     ];
   }
 
+  $share = $sharesById[(string)$member['id']] ?? null;
+  if ($share) {
+    return [
+      'inheritance_status' => (($member['inheritance_status'] ?? '') === 'confirmado') ? 'confirmado' : 'posible_heredero',
+      'inheritance_reason' => (string)($share['reason'] ?? 'Heredero por representación dentro de la estirpe sucesoral activa.'),
+    ];
+  }
+
   return [
     'inheritance_status' => $member['inheritance_status'] ?? 'requiere_revision',
     'inheritance_reason' => $member['inheritance_reason'] ?? 'No hay suficiente información del expediente para clasificarlo automáticamente.',
@@ -282,7 +282,7 @@ function classify_member_by_dominican_law(array $member, array $members, array $
 
 function resolve_effective_member_inheritance(array $member, array $classified): array {
   $storedStatus = $member['inheritance_status'] ?? 'requiere_revision';
-  if ($storedStatus !== '' && $storedStatus !== 'requiere_revision') {
+  if (!is_deceased_member($member) && $storedStatus !== '' && $storedStatus !== 'requiere_revision') {
     return [
       'inheritance_status' => $storedStatus,
       'inheritance_reason' => $member['inheritance_reason'] ?? 'Estado definido manualmente en la administración del árbol.',
@@ -1236,6 +1236,7 @@ function ensure_schema(): void {
       phone VARCHAR(50) NULL,
       role ENUM('admin', 'regular') NOT NULL DEFAULT 'regular',
       is_approved BOOLEAN NOT NULL DEFAULT FALSE,
+      can_edit BOOLEAN NOT NULL DEFAULT FALSE,
       created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     );
@@ -1388,6 +1389,10 @@ function ensure_schema(): void {
   }
 
   sync_regular_user_page_access('/sienna/dobles-linajes');
+
+  if (!column_exists('profiles', 'can_edit')) {
+    db()->exec('ALTER TABLE profiles ADD COLUMN can_edit BOOLEAN NOT NULL DEFAULT FALSE AFTER is_approved');
+  }
 
   $migrations = [
     ['sienna_member_id', 'ALTER TABLE confirmed_heirs ADD COLUMN sienna_member_id VARCHAR(120) NULL UNIQUE AFTER id'],
@@ -1604,6 +1609,7 @@ function public_profile(?array $profile): ?array {
     'phone' => $profile['phone'],
     'role' => $profile['role'],
     'is_approved' => (bool)$profile['is_approved'],
+    'can_edit' => (bool)($profile['can_edit'] ?? false),
     'created_at' => $profile['created_at'],
     'updated_at' => $profile['updated_at'],
   ];
@@ -1676,6 +1682,12 @@ function require_user(bool $requireApproved = true): array {
 
 function require_admin(array $user): void {
   if (($user['role'] ?? '') !== 'admin') json_response(['message' => 'Acceso no autorizado'], 403);
+}
+
+function require_editor(array $user): void {
+  if (($user['role'] ?? '') === 'admin') return;
+  if (filter_var($user['can_edit'] ?? false, FILTER_VALIDATE_BOOLEAN)) return;
+  json_response(['message' => 'Tu cuenta tiene permiso de lectura, pero no puede modificar información.'], 403);
 }
 
 function body(): array {
@@ -1858,7 +1870,7 @@ try {
   if ($method === 'GET' && $path === '/users') {
     $user = require_user();
     require_admin($user);
-    $users = query_all('SELECT id, email, full_name, phone, role, is_approved, created_at, updated_at FROM profiles ORDER BY created_at DESC');
+    $users = query_all('SELECT id, email, full_name, phone, role, is_approved, can_edit, created_at, updated_at FROM profiles ORDER BY created_at DESC');
     $permissions = query_all('SELECT user_id, page_id FROM user_page_permissions');
     foreach ($users as &$row) {
       $row = public_profile($row);
@@ -1888,8 +1900,8 @@ try {
     $id = uuid();
     $role = in_array(($data['role'] ?? 'regular'), ['admin', 'regular'], true) ? $data['role'] : 'regular';
     exec_sql(
-      'INSERT INTO profiles (id, email, password_hash, full_name, role, is_approved)
-       VALUES (:id, :email, :hash, :fullName, :role, :approved)',
+      'INSERT INTO profiles (id, email, password_hash, full_name, role, is_approved, can_edit)
+       VALUES (:id, :email, :hash, :fullName, :role, :approved, :canEdit)',
       [
         'id' => $id,
         'email' => $email,
@@ -1897,6 +1909,7 @@ try {
         'fullName' => $data['full_name'] ?? null,
         'role' => $role,
         'approved' => bool_value($data['is_approved'] ?? true),
+        'canEdit' => bool_value($data['can_edit'] ?? false),
       ]
     );
     json_response(['profile' => public_profile(query_one('SELECT * FROM profiles WHERE id = :id', ['id' => $id]))], 201);
@@ -1909,8 +1922,15 @@ try {
     if (array_key_exists('is_approved', $data)) {
       exec_sql('UPDATE profiles SET is_approved = :approved WHERE id = :id', ['approved' => bool_value($data['is_approved']), 'id' => $m[1]]);
     }
+    if (array_key_exists('can_edit', $data)) {
+      exec_sql('UPDATE profiles SET can_edit = :canEdit WHERE id = :id', ['canEdit' => bool_value($data['can_edit']), 'id' => $m[1]]);
+    }
     if (isset($data['role']) && in_array($data['role'], ['admin', 'regular'], true)) {
       exec_sql('UPDATE profiles SET role = :role WHERE id = :id', ['role' => $data['role'], 'id' => $m[1]]);
+    }
+    if (array_key_exists('full_name', $data)) {
+      $fullName = trim((string)($data['full_name'] ?? ''));
+      exec_sql('UPDATE profiles SET full_name = :fullName WHERE id = :id', ['fullName' => $fullName !== '' ? $fullName : null, 'id' => $m[1]]);
     }
     json_response(['profile' => public_profile(query_one('SELECT * FROM profiles WHERE id = :id', ['id' => $m[1]]))]);
   }
@@ -1965,6 +1985,7 @@ try {
 
   if ($method === 'POST' && $path === '/confirmed-heirs/bulk-amounts') {
     $user = require_user();
+    require_editor($user);
     $data = body();
     $items = is_array($data['items'] ?? null) ? $data['items'] : [];
     foreach ($items as $item) {
@@ -1985,6 +2006,7 @@ try {
 
   if ($method === 'POST' && $path === '/confirmed-heirs') {
     $user = require_user();
+    require_editor($user);
     $data = body();
     $heirName = trim((string)($data['heir_name'] ?? ''));
     if ($heirName === '') {
@@ -2026,6 +2048,7 @@ try {
 
   if (preg_match('#^/confirmed-heirs/([^/]+)$#', $path, $m) && $method === 'PUT') {
     $user = require_user();
+    require_editor($user);
     $data = body();
     $heirName = trim((string)($data['heir_name'] ?? ''));
     if ($heirName === '') {
@@ -2108,6 +2131,7 @@ try {
 
   if ($method === 'POST' && $path === '/sienna-family-members') {
     $user = require_user();
+    require_editor($user);
     $data = body();
     if (empty($data['name'])) {
       json_response(['message' => 'El nombre del miembro es requerido'], 400);
@@ -2216,7 +2240,7 @@ try {
 
   if (preg_match('#^/sienna-family-members/([^/]+)$#', $path, $m) && $method === 'DELETE') {
     $user = require_user();
-    require_admin($user);
+    require_editor($user);
     $memberId = $m[1];
     exec_sql(
       'DELETE FROM member_parent_links WHERE child_member_id = :childId OR parent_member_id = :parentId',
@@ -2276,6 +2300,7 @@ try {
 
   if ($method === 'POST' && $path === '/evidence-documents') {
     $user = require_user();
+    require_editor($user);
     $data = body();
     $title = trim((string)($data['title'] ?? ''));
     $documentType = trim((string)($data['document_type'] ?? ''));
@@ -2325,7 +2350,8 @@ try {
   }
 
   if (preg_match('#^/evidence-documents/([^/]+)$#', $path, $m) && $method === 'DELETE') {
-    require_user();
+    $user = require_user();
+    require_editor($user);
     exec_sql('DELETE FROM evidence_documents WHERE id = :id', ['id' => $m[1]]);
     json_response(['ok' => true]);
   }
@@ -2352,6 +2378,7 @@ try {
 
   if ($method === 'POST' && $path === '/sienna-calculation-snapshots') {
     $user = require_user();
+    require_editor($user);
     $data = body();
     $id = uuid();
     exec_sql(

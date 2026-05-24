@@ -15,10 +15,31 @@ type AuthContextType = {
   refreshUserProfile: () => Promise<void>;
   isAdmin: boolean;
   isApproved: boolean;
+  canEdit: boolean;
   hasAccess: (path: string) => boolean;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+const routeAliases: Record<string, string> = {
+  "/sienna": "/dashboard",
+  "/sienna/arbol": "/sienna/arbol-genealogico",
+  "/sienna/linajes": "/sienna/dobles-linajes",
+  "/sienna/miembros": "/sienna/miembros-arbol",
+  "/sienna/explicacion": "/sienna/explicacion-herederos",
+  "/sienna/documentos": "/documentos-probatorios",
+  "/sienna/hallazgos": "/hallazgos",
+  "/sienna/filiacion": "/calculo-filiacion",
+  "/caso/determinacion-herederos": "/determinacion-herederos",
+  "/legacy/arbol-genealogico": "/arbol-genealogico",
+  "/legacy/arbol-clasico": "/arbol-genealogico-clasico",
+  "/legacy/lineas-familiares": "/lineas-familiares",
+  "/legacy/calculo-filiacion": "/calculo-filiacion",
+  "/admin/usuarios": "/admin-users",
+  "/admin/calculo-herencias": "/calculo-herencias",
+};
+
+const normalizeRoute = (path: string) => (path || "/").split("?")[0].replace(/\/+$/, "") || "/";
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<UserProfile | null>(null);
@@ -31,6 +52,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const isAdmin = Boolean(userProfile?.role === "admin");
   const isApproved = Boolean(userProfile?.is_approved);
+  const canEdit = isAdmin || Boolean(userProfile?.can_edit);
 
   const fetchUserPages = async (profile: UserProfile) => {
     try {
@@ -107,7 +129,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (!navigationBlocker.current) {
         navigationBlocker.current = true;
-        navigate("/dashboard");
+        navigate("/sienna");
         setTimeout(() => {
           navigationBlocker.current = false;
         }, 500);
@@ -155,18 +177,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const hasAccess = useCallback((path: string) => {
-    const normalizedPath = (path || "/").split("?")[0].replace(/\/+$/, "") || "/";
+    const normalizedPath = normalizeRoute(path);
+    const canonicalPath = routeAliases[normalizedPath] || normalizedPath;
     if (normalizedPath === "/auth" || normalizedPath === "/perfil") return true;
     if (isAdmin) return true;
     if (!isApproved) return false;
 
-    const sharedApprovedPaths = new Set(["/", "/dashboard", "/sienna/dobles-linajes"]);
-    if (sharedApprovedPaths.has(normalizedPath)) return true;
+    const sharedApprovedPaths = new Set(["/", "/dashboard", "/sienna", "/sienna/dobles-linajes", "/sienna/linajes"]);
+    if (sharedApprovedPaths.has(normalizedPath) || sharedApprovedPaths.has(canonicalPath)) return true;
 
     if (userPages.length === 0) return false;
     return userPages.some((page) => {
-      const normalizedPagePath = (page.path || "/").replace(/\/+$/, "") || "/";
-      return normalizedPagePath === normalizedPath;
+      const normalizedPagePath = normalizeRoute(page.path || "/");
+      const canonicalPagePath = routeAliases[normalizedPagePath] || normalizedPagePath;
+      return (
+        normalizedPagePath === normalizedPath ||
+        normalizedPagePath === canonicalPath ||
+        canonicalPagePath === normalizedPath ||
+        canonicalPagePath === canonicalPath
+      );
     });
   }, [isAdmin, isApproved, userPages]);
 
@@ -184,6 +213,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         refreshUserProfile,
         isAdmin,
         isApproved,
+        canEdit,
         hasAccess,
       }}
     >
