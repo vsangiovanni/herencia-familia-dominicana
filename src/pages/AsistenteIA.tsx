@@ -85,9 +85,12 @@ const renderAnswer = (answer: string) => {
 const AsistenteIA = () => {
   const location = useLocation();
   const personalization = useSiennaPersonalization();
+  const initialStoredConversation = useMemo(() => loadStoredConversation(), []);
   const animationChainRef = useRef<Promise<void>>(Promise.resolve());
+  const previousConversationRef = useRef<ChatMessage[]>(initialStoredConversation);
   const [question, setQuestion] = useState('');
-  const [messages, setMessages] = useState<ChatMessage[]>(() => loadStoredConversation());
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [hasStoredContext, setHasStoredContext] = useState(() => previousConversationRef.current.length > 0);
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -104,14 +107,16 @@ const AsistenteIA = () => {
         response: message.response,
       }));
     if (!persistable.length) {
-      window.localStorage.removeItem(SIENNA_CONVERSATION_STORAGE_KEY);
       return;
     }
     window.localStorage.setItem(SIENNA_CONVERSATION_STORAGE_KEY, JSON.stringify(persistable));
+    setHasStoredContext(true);
   }, [messages]);
 
   const clearConversation = () => {
+    previousConversationRef.current = [];
     setMessages([]);
+    setHasStoredContext(false);
     setError(null);
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem(SIENNA_CONVERSATION_STORAGE_KEY);
@@ -153,7 +158,8 @@ const AsistenteIA = () => {
   const ask = async (text?: string) => {
     const prompt = (text || question).trim();
     if (prompt.length < 3) return;
-    const conversationHistory: SiennaConversationMessage[] = messages
+    const visibleHistory = messages.filter((message) => message.content.trim());
+    const conversationHistory: SiennaConversationMessage[] = [...previousConversationRef.current, ...visibleHistory]
       .filter((message) => message.content.trim())
       .slice(-8)
       .map((message) => ({ role: message.role, content: message.content.slice(0, 900) }));
@@ -219,7 +225,7 @@ const AsistenteIA = () => {
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
           <Card className="legacy-surface">
             <CardContent className="flex min-h-[560px] flex-col p-4 sm:p-5">
-              {messages.length > 0 && (
+              {(messages.length > 0 || hasStoredContext) && (
                 <div className="mb-3 flex justify-end">
                   <Button type="button" variant="outline" size="sm" className="btn-secondary" onClick={clearConversation}>
                     <RefreshCcw className="mr-1.5 h-3.5 w-3.5" />
