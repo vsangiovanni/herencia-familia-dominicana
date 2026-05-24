@@ -734,7 +734,7 @@ const MiembrosArbolSienna = () => {
       <BackButton />
 
       <DocumentHeader
-        title="Miembros del Árbol Sienna"
+        title="Miembros del Árbol de Alessandro"
         subtitle="Registro operativo: línea parental, rama sucesoral, conexión al árbol y si el miembro hereda o actúa solo como enlace"
         helpKey="sienna-miembros"
         helpToolbar={<MemberRegistrationGuide variant="icon" />}

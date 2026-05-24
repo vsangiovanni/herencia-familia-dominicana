@@ -33,6 +33,7 @@ const MiembrosArbolSienna = lazy(() => import('./pages/MiembrosArbolSienna'));
 const ExplicacionHerederosSienna = lazy(() => import('./pages/ExplicacionHerederosSienna'));
 const AnalisisDoblesLinajesSienna = lazy(() => import('./pages/AnalisisDoblesLinajesSienna'));
 const DocumentosProbatorios = lazy(() => import('./pages/DocumentosProbatorios'));
+const AsistenteIA = lazy(() => import('./pages/AsistenteIA'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -307,6 +308,14 @@ const AppContent = () => {
                 }
               />
               <Route
+                path="/sienna/asistente"
+                element={
+                  <ProtectedRoute>
+                    <AsistenteIA />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
                 path="/admin/usuarios"
                 element={
                   <ProtectedRoute requireAdmin={true}>
@@ -328,7 +337,7 @@ const AppContent = () => {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
+      <ThemeProvider attribute="class" defaultTheme="system" enableSystem storageKey="herenciard-theme">
         <TooltipProvider>
           <Toaster />
           <Sonner />

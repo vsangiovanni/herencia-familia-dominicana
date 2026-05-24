@@ -373,7 +373,7 @@ const OrderedStepsText = () => {
       step: '4',
       title: 'Revisar y validar',
       detail:
-        'Panel «Posición en el árbol», tabla de miembros, y Árbol Sienna (línea «Filiación: Matrimonio…» en hijos).',
+        'Panel «Posición en el árbol», tabla de miembros, y Árbol del caso (línea «Filiación: Matrimonio…» en hijos).',
     },
   ];
 

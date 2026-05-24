@@ -39,6 +39,8 @@ pnpm run dev
 
 Documentación: [docs/SIENNA.md](docs/SIENNA.md)
 
+Handoff operativo actual del asistente conversacional: [docs/SIENNA_AI_HANDOFF_2026-05-24.md](docs/SIENNA_AI_HANDOFF_2026-05-24.md)
+
 | Ruta | Uso |
 |------|-----|
 | `/sienna/arbol-genealogico` | Árbol clásico, montos, doble linaje, pantalla completa y resumen «Por qué heredan» |

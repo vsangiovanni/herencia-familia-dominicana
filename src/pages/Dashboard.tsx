@@ -4,12 +4,14 @@ import { useAuth } from '@/context/AuthContext';
 import PageHelp from '@/components/PageHelp';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { useConfirmedHeirs, useSiennaAnalysisSummary, useSiennaCalculation, useSiennaFamily } from '@/hooks/useSiennaData';
+import { useConfirmedHeirs, useSiennaAiCuriosities, useSiennaAnalysisSummary, useSiennaCalculation, useSiennaFamily } from '@/hooks/useSiennaData';
+import { useSiennaPersonalization } from '@/hooks/useSiennaPersonalization';
 import type { FamilyUnion, MemberParentLink, SiennaFamilyMember } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import {
   ArrowRight,
   BadgeDollarSign,
+  Bot,
   Calculator,
   CheckCircle2,
   FileText,
@@ -105,6 +107,14 @@ const HEIR_LINKS: DashboardLink[] = [
     path: '/sienna/documentos',
     icon: ScrollText,
     cta: 'Ver documentos',
+    primary: true,
+  },
+  {
+    title: 'Sienna contigo',
+    description: 'Pregúntame qué revisar y te guío paso a paso sin modificar datos.',
+    path: '/sienna/asistente',
+    icon: Bot,
+    cta: 'Preguntar',
     primary: true,
   },
   {
@@ -361,9 +371,9 @@ const ChartPanel = ({
   title: string;
   children: React.ReactNode;
 }) => (
-  <div className="legacy-surface rounded-lg p-4">
+  <div className="legacy-surface flex h-full min-h-[190px] flex-col rounded-lg p-4">
     <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-legal-gray">{title}</p>
-    {children}
+    <div className="flex flex-1 flex-col justify-center">{children}</div>
   </div>
 );
 
@@ -471,6 +481,16 @@ const buildLegacyCuriosities = ({
   const facts: string[] = [];
   const childrenByParent = getChildrenByParent(members, parentLinks);
   const alessandro = members.find((member) => member.name.toLowerCase().includes('alessandro'));
+  const inconsistentLinks = parentLinks.filter((link) => link.is_inconsistent);
+
+  inconsistentLinks.slice(0, 3).forEach((link) => {
+    const child = membersById.get(link.child_member_id);
+    const parent = membersById.get(link.parent_member_id);
+    if (!child || !parent) return;
+    facts.push(
+      'Hay una filiación que merece lupa: ' + shortName(child.name) + ' aparece ligado a ' + shortName(parent.name) + ', pero el expediente pide validación.'
+    );
+  });
 
   if (alessandro && !alessandro.spouse && !alessandro.spouse_member_id && !hasFormalUnion(alessandro, unions)) {
     facts.push('¿Sabías que Alessandro figura en el árbol sin matrimonio registrado? Es un detalle pequeño, pero cambia mucho cómo se lee su historia familiar.');
@@ -615,6 +635,38 @@ const buildLegacyCuriosities = ({
 
   const finalFacts = uniqueFacts(facts);
   return finalFacts.length ? finalFacts : ['Todavía no veo una curiosidad fuerte en los datos actuales, pero el árbol ya tiene suficiente estructura para empezar a contar mejor la historia familiar.'];
+};
+
+const buildPersonalCuriosities = ({
+  firstName,
+  member,
+  parentLinks,
+}: {
+  firstName: string;
+  member: SiennaFamilyMember | null;
+  parentLinks: MemberParentLink[];
+}) => {
+  if (!member) return [];
+  const facts: string[] = [];
+  const directParents = parentLinks.filter((link) => link.child_member_id === member.id);
+  const directChildren = parentLinks.filter((link) => link.parent_member_id === member.id);
+  const status = member.effective_inheritance_status || member.inheritance_status;
+  const reason = member.effective_inheritance_reason || member.inheritance_reason;
+
+  if (directParents.length >= 2) {
+    facts.push(`${firstName}, tu ficha familiar tiene dos enlaces parentales registrados; eso ayuda a leer tu línea con más precisión.`);
+  }
+  if (status && reason) {
+    facts.push(`${firstName}, tu conexión familiar está clasificada como ${String(status).replace(/_/g, ' ')}: ${reason}`);
+  }
+  if (directChildren.length > 0) {
+    facts.push(`${firstName}, desde tu ficha también se proyectan ${directChildren.length} enlace(s) descendiente(s) dentro del árbol.`);
+  }
+  if (!facts.length) {
+    facts.push(`${firstName}, ya puedo leer esta sección tomando como referencia tu ficha familiar: ${member.name}.`);
+  }
+
+  return facts.slice(0, 2);
 };
 
 const selectCuriosityCards = (facts: string[], seed: string, count = 3) => {
@@ -787,11 +839,11 @@ const buildSiennaPersona = ({
       label: priority.label,
       headline: chooseVariant(seed, [
         `Hola, ${firstName}. ${priority.headline}.`,
-        `${firstName}, hoy el Legado Sangiovanni pide atención aquí: ${priority.headline.toLowerCase()}.`,
+        `${firstName}, hoy el caso Alessandro pide atención aquí: ${priority.headline.toLowerCase()}.`,
         `Vista directiva: ${priority.headline}.`,
       ]),
       curiosity,
-      message: `${priority.message} Tienes acceso completo, pero el tablero coloca primero lo que afecta la lectura del legado familiar.`,
+      message: `${priority.message} Tienes acceso completo, pero esta portada coloca primero lo que afecta la lectura del legado familiar de Alessandro.`,
       focus: priority.focus,
       priorityPath: priority.path,
       priorityCta: priority.cta,
@@ -850,11 +902,13 @@ const buildSiennaPersona = ({
 };
 
 const Dashboard = () => {
-  const { user, userProfile, isAdmin, hasAccess } = useAuth();
+  const { isAdmin, hasAccess } = useAuth();
+  const siennaPersonalization = useSiennaPersonalization();
   const { data: analysisSummary } = useSiennaAnalysisSummary();
   const { data: realtimeCalculationData } = useSiennaCalculation();
   const { data: confirmedHeirsData } = useConfirmedHeirs(false);
   const { data: familyData } = useSiennaFamily();
+  const { data: aiCuriositiesData } = useSiennaAiCuriosities();
   const summary = analysisSummary?.summary;
   const realtimeCalculation = realtimeCalculationData?.calculation;
   const calculatedFinalHeirsTotal =
@@ -865,11 +919,7 @@ const Dashboard = () => {
     0;
   const recognizedRegistryTotal = confirmedHeirsData?.heirs?.length ?? 0;
 
-  const firstName = useMemo(() => {
-    const fullName = userProfile?.full_name?.trim();
-    if (fullName) return fullName.split(/\s+/)[0];
-    return user?.email?.split('@')[0] || 'Bienvenido';
-  }, [user?.email, userProfile?.full_name]);
+  const firstName = siennaPersonalization.firstName;
   const dashboardVisitSeed = useMemo(
     () => `${Date.now()}-${Math.random().toString(36).slice(2)}`,
     []
@@ -948,13 +998,20 @@ const Dashboard = () => {
 
   const curiosityFacts = useMemo(
     () =>
-      buildLegacyCuriosities({
-        members: familyData?.members ?? [],
-        unions: familyData?.unions ?? [],
-        parentLinks: familyData?.parent_links ?? [],
-        seed: dashboardVisitSeed,
-      }),
-    [dashboardVisitSeed, familyData?.members, familyData?.parent_links, familyData?.unions]
+      [
+        ...buildPersonalCuriosities({
+          firstName,
+          member: siennaPersonalization.member,
+          parentLinks: familyData?.parent_links ?? [],
+        }),
+        ...buildLegacyCuriosities({
+          members: familyData?.members ?? [],
+          unions: familyData?.unions ?? [],
+          parentLinks: familyData?.parent_links ?? [],
+          seed: dashboardVisitSeed,
+        }),
+      ],
+    [dashboardVisitSeed, familyData?.members, familyData?.parent_links, familyData?.unions, firstName, siennaPersonalization.member]
   );
 
   const [curiosityCards, setCuriosityCards] = useState<string[]>(() => curiosityFacts.slice(0, 3));
@@ -979,7 +1036,12 @@ const Dashboard = () => {
     return [...facts.slice(offset), ...facts.slice(0, offset)].slice(0, 3);
   }, [dashboardVisitSeed, familyData?.members, familyData?.parent_links, familyData?.unions]);
 
-  const displayCuriosityCards = curiosityCards.length ? curiosityCards : fallbackCuriosityCards;
+  const aiCuriosityCards = aiCuriositiesData?.curiosities?.filter(Boolean).slice(0, 3) ?? [];
+  const displayCuriosityCards = aiCuriosityCards.length
+    ? aiCuriosityCards
+    : curiosityCards.length
+      ? curiosityCards
+      : fallbackCuriosityCards;
 
   const persona = useMemo(
     () =>
@@ -1053,18 +1115,46 @@ const Dashboard = () => {
       <section className="legacy-gradient border-b border-legal-blue/10 dark:border-[#243047]">
         <div className="app-shell py-8 sm:py-10">
           <div className="legacy-surface relative overflow-hidden rounded-lg p-5 sm:p-7">
-            <div className="relative max-w-4xl pr-12">
+            <div className="relative pr-12">
               <div className="absolute right-0 top-0">
                 <PageHelp helpKey="dashboard" />
               </div>
-              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-legal-gold/35 bg-[#FFF6D8] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[#0A1020]">
-                <Sparkles className="h-3.5 w-3.5 text-legal-gold" />
-                Curiosidades del legado
+              <div className="grid gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.8fr)] 2xl:grid-cols-[minmax(0,1.7fr)_minmax(380px,0.9fr)]">
+                <div>
+                  <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-legal-gold/35 bg-[#FFF6D8] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[#0A1020]">
+                    <Sparkles className="h-3.5 w-3.5 text-legal-gold" />
+                    Caso Alessandro de Paola Sangiovanni
+                  </div>
+                  <h1 className="max-w-5xl font-serif text-3xl font-bold text-legal-blue dark:text-[#F5F7FA] sm:text-5xl">
+                    {siennaPersonalization.isLinkedMember
+                      ? `${firstName}, el legado de Alessandro visto desde tu familia.`
+                      : 'El legado de Alessandro, claro para tu familia.'}
+                  </h1>
+                  <p className="mt-3 max-w-4xl text-sm leading-relaxed text-gray-700 dark:text-muted-foreground sm:text-base">
+                    {siennaPersonalization.isLinkedMember
+                      ? `Estoy leyendo genealogía, evidencia, reparto y hallazgos tomando como referencia tu ficha familiar: ${siennaPersonalization.memberLabel}.`
+                      : 'Reúno genealogía, evidencia, reparto, hallazgos y rutas de herencia para que cada miembro pueda comprender su conexión familiar con calma y precisión.'}
+                  </p>
+                </div>
+                <div className="rounded-md border border-legal-blue/10 bg-white/75 p-4 shadow-sm dark:border-[#D4AF37]/20 dark:bg-[#101827]/85">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-legal-gray dark:text-[#8C97A8]">
+                    Punto de control
+                  </p>
+                  <p className="mt-2 font-serif text-2xl font-bold text-legal-blue dark:text-[#F5F7FA]">
+                    {formatCompactNumber(summary?.active_heir_count || 0)} herederos finales
+                  </p>
+                  <p className="mt-2 text-sm leading-relaxed text-gray-600 dark:text-muted-foreground">
+                    {formatMoney(summary?.estate?.distributableAmount)} netos calculados sobre el expediente vivo.
+                  </p>
+                  <Button asChild className="btn-primary mt-4 w-full">
+                    <Link to={priority.path}>
+                      {priority.cta}
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Link>
+                  </Button>
+                </div>
               </div>
-              <h1 className="font-serif text-3xl font-bold text-legal-blue dark:text-[#F5F7FA] sm:text-5xl">
-                El archivo también cuenta historias.
-              </h1>
-              <div className="mt-5 grid max-w-5xl gap-3 lg:grid-cols-[1.35fr_1fr]">
+              <div className="mt-5 grid gap-3 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.9fr)] 2xl:grid-cols-[minmax(0,1.55fr)_minmax(380px,0.9fr)]">
                 <div className="rounded-md border border-legal-gold/25 bg-white/80 p-5 shadow-sm dark:border-[#D4AF37]/25 dark:bg-[#101827]/85">
                   <p className="text-xs font-semibold uppercase tracking-wide text-[#9B7418] dark:text-[#E6C768]">
                     Sabías que...
@@ -1113,10 +1203,10 @@ const Dashboard = () => {
         </div>
 
         <div className="mb-6 max-w-3xl">
-          <h2 className="font-serif text-2xl font-bold text-legal-blue dark:text-[#F5F7FA]">Explorar el legado</h2>
+          <h2 className="font-serif text-2xl font-bold text-legal-blue dark:text-[#F5F7FA]">Explorar el caso Alessandro</h2>
           <p className="mt-2 text-sm leading-relaxed text-gray-600 dark:text-muted-foreground">
-            Las pantallas principales quedan arriba. Las herramientas formales, legacy y administrativas quedan
-            separadas para reducir ruido.
+            Las pantallas principales quedan arriba. Las herramientas formales, legacy y administrativas quedan separadas
+            para que el protagonismo lo tenga el expediente de Alessandro, no la estructura interna del sistema.
           </p>
         </div>
 

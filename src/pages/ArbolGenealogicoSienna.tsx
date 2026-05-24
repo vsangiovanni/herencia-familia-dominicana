@@ -837,7 +837,7 @@ const ArbolGenealogicoSienna = () => {
       <html lang="es">
         <head>
           <meta charset="utf-8" />
-          <title>Árbol Sienna</title>
+          <title>Árbol del caso Alessandro</title>
           ${styles}
           <style>
             @page { size: A3 landscape; margin: 8mm; }
@@ -882,7 +882,7 @@ const ArbolGenealogicoSienna = () => {
           <main class="print-page">
             <header class="print-header">
               <div>
-                <h1 class="print-title">Árbol Genealógico Sienna</h1>
+                <h1 class="print-title">Árbol Genealógico del caso Alessandro</h1>
                 <p class="print-meta">Vista completa del árbol · ${members.length} miembros · ${presentationStats.finalHeirs} herederos finales</p>
               </div>
               <p class="print-meta">${new Date().toLocaleString('es-DO')}</p>
@@ -939,7 +939,7 @@ const ArbolGenealogicoSienna = () => {
       <BackButton />
 
       <DocumentHeader
-        title="Árbol Genealógico Sienna"
+        title="Árbol Genealógico de Alessandro"
         subtitle="Visualización clásica dinámica con herederos, foto y monto heredado"
         helpKey="sienna-arbol"
       />
@@ -999,7 +999,7 @@ const ArbolGenealogicoSienna = () => {
         )}
 
         <div className="rounded-md border border-legal-blue/10 bg-white px-4 py-3">
-          <p className="text-xs uppercase tracking-wide text-legal-gray">Cálculo Sienna en vivo</p>
+          <p className="text-xs uppercase tracking-wide text-legal-gray">Cálculo del caso en vivo</p>
           <p className="mt-1 text-sm text-legal-blue">
               {isFetchingCalculation
                 ? 'La API está recalculando con la data actual...'

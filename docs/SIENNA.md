@@ -2,6 +2,14 @@
 
 Pantallas especializadas del expediente familiar (caso Alessandro y derivados).
 
+## Handoff operativo reciente
+
+Para retomar el estado actual del asistente conversacional Sienna despues de un reinicio o una conversacion nueva, leer primero:
+
+- [Handoff Sienna AI - 2026-05-24](SIENNA_AI_HANDOFF_2026-05-24.md)
+
+Ese documento resume la arquitectura actual del asistente, los cambios hechos, pruebas realizadas, deploy a Hostinger, pendientes y breadcrumbs de archivos clave.
+
 ## Rutas
 
 | Ruta | Archivo | Propósito |
@@ -10,6 +18,7 @@ Pantallas especializadas del expediente familiar (caso Alessandro y derivados).
 | `/sienna/miembros-arbol` | `MiembrosArbolSienna.tsx` | CRUD con línea parental, rama sucesoral, conexión al árbol y si hereda |
 | `/sienna/dobles-linajes` | `AnalisisDoblesLinajesSienna.tsx` | Auditoría visual de dobles linajes, rutas, convergencias e inconsistencias |
 | `/sienna/explicacion-herederos` | `ExplicacionHerederosSienna.tsx` | Reunión: por qué heredo, simulador, semáforo, timeline, glosario, PDF |
+| `/sienna/asistente` | `AsistenteIA.tsx` | Sienna contigo: orienta, explica y guía hacia pantallas sin modificar datos |
 | `/hallazgos` | `Hallazgos.tsx` | Hallazgos dinámicos de consistencia (sin texto hardcodeado) según data vigente |
 | `/admin/settings` | `AdminSettings.tsx` | Editor guiado de settings globales y configuración del caso (solo admin) |
 
@@ -31,6 +40,7 @@ Endpoints canónicos actuales:
 | `GET /api/sienna-dual-lineage-analysis` | Casos de doble linaje, rutas, convergencias e inconsistencias |
 | `GET /api/sienna-analysis-summary` | Resumen ejecutivo de métricas Sienna |
 | `GET /api/sienna-findings` | Hallazgos accionables por miembro |
+| `POST /api/sienna-ai-assistant` | Orientación IA read-only. No expone escritura ni permite modificar reparto, árbol o documentos |
 
 ## Estado del release 2026-05-22
 
@@ -45,6 +55,22 @@ Endpoints canónicos actuales:
 
 Último estado documentado del aparato Sienna después de la ronda de ajustes visuales, PDF, conteos y enlaces accionables.
 
+### Decisión de producto 2026-05-23 noche
+
+- La experiencia principal no debe presentarse como “Dashboard Sienna” ni como una marca interna del sistema.
+- El protagonista visible es **Alessandro de Paola Sangiovanni**.
+- La ruta técnica `/sienna` se conserva por compatibilidad, pero la interfaz debe hablar de **Caso Alessandro**, **Árbol del caso**, **Legado Sangiovanni** y expediente familiar.
+- “Sienna” queda como nombre interno de módulos/componentes/API, no como encabezado protagonista para usuarios finales.
+
+### Hardening backend local 2026-05-23 noche
+
+- Node local quedó alineado con PHP/producción para `can_edit`: perfiles, listado de usuarios, creación/edición de usuarios y perfil público.
+- Node agregó guardia `requireEditor` para escrituras de herederos, miembros, documentos y snapshots; usuarios aprobados sin edición quedan en modo lectura.
+- Guardar/eliminar miembros en Node ahora usa transacción para mantener consistentes miembro, filiación, uniones y referencias documentales/herederos.
+- Node y PHP agregan cache corto de 20 segundos para endpoints Sienna pesados: workspace, cálculo, linajes, resumen y hallazgos; se invalida al modificar settings, miembros, herederos, documentos o snapshots.
+- La app usa `next-themes` con `defaultTheme="system"` y storage propio `herenciard-theme`, por lo que el primer render sigue el tema claro/oscuro del dispositivo sin quedar amarrado al viejo default `light`; si el usuario elige manualmente un tema, se respeta esa elección.
+- Se agregó Sienna contigo en modo local/read-only: usa `OPENAI_MODEL=gpt-5-nano` cuando `OPENAI_API_KEY` está configurado; si no, responde en modo fallback con orientación determinística del backend. No tiene endpoints de escritura ni modifica datos sensibles.
+
 ### Fuente de verdad y conteos
 
 - El conteo principal de herederos finales debe venir del cálculo vivo del API: `/api/sienna-calculation.active_heir_count` o `active_heirs.length`.
@@ -52,7 +78,7 @@ Endpoints canónicos actuales:
 - Estado esperado:
   - Dashboard: **Herederos finales** = cálculo vivo.
   - Explicación de herederos: **Herederos calculados** = cálculo vivo.
-  - Árbol Sienna: **Herederos finales** = cálculo vivo.
+  - Árbol del caso: **Herederos finales** = cálculo vivo.
   - El conteo de `confirmed_heirs` puede mostrarse solo como detalle secundario/documental.
 
 ### Soporte documental accionable
@@ -149,7 +175,7 @@ Regla UX: no todos los badges deben ser links. Solo se enlazan estados que tiene
   3. Seleccionar **miembro titular (árbol)** (obligatorio).
   4. Usar **Recalcular parentescos automáticos** para completar padre/madre/cónyuge según el árbol.
 - Los campos de parentesco se guardan vinculados por `*_member_id` para evitar duplicidades por texto libre.
-- En `Miembros del Árbol Sienna`, la tabla incluye foto del miembro, conteo de documentos y botón **Ver documentación** con visor (imagen/PDF/texto).
+- En `Miembros del Árbol de Alessandro`, la tabla incluye foto del miembro, conteo de documentos y botón **Ver documentación** con visor (imagen/PDF/texto).
 
 ## Ayuda en pantalla
 
@@ -253,7 +279,7 @@ Ayuda en pantalla: icono **?** (`sienna-miembros`, `sienna-miembros-agregar`) e 
 - **Fórmula única** (`resolveEstateAmounts` en `siennaCalculation.ts`):
   - Firma = bruto × (% / 100)
   - Neto repartible = bruto − firma
-- **Árbol Sienna** y **Explicación a herederos** usan la misma función; los montos por heredero = neto × % sucesorio real.
+- **Árbol del caso** y **Explicación a herederos** usan la misma función; los montos por heredero = neto × % sucesorio real.
 - Al abrir cada pantalla se leen Settings y el cálculo vigente desde la API.
 - Guardar montos en el árbol persiste los pagos calculados sobre los herederos confirmados; Explicación refresca la vista sin alterar Settings globales.
 
@@ -314,5 +340,5 @@ Estado de la última validación local: PHP OK, build OK, pruebas Sienna OK, lin
 1. Abrir cada ruta en viewport 375px y 1920px.
 2. Verificar scroll de pestañas y tabla sin solapamiento.
 3. Árbol: zoom/scroll y nodos legibles en móvil.
-4. Imprimir árbol completo desde Árbol Sienna.
+4. Imprimir árbol completo desde Árbol del caso.
 5. Imprimir desde Explicación (`Imprimir reunión`) y generar PDF individual de un heredero con soporte documental.

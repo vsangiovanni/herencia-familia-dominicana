@@ -282,7 +282,7 @@ export const buildSiennaFindings = ({
       suggestion: 'Valide rutas en Cálculo por filiación y documentación probatoria por rama.',
       fixActions: [
         { id: 'dual-line-calculo', label: 'Ver cálculo', type: 'navigate', href: '/calculo-filiacion' },
-        { id: 'dual-line-arbol', label: 'Ver árbol Sienna', type: 'navigate', href: '/sienna/arbol-genealogico' },
+        { id: 'dual-line-arbol', label: 'Ver árbol del caso', type: 'navigate', href: '/sienna/arbol-genealogico' },
       ],
     });
   }

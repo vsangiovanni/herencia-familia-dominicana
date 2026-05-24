@@ -31,8 +31,8 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
     ],
   },
   dashboard: {
-    title: 'Inicio del expediente',
-    intro: 'Pantalla principal para herederos: árbol familiar, su parte en la herencia, conexiones de parentesco y documentos.',
+    title: 'Caso Alessandro',
+    intro: 'Portada principal del expediente de Alessandro de Paola Sangiovanni: árbol familiar, reparto, conexiones de parentesco y documentos.',
     sections: [
       {
         title: 'Accesos principales',
@@ -89,6 +89,27 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
       },
     ],
   },
+  'sienna-asistente': {
+    title: 'Sienna contigo',
+    intro: 'Aquí puedes preguntarme sobre el expediente y te ayudo a ubicar qué revisar, dónde ir y cómo avanzar sin cambiar nada por ti.',
+    sections: [
+      {
+        title: 'Uso seguro',
+        items: [
+          'Haga preguntas sobre reparto, árbol, documentos, hallazgos o rutas de parentesco.',
+          'Te indicaré la pantalla adecuada y, si hace falta, pasos sencillos para revisar con calma.',
+          'Cualquier cambio importante debe revisarlo y hacerlo una persona autorizada.',
+        ],
+      },
+      {
+        title: 'Cuidado del expediente',
+        items: [
+          'No creo, edito, elimino ni confirmo herederos.',
+          'Para decidir, use siempre lo que muestran las pantallas oficiales del expediente.',
+        ],
+      },
+    ],
+  },
   'admin-users': {
     title: 'Administración de usuarios',
     intro: 'Panel administrativo integral para controlar cuentas, permisos y auditar el uso operativo de la aplicación.',
@@ -136,7 +157,7 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
         title: 'Propósito',
         items: [
           'Vista estática de referencia del caso histórico cargado en el sistema.',
-          'Para trabajo operativo con cálculo use el Árbol Sienna.',
+          'Para trabajo operativo con cálculo use el Árbol del caso Alessandro.',
         ],
       },
     ],
@@ -148,7 +169,7 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
         title: 'Análisis',
         items: [
           'Revise ramas por generación en acordeones o pestañas.',
-          'Sirve para ubicar parentescos antes de registrar miembros en Sienna.',
+          'Sirve para ubicar parentescos antes de registrar miembros del expediente.',
         ],
       },
     ],
@@ -186,7 +207,7 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
         title: 'Herramienta',
         items: [
           'Simule repartos y gestione parámetros del cálculo sucesoral.',
-          'Complementa, no reemplaza, el motor automático de la sección Sienna.',
+          'Complementa, no reemplaza, el motor automático del expediente.',
         ],
       },
     ],
@@ -235,7 +256,7 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
     ],
   },
   'sienna-arbol': {
-    title: 'Árbol genealógico Sienna',
+    title: 'Árbol genealógico de Alessandro',
     intro: 'Vista principal del reparto: árbol completo, porcentajes, montos, doble linaje e impresión para reunión.',
     sections: [
       {
@@ -277,19 +298,19 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
   },
   'sienna-dobles-linajes': {
     title: 'Análisis de Dobles Linajes',
-    intro: 'Consola visual para auditar convergencias familiares sin reemplazar el árbol Sienna.',
+    intro: 'Consola visual para auditar convergencias familiares sin reemplazar el árbol del caso.',
     sections: [
       {
         title: 'Qué analiza',
         items: [
-          'Detecta personas conectadas por más de una ruta genealógica usando el backend y la base de datos real.',
+          'Detecta personas conectadas por más de una ruta familiar usando la información registrada en el expediente.',
           'Compara rutas por fuente familiar, identifica ancestros compartidos y estima complejidad del cruce.',
           'Muestra alertas por duplicados, vínculos dudosos, fechas incoherentes y relaciones sospechosas.',
           'El cónyuge en texto (sin spouse_member_id) es referencia documental y no genera inconsistencia sucesoria.',
           'El badge Verificado indica enlaces formales correctos; Ref. doc. señala cónyuge solo en texto.',
           'Use los filtros Todos, Heredan y No heredan / Vínculo para separar quienes reciben cuota del reparto de quienes solo conectan rutas.',
           'El cuadro Reparto por rama muestra monto y porcentaje por Vincenzo/Vicente y Paolo/Paulino; Monto total heredado resume la cuota neta.',
-          'Los fallecidos muestran el mismo lacito y etiqueta Fallecido que en el árbol Sienna.',
+          'Los fallecidos muestran el mismo lacito y etiqueta Fallecido que en el árbol del caso.',
         ],
       },
       {
@@ -366,7 +387,7 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
         items: [
           'Línea parental y rama sucesoral deben verse coherentes en el panel del formulario.',
           'En la tabla, abra un progenitor y revise "Hijos por filiación": matrimonio vs otras relaciones.',
-          'En Árbol Sienna, los hijos con unión muestran línea "Filiación: Matrimonio: …".',
+          'En Árbol del caso, los hijos con unión muestran línea "Filiación: Matrimonio: …".',
           'Si unión aparece inconsistente (migración), enlace el cónyuge en el miembro antes de reclasificar hijos.',
         ],
       },
@@ -421,7 +442,7 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
         title: 'Resaltar nodo y simulador',
         items: [
           'Resaltar nodo: solo ayuda visual en el árbol; no cambia herencia ni montos.',
-          'Simulador: muestra cambio de % antes de guardar (no incluye montos en RD$; esos van en Árbol Sienna).',
+          'Simulador: muestra cambio de % antes de guardar (no incluye montos en RD$; esos van en Árbol del caso).',
         ],
       },
       {
@@ -451,9 +472,9 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
       {
         title: 'Monto',
         items: [
-          'Ingrese el caudal bruto y el mismo % de firma de abogados que en Árbol Sienna.',
+          'Ingrese el caudal bruto y el mismo % de firma de abogados que en Árbol del caso.',
           'Neto = bruto − (bruto × % abogados). Los montos por heredero se calculan sobre el neto.',
-          'La pantalla consulta el cálculo en vivo de la API para mantenerse consistente con el árbol.',
+          'La pantalla usa el mismo cálculo que ve en el árbol para mantenerse consistente.',
           'Actualizar esta vista refresca datos y cálculo sin cambiar Settings globales.',
         ],
       },

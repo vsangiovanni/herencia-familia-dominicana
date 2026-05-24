@@ -252,7 +252,7 @@ const CalculoFiliacion = () => {
           </CardHeader>
           <CardContent className="p-6 space-y-4">
             <p className="text-gray-700">
-              Este cálculo consulta la API Sienna en vivo y separa la herencia por líneas activas. Si se agrega,
+              Este cálculo consulta la API del caso en vivo y separa la herencia por líneas activas. Si se agrega,
               modifica o elimina un miembro, la API recalcula y esta tabla refleja la misma realidad que el árbol.
             </p>
 
@@ -428,7 +428,7 @@ const CalculoFiliacion = () => {
           <div className="border-t border-legal-blue/10 p-4">
             <p className="text-sm leading-relaxed text-gray-700">
               Esta vista ya no usa supuestos fijos: refleja en tiempo real la misma estructura y cálculo sucesoral del
-              módulo Sienna. El porcentaje final siempre debe validarse con criterio jurídico, actas y estrategia procesal
+              módulo del caso. El porcentaje final siempre debe validarse con criterio jurídico, actas y estrategia procesal
               antes de emitir una distribución definitiva.
             </p>
           </div>

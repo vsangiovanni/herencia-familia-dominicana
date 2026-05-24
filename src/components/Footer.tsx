@@ -11,7 +11,7 @@ const Footer = () => {
           <div className="text-center md:text-left">
             <h3 className="font-serif text-xl font-bold">Legado Sangiovanni</h3>
             <p className="mt-1 text-sm text-legal-beige/70">
-              Archivo vivo familiar — árbol, reparto, hallazgos y evidencia
+              Expediente familiar — árbol, reparto, hallazgos y evidencia
             </p>
           </div>
 

@@ -516,7 +516,7 @@ const DocumentosProbatorios = () => {
       });
       invalidateSiennaData(queryClient);
       await loadData();
-      toast({ title: 'Heredero actualizado', description: 'Foto y monto quedaron guardados para el árbol Sienna.' });
+      toast({ title: 'Heredero actualizado', description: 'Foto y monto quedaron guardados para el árbol del caso.' });
     } catch (error) {
       toast({
         title: 'No se pudo actualizar el heredero',

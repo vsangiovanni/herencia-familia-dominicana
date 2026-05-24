@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
+import type { SiennaFamilyMember } from '@/lib/api';
 import DocumentHeader from '@/components/DocumentHeader';
 import SoftLoadingIndicator from '@/components/SoftLoadingIndicator';
 import { Button } from '@/components/ui/button';
@@ -38,6 +39,7 @@ interface UserData {
   id: string;
   email: string;
   full_name: string | null;
+  sienna_member_id?: string | null;
   role: 'admin' | 'regular';
   is_approved: boolean;
   can_edit: boolean;
@@ -84,10 +86,11 @@ const subtractDays = (days: number) => {
 };
 
 const AdminUsers = () => {
-  const { isAdmin, userProfile } = useAuth();
+  const { isAdmin, userProfile, refreshUserProfile } = useAuth();
   const [users, setUsers] = useState<UserData[]>([]);
   const [visits, setVisits] = useState<PageVisit[]>([]);
   const [pages, setPages] = useState<PageData[]>([]);
+  const [familyMembers, setFamilyMembers] = useState<SiennaFamilyMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMessage, setLoadingMessage] = useState('Cargando usuarios, permisos y auditoría...');
   const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
@@ -100,6 +103,7 @@ const AdminUsers = () => {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [auditUserId, setAuditUserId] = useState<string>('all');
   const [auditPathFilter, setAuditPathFilter] = useState('');
+  const [savingMemberForUserId, setSavingMemberForUserId] = useState<string | null>(null);
   const [newUser, setNewUser] = useState({
     email: '',
     full_name: '',
@@ -123,11 +127,20 @@ const AdminUsers = () => {
     setVisits((visits as PageVisit[]) || []);
   };
 
+  const fetchFamilyMembers = async () => {
+    const { members } = await api.getSiennaWorkspace({ includeMedia: false });
+    setFamilyMembers(
+      [...(members || [])].sort((left, right) =>
+        (left.name || '').localeCompare(right.name || '', 'es', { sensitivity: 'base' })
+      )
+    );
+  };
+
   const refreshAll = async () => {
     try {
       setLoading(true);
       setLoadingMessage('Consultando usuarios, páginas y visitas...');
-      await Promise.all([fetchUsers(), fetchPages(), fetchVisits()]);
+      await Promise.all([fetchUsers(), fetchPages(), fetchVisits(), fetchFamilyMembers()]);
       setLoadingMessage('Procesando indicadores del panel...');
     } catch (error) {
       toast({
@@ -239,6 +252,35 @@ const AdminUsers = () => {
         title: 'Error actualizando nombre',
         description: error instanceof Error ? error.message : 'No se pudo actualizar el nombre del usuario.',
       });
+    }
+  };
+
+  const updateUserMember = async (user: UserData, memberId: string) => {
+    try {
+      const nextMemberId = memberId || null;
+      setSavingMemberForUserId(user.id);
+      await api.updateUser(user.id, { sienna_member_id: nextMemberId });
+      if (user.id === userProfile?.id) {
+        await refreshUserProfile();
+      }
+      setUsers((current) =>
+        current.map((item) => (item.id === user.id ? { ...item, sienna_member_id: nextMemberId } : item))
+      );
+      const memberName = familyMembers.find((member) => member.id === nextMemberId)?.name;
+      toast({
+        title: 'Asociación actualizada',
+        description: memberName
+          ? `${user.email} quedó asociado a ${memberName}.`
+          : `${user.email} quedó sin asociación familiar manual.`,
+      });
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error asociando miembro',
+        description: error instanceof Error ? error.message : 'No se pudo asociar el usuario al miembro.',
+      });
+    } finally {
+      setSavingMemberForUserId(null);
     }
   };
 
@@ -573,10 +615,11 @@ const AdminUsers = () => {
                   <div className="py-8 text-center text-legal-gray">No hay usuarios para los filtros aplicados.</div>
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full min-w-[1150px] border-collapse">
+                    <table className="w-full min-w-[1380px] border-collapse">
                       <thead>
                         <tr className="bg-gray-50">
                           <th className="border px-3 py-2 text-left">Usuario</th>
+                          <th className="border px-3 py-2 text-left">Miembro asociado</th>
                           <th className="border px-3 py-2 text-left">Estado</th>
                           <th className="border px-3 py-2 text-left">Rol</th>
                           <th className="border px-3 py-2 text-left">Edición</th>
@@ -593,6 +636,26 @@ const AdminUsers = () => {
                               <p className="font-medium text-legal-blue">{item.user.full_name || 'Sin nombre'}</p>
                               <p className="text-sm text-gray-600">{item.user.email}</p>
                               <p className="text-xs text-gray-500">Creado: {formatDateTime(item.user.created_at)}</p>
+                            </td>
+                            <td className="border px-3 py-2">
+                              <select
+                                className="h-10 w-full min-w-[220px] rounded-md border px-3 text-sm"
+                                value={item.user.sienna_member_id || ''}
+                                disabled={savingMemberForUserId === item.user.id || familyMembers.length === 0}
+                                onChange={(event) => updateUserMember(item.user, event.target.value)}
+                              >
+                                <option value="">Sin asociar</option>
+                                {familyMembers.map((member) => (
+                                  <option key={member.id} value={member.id}>
+                                    {member.name}
+                                  </option>
+                                ))}
+                              </select>
+                              <p className="mt-1 text-xs text-gray-500">
+                                {item.user.sienna_member_id
+                                  ? 'Sienna lo tratará como este miembro.'
+                                  : 'Sienna puede detectar por nombre, si coincide.'}
+                              </p>
                             </td>
                             <td className="border px-3 py-2">
                               <Badge variant={item.user.is_approved ? 'default' : 'secondary'}>

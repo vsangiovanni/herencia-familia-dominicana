@@ -41,7 +41,8 @@ const MobileNavigationMenu = () => {
     can('/sienna/documentos') ||
     can('/sienna/miembros') ||
     can('/sienna/explicacion') ||
-    can('/sienna/filiacion');
+    can('/sienna/filiacion') ||
+    can('/sienna/asistente');
   const showLegacy =
     can('/legacy/arbol-genealogico') ||
     can('/legacy/arbol-clasico') ||
@@ -59,11 +60,11 @@ const MobileNavigationMenu = () => {
           <DropdownMenuLabel>Navegación</DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => navigate('/sienna')}>
-            Archivo vivo
+            Caso Alessandro
           </DropdownMenuItem>
           {showSienna && (
             <DropdownMenuLabel className="text-xs uppercase tracking-wide text-legal-gray">
-              Sienna
+              Legado
             </DropdownMenuLabel>
           )}
           {can('/sienna/arbol') && (
@@ -99,6 +100,11 @@ const MobileNavigationMenu = () => {
           {can('/sienna/filiacion') && (
             <DropdownMenuItem onClick={() => navigate('/sienna/filiacion')}>
               Filiación
+            </DropdownMenuItem>
+          )}
+          {can('/sienna/asistente') && (
+            <DropdownMenuItem onClick={() => navigate('/sienna/asistente')}>
+              Sienna
             </DropdownMenuItem>
           )}
           {can('/caso/determinacion-herederos') && (

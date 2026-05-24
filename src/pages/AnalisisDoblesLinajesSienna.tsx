@@ -525,7 +525,7 @@ const AnalisisDoblesLinajesSienna = () => {
             <div>
               <p className="mb-2 inline-flex items-center gap-2 rounded-full border border-legal-gold/30 bg-white px-3 py-1 text-xs font-semibold uppercase text-legal-blue">
                 <Sparkles className="h-3.5 w-3.5 text-legal-gold" />
-                Debugger genealógico Sienna
+                Auditoría genealógica del caso
               </p>
               <p className="max-w-3xl text-sm leading-relaxed text-gray-700">
                 Esta sección no reemplaza el árbol. Usa el backend para auditar rutas, comparar linajes y

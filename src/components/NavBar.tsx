@@ -2,6 +2,7 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   BookOpen,
+  Bot,
   FileText,
   GitMerge,
   History,
@@ -28,7 +29,7 @@ type SidebarLink = {
 };
 
 const siennaLinks: SidebarLink[] = [
-  { label: 'Archivo vivo', path: '/sienna', icon: Sparkles },
+  { label: 'Caso Alessandro', path: '/sienna', icon: Sparkles },
   { label: 'Árbol Genealógico', path: '/sienna/arbol', icon: TreePine },
   { label: 'Hallazgos', path: '/sienna/hallazgos', icon: Search },
   { label: 'Linajes', path: '/sienna/linajes', icon: GitMerge },
@@ -36,6 +37,7 @@ const siennaLinks: SidebarLink[] = [
   { label: 'Miembros', path: '/sienna/miembros', icon: Users },
   { label: 'Explicación', path: '/sienna/explicacion', icon: BookOpen },
   { label: 'Filiación', path: '/sienna/filiacion', icon: Network },
+  { label: 'Sienna', path: '/sienna/asistente', icon: Bot },
 ];
 
 const caseLinks: SidebarLink[] = [
@@ -107,41 +109,43 @@ const DesktopSidebar = () => {
   const roleLabel = isAdmin ? 'Administrador' : 'Usuario autorizado';
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-[#D9CDB8] bg-[var(--gradient-surface)] text-[#1B2430] shadow-xl dark:border-white/10 dark:text-white md:flex">
-      <div className="flex h-full flex-col p-4">
-        <div className="mb-5 flex items-center gap-2">
+    <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col overflow-hidden border-r border-[#D9CDB8] bg-[var(--gradient-surface)] text-[#1B2430] shadow-xl dark:border-white/10 dark:text-white md:flex">
+      <div className="flex h-full min-h-0 flex-col p-4">
+        <div className="mb-5 flex shrink-0 items-center gap-2">
           <Link
             to="/sienna"
-            aria-label="Legado Sangiovanni"
+            aria-label="Caso Alessandro de Paola Sangiovanni"
             className="flex min-w-0 flex-1 items-center justify-center overflow-hidden rounded-md border border-[#C89B2D]/30 bg-white/70 p-1 gold-glow transition-colors hover:bg-[#FFF6D8] dark:border-[#D4AF37]/20 dark:bg-white/[0.05] dark:hover:bg-white/[0.08]"
             style={{ aspectRatio: '1280 / 853' }}
           >
             <img
               src="/legado-sangiovanni-logo-transparent.png"
-              alt="Legado Sangiovanni"
+              alt="Caso Alessandro de Paola Sangiovanni"
               className="h-full w-full object-contain"
             />
           </Link>
           <ThemeToggle className="h-10 w-10 shrink-0 border border-[#D9CDB8] bg-white/70 text-[#1B2430] hover:bg-[#FFF6D8] hover:text-[#1B2430] dark:border-white/10 dark:bg-white/[0.04] dark:text-white/80 dark:hover:bg-white/10 dark:hover:text-white" />
         </div>
 
-        <div className="mb-3 px-3 text-[11px] font-semibold uppercase tracking-wide text-[#5F6B7A] dark:text-white/45">
-          Navegación principal
-        </div>
-        <nav className="space-y-1">
-          {visibleSienna.map((item) => (
-            <SidebarNavLink key={item.path} item={item} />
-          ))}
-        </nav>
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-[#C89B2D]/35 scrollbar-track-transparent">
+          <div className="mb-3 px-3 text-[11px] font-semibold uppercase tracking-wide text-[#5F6B7A] dark:text-white/45">
+            Navegación principal
+          </div>
+          <nav className="space-y-1">
+            {visibleSienna.map((item) => (
+              <SidebarNavLink key={item.path} item={item} />
+            ))}
+          </nav>
 
-        <div className="my-4 border-t border-[#D9CDB8] dark:border-white/10" />
-        <div className="space-y-2">
-          <CollapsedGroup title="Caso" links={visibleCase} />
-          <CollapsedGroup title="Legacy" links={visibleLegacy} />
-          <CollapsedGroup title="Admin" links={visibleAdmin} />
+          <div className="my-4 border-t border-[#D9CDB8] dark:border-white/10" />
+          <div className="space-y-2 pb-3">
+            <CollapsedGroup title="Caso" links={visibleCase} />
+            <CollapsedGroup title="Legacy" links={visibleLegacy} />
+            <CollapsedGroup title="Admin" links={visibleAdmin} />
+          </div>
         </div>
 
-        <div className="mt-auto space-y-3 border-t border-[#D9CDB8] pt-4 dark:border-white/10">
+        <div className="shrink-0 space-y-3 border-t border-[#D9CDB8] pt-4 dark:border-white/10">
           <div className="rounded-md border border-[#D9CDB8] bg-white/60 p-3 dark:border-white/10 dark:bg-white/[0.04]">
             <p className="truncate text-sm font-semibold text-[#1B2430] dark:text-white">{displayName}</p>
             <p className="mt-1 text-xs text-[#5F6B7A] dark:text-white/55">{roleLabel}</p>
@@ -174,12 +178,12 @@ const MobileTopBar = () => (
         <div className="flex items-center">
           <Link to="/sienna" className="flex items-center gap-2 text-legal-blue">
             <span className="inline-flex h-9 w-9 overflow-hidden rounded-lg border border-[#D4AF37]/40 bg-[#223A5E] text-white shadow-sm dark:bg-[#162033]">
-              <img src="/legado-sangiovanni-icon.jpg" alt="Legado Sangiovanni" className="h-full w-full object-cover" />
+              <img src="/legado-sangiovanni-icon.jpg" alt="Caso Alessandro de Paola Sangiovanni" className="h-full w-full object-cover" />
             </span>
             <span className="leading-tight">
-              <span className="block font-serif text-xl font-bold">Sangiovanni</span>
+              <span className="block font-serif text-xl font-bold">Alessandro</span>
               <span className="hidden text-[11px] font-semibold uppercase tracking-wide text-legal-gray sm:block">
-                Archivo vivo
+                Legado Sangiovanni
               </span>
             </span>
           </Link>
@@ -200,7 +204,7 @@ const GuestTopBar = () => (
         <div className="flex items-center">
           <Link to="/" className="flex items-center gap-2 text-legal-blue">
             <span className="inline-flex h-9 w-9 overflow-hidden rounded-lg border border-[#D4AF37]/40 bg-[#223A5E] text-white shadow-sm dark:bg-[#162033]">
-              <img src="/legado-sangiovanni-icon.jpg" alt="Legado Sangiovanni" className="h-full w-full object-cover" />
+              <img src="/legado-sangiovanni-icon.jpg" alt="Caso Alessandro de Paola Sangiovanni" className="h-full w-full object-cover" />
             </span>
             <span className="block font-serif text-xl font-bold">Legado Sangiovanni</span>
           </Link>

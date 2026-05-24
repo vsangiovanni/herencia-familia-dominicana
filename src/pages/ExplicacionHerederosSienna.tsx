@@ -282,7 +282,7 @@ const ExplicacionHerederosSienna = () => {
             {isPresentationMode ? 'Salir modo exposición' : 'Modo exposición'}
           </Button>
           <Button variant="outline" size="sm" asChild>
-            <Link to="/sienna/arbol-genealogico">Ver árbol Sienna</Link>
+            <Link to="/sienna/arbol-genealogico">Ver árbol del caso</Link>
           </Button>
           <Button variant="outline" size="sm" onClick={() => window.print()}>
             <Printer className="mr-2 h-4 w-4" />
@@ -292,7 +292,7 @@ const ExplicacionHerederosSienna = () => {
       </div>
 
       <DocumentHeader
-        title="Explicación Sienna para Herederos"
+        title="Explicación para Herederos"
         subtitle="Por qué heredo, simulación, soporte documental y resumen para reunión"
         helpKey="sienna-explicacion"
       />
@@ -408,7 +408,7 @@ const ExplicacionHerederosSienna = () => {
             {!isRenormalizedSimulation && distributedTotal < 99.95 && (
               <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">
                 El cálculo reparte {formatPercent(distributedTotal)} del caudal; el resto queda sin heredero vivo en alguna
-                rama. Los montos usan ese porcentaje real (igual que en el árbol Sienna).
+                rama. Los montos usan ese porcentaje real (igual que en el árbol del caso).
               </p>
             )}
 

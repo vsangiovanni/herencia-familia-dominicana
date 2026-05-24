@@ -15,12 +15,14 @@ export const siennaQueryKeys = {
     ['sienna-calculation', { estateAmount, lawyerFeePercentage }] as const,
   analysisSummary: ['sienna-analysis-summary'] as const,
   findings: ['sienna-findings'] as const,
+  aiCuriosities: ['sienna-ai-curiosities'] as const,
 };
 
-export const useSiennaFamily = () =>
+export const useSiennaFamily = (enabled = true) =>
   useQuery({
     queryKey: siennaQueryKeys.family,
     queryFn: () => api.listSiennaFamilyMembers(),
+    enabled,
     staleTime: SIENNA_STALE_MS,
   });
 
@@ -74,6 +76,14 @@ export const useSiennaFindings = () =>
     staleTime: 0,
   });
 
+export const useSiennaAiCuriosities = () =>
+  useQuery({
+    queryKey: siennaQueryKeys.aiCuriosities,
+    queryFn: () => api.getSiennaAiCuriosities(),
+    staleTime: 10 * 60_000,
+    retry: false,
+  });
+
 export const invalidateSiennaData = (queryClient: ReturnType<typeof useQueryClient>) => {
   queryClient.invalidateQueries({ queryKey: ['sienna-family'] });
   queryClient.invalidateQueries({ queryKey: ['confirmed-heirs'] });
@@ -85,6 +95,7 @@ export const invalidateSiennaData = (queryClient: ReturnType<typeof useQueryClie
   queryClient.invalidateQueries({ queryKey: ['sienna-calculation'] });
   queryClient.invalidateQueries({ queryKey: ['sienna-analysis-summary'] });
   queryClient.invalidateQueries({ queryKey: ['sienna-findings'] });
+  queryClient.invalidateQueries({ queryKey: ['sienna-ai-curiosities'] });
 };
 
 export type SiennaWorkspaceData = {

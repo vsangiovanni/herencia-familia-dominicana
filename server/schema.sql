@@ -7,8 +7,10 @@ CREATE TABLE IF NOT EXISTS profiles (
   password_hash VARCHAR(255) NOT NULL,
   full_name VARCHAR(255) NULL,
   phone VARCHAR(50) NULL,
+  sienna_member_id VARCHAR(120) NULL,
   role ENUM('admin', 'regular') NOT NULL DEFAULT 'regular',
   is_approved BOOLEAN NOT NULL DEFAULT FALSE,
+  can_edit BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
@@ -192,9 +194,9 @@ VALUES
   (UUID(), 'Cálculo por Filiación', '/calculo-filiacion', 'Distribución por líneas familiares'),
   (UUID(), 'Settings', '/admin/settings', 'Configuración global del sistema'),
   (UUID(), 'Documentos Probatorios', '/documentos-probatorios', 'Expediente documental de actas y herederos'),
-  (UUID(), 'Árbol Sienna', '/sienna/arbol-genealogico', 'Árbol genealógico con foto y monto heredado'),
-  (UUID(), 'Miembros del Árbol Sienna', '/sienna/miembros-arbol', 'CRUD de miembros del árbol genealógico Sienna'),
-  (UUID(), 'Explicación de Herederos Sienna', '/sienna/explicacion-herederos', 'Explicación, simulación y auditoría de herederos Sienna')
+  (UUID(), 'Árbol del caso Alessandro', '/sienna/arbol-genealogico', 'Árbol genealógico con foto y monto heredado'),
+  (UUID(), 'Miembros del Árbol de Alessandro', '/sienna/miembros-arbol', 'CRUD de miembros del árbol genealógico del caso'),
+  (UUID(), 'Explicación de Herederos', '/sienna/explicacion-herederos', 'Explicación, simulación y auditoría de herederos')
 ON DUPLICATE KEY UPDATE
   name = VALUES(name),
   description = VALUES(description);

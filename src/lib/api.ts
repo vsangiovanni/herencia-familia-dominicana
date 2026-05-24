@@ -3,6 +3,7 @@ export interface UserProfile {
   email: string;
   full_name?: string | null;
   phone?: string | null;
+  sienna_member_id?: string | null;
   role?: "admin" | "regular";
   is_approved?: boolean;
   can_edit?: boolean;
@@ -157,6 +158,25 @@ export interface SiennaAnalysisSummary {
   pending_validation_total: number;
   backend_contract: { source: string; message: string };
 }
+
+export interface SiennaAiAssistantResponse {
+  answer: string;
+  model: string;
+  mode: "openai" | "fallback";
+  guardrails: string[];
+  suggested_paths: Array<{ label: string; path: string; reason: string }>;
+}
+
+export interface SiennaAiCuriositiesResponse {
+  curiosities: string[];
+  model: string;
+  mode: "openai" | "fallback";
+}
+
+export type SiennaConversationMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
 
 export type DualLineageSeverity = "info" | "warning" | "critical";
 
@@ -332,6 +352,71 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return payload as T;
 }
 
+async function streamSiennaAssistant(
+  question: string,
+  currentPath: string | undefined,
+  onDelta: (delta: string) => void,
+  conversationHistory: SiennaConversationMessage[] = []
+): Promise<SiennaAiAssistantResponse> {
+  const response = await fetch("/api/sienna-ai-assistant-stream", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question, current_path: currentPath || null, conversation_history: conversationHistory }),
+  });
+
+  if (!response.ok || !response.body) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.message || "No pude comunicarme con el expediente en este momento");
+  }
+
+  const decoder = new TextDecoder();
+  const reader = response.body.getReader();
+  let buffer = "";
+  let eventName = "message";
+  let answer = "";
+  let meta: Partial<SiennaAiAssistantResponse> = {};
+
+  const handleEvent = (event: string, data: string) => {
+    const payload = data ? JSON.parse(data) : {};
+    if (event === "meta") {
+      meta = payload;
+      return;
+    }
+    if (event === "delta") {
+      const delta = String(payload.delta || "");
+      answer += delta;
+      onDelta(delta);
+    }
+  };
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const events = buffer.split("\n\n");
+    buffer = events.pop() || "";
+    for (const rawEvent of events) {
+      const lines = rawEvent.split(/\r?\n/);
+      let data = "";
+      eventName = "message";
+      for (const line of lines) {
+        if (line.startsWith("event:")) eventName = line.slice(6).trim();
+        if (line.startsWith("data:")) data += line.slice(5).trim();
+      }
+      handleEvent(eventName, data);
+    }
+  }
+
+  return {
+    answer,
+    model: meta.model || "gpt-5-nano",
+    mode: meta.mode || "openai",
+    guardrails: meta.guardrails || [],
+    suggested_paths: meta.suggested_paths || [],
+  } as SiennaAiAssistantResponse;
+}
+
 export const api = {
   signUp: (email: string, password: string) =>
     request<{ ok: boolean }>("/api/auth/signup", {
@@ -365,7 +450,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify(data),
     }),
-  updateUser: (id: string, data: Partial<Pick<UserProfile, "is_approved" | "role" | "full_name" | "can_edit">>) =>
+  updateUser: (id: string, data: Partial<Pick<UserProfile, "is_approved" | "role" | "full_name" | "can_edit" | "sienna_member_id">>) =>
     request<{ profile: UserProfile }>(`/api/users/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),
@@ -456,6 +541,14 @@ export const api = {
     request<{ summary: SiennaAnalysisSummary }>("/api/sienna-analysis-summary"),
   getSiennaFindings: () =>
     request<{ findings: SiennaFindingsResponse }>("/api/sienna-findings"),
+  askSiennaAssistant: (question: string, currentPath?: string, conversationHistory: SiennaConversationMessage[] = []) =>
+    request<SiennaAiAssistantResponse>("/api/sienna-ai-assistant", {
+      method: "POST",
+      body: JSON.stringify({ question, current_path: currentPath || null, conversation_history: conversationHistory }),
+    }),
+  streamSiennaAssistant,
+  getSiennaAiCuriosities: () =>
+    request<SiennaAiCuriositiesResponse>("/api/sienna-ai-curiosities"),
   saveSiennaFamilyMember: (
     data: Omit<SiennaFamilyMember, "created_at" | "updated_at"> & { filiation?: MemberFiliationPayload }
   ) =>

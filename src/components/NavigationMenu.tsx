@@ -25,7 +25,7 @@ const NavigationMenu = () => {
             to="/sienna"
             className="rounded-md bg-legal-blue px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-legal-blue/90"
           >
-            Sienna
+            Caso Alessandro
           </Link>
 
           {can('/sienna/arbol') && (

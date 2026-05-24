@@ -117,7 +117,7 @@ const AdminSettings = () => {
       <BackButton />
       <DocumentHeader
         title="Settings de Administracion"
-        subtitle="Pantalla exclusiva para administradores. Configura parametros globales y la configuracion del caso Sienna."
+        subtitle="Pantalla exclusiva para administradores. Configura parámetros globales y la configuración del caso Alessandro."
       />
 
       <div className="mb-4 flex flex-wrap justify-end gap-2">
@@ -144,7 +144,7 @@ const AdminSettings = () => {
                 placeholder="0.00"
               />
               <p className="mt-1 text-xs text-legal-gray">
-                Default global para las pantallas Sienna; cada pantalla puede simular otro monto sin cambiar Settings.
+                Default global para las pantallas del caso; cada pantalla puede simular otro monto sin cambiar Settings.
               </p>
             </div>
             <div>
@@ -193,7 +193,7 @@ const AdminSettings = () => {
           </div>
 
           <div>
-            <Label>Criterio legal (texto visible en Sienna)</Label>
+            <Label>Criterio legal (texto visible en el caso)</Label>
             <Textarea
               rows={5}
               value={caseConfig.legal_criterion_text}
