@@ -1321,6 +1321,19 @@ const kinshipWord = (member, masculine, feminine) => kinshipGender(member) === '
 
 const familyRelationQuery = (question = '') => {
   const normalized = normalizeAiText(question);
+  const siblingChain = normalized.match(/\b(herman[ao]s?|hermanas|hermanos)\b.*\b(mi|mis|de mi)\b.*\b(bisabuel[oa]s?|bisabuelas|bisabuelos|abuel[oa]s?|abuelas|abuelos|padres|madre|padre|mama|papa)\b/);
+  if (siblingChain) {
+    const targetText = siblingChain[3] || '';
+    const baseRelation = /bisabuel/.test(targetText)
+      ? 'great_grandparents'
+      : (/abuel/.test(targetText) ? 'grandparents' : 'parents');
+    return {
+      relation: 'sibling_of_ancestor',
+      baseRelation,
+      gender: /\b(hermana|hermanas)\b/.test(normalized) ? 'f' : (/\b(hermano|hermanos)\b/.test(normalized) ? 'm' : 'all'),
+      age: 'all',
+    };
+  }
   const relationMatchers = [
     ['great_grandparents', /\b(bisabuel[oa]s?|bisabuelas|bisabuelos)\b/],
     ['grandparents', /\b(abuel[oa]s?|abuelas|abuelos)\b/],
@@ -1416,6 +1429,10 @@ const relationGroupLabel = (query = {}) => {
     siblings: gender === 'f' ? 'hermanas' : (gender === 'm' ? 'hermanos varones' : 'hermanos y hermanas'),
     children: gender === 'f' ? 'hijas' : (gender === 'm' ? 'hijos varones' : 'hijos e hijas'),
     spouse: 'cónyuge',
+    sibling_of_ancestor: (() => {
+      const base = query.baseRelation === 'great_grandparents' ? 'tus bisabuelos' : (query.baseRelation === 'grandparents' ? 'tus abuelos' : 'tus padres');
+      return gender === 'f' ? 'hermanas de ' + base : (gender === 'm' ? 'hermanos de ' + base : 'hermanos y hermanas de ' + base);
+    })(),
     uncles: gender === 'f' ? 'tías' : (gender === 'm' ? 'tíos' : 'tíos y tías'),
     nephews: gender === 'f' ? 'sobrinas' : (gender === 'm' ? 'sobrinos' : 'sobrinos y sobrinas'),
     cousins: gender === 'f' ? 'primas' : (gender === 'm' ? 'primos varones' : 'primos y primas'),
@@ -1436,15 +1453,40 @@ const buildRelationshipContext = (member, members = [], question = '') => {
   const sourceId = normalizedMemberId(member.id);
   const sourceBirthValue = parseSiennaDateValue(member.birth);
   let omittedUnknownBirth = 0;
-  const items = members
+  const sourceRelatedMembers = members
     .filter((item) => normalizedMemberId(item.id) !== sourceId)
     .map((item) => {
       const relation = resolveKinshipLabel(sourceId, item.id, members);
       return relation ? { ...item, relation } : null;
     })
-    .filter(Boolean)
+    .filter(Boolean);
+  const ancestorRelationMatches = (relation) => {
+    if (query.baseRelation === 'parents') return relation === 'tu padre' || relation === 'tu madre';
+    if (query.baseRelation === 'grandparents') return relation === 'tu abuelo' || relation === 'tu abuela';
+    if (query.baseRelation === 'great_grandparents') return relation === 'tu bisabuelo' || relation === 'tu bisabuela';
+    return false;
+  };
+  const anchorIds = query.relation === 'sibling_of_ancestor'
+    ? sourceRelatedMembers.filter((item) => ancestorRelationMatches(item.relation)).map((item) => normalizedMemberId(item.id))
+    : [];
+  const candidateItems = query.relation === 'sibling_of_ancestor'
+    ? members
+        .map((item) => {
+          const viaAnchor = anchorIds
+            .map((anchorId) => {
+              const relation = resolveKinshipLabel(anchorId, item.id, members);
+              return relation === 'tu hermano' || relation === 'tu hermana' ? members.find((memberItem) => normalizedMemberId(memberItem.id) === anchorId) : null;
+            })
+            .find(Boolean);
+          if (!viaAnchor) return null;
+          return { ...item, relation: kinshipWord(item, 'hermano de tu ancestro', 'hermana de tu ancestro'), via: viaAnchor.name };
+        })
+        .filter(Boolean)
+    : sourceRelatedMembers;
+  const items = candidateItems
     .filter((item) => {
       const relation = item.relation;
+      if (query.relation === 'sibling_of_ancestor') return relation === 'hermano de tu ancestro' || relation === 'hermana de tu ancestro';
       if (query.relation === 'parents') return relation === 'tu padre' || relation === 'tu madre';
       if (query.relation === 'grandparents') return relation === 'tu abuelo' || relation === 'tu abuela';
       if (query.relation === 'great_grandparents') return relation === 'tu bisabuelo' || relation === 'tu bisabuela';
@@ -1473,6 +1515,7 @@ const buildRelationshipContext = (member, members = [], question = '') => {
       relation: item.relation,
       birth: item.birth || null,
       death: item.death || null,
+      via: item.via || null,
       inheritanceStatus: item.inheritance_status || null,
       inheritanceReason: item.inheritance_reason || null,
     }));
