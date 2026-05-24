@@ -89,6 +89,26 @@ const initials = (name: string) =>
     .join('')
     .toUpperCase();
 
+const supportDocumentHref = (brief: HeirBrief) =>
+  `/sienna/documentos?memberId=${encodeURIComponent(brief.share.member.id)}&intent=heir-support`;
+
+const SupportBadge = ({ brief }: { brief: HeirBrief }) => {
+  const needsSupport = brief.traffic.label === 'Falta soporte' || brief.traffic.label === 'En progreso';
+  const badge = <Badge className={brief.traffic.className}>{brief.traffic.label}</Badge>;
+
+  if (!needsSupport) return badge;
+
+  return (
+    <Link
+      to={supportDocumentHref(brief)}
+      className="inline-flex rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-legal-gold focus-visible:ring-offset-2"
+      title={brief.traffic.label === 'Falta soporte' ? 'Cargar soporte documental' : 'Completar soporte documental'}
+    >
+      {badge}
+    </Link>
+  );
+};
+
 const ExplicacionHerederosSienna = () => {
   const { isAdmin } = useAuth();
   const queryClient = useQueryClient();
@@ -422,7 +442,7 @@ const ExplicacionHerederosSienna = () => {
                       <td className="p-3 text-xs text-legal-gray">{brief.share.sources.join(', ') || '-'}</td>
                       <td className="p-3 text-xs text-legal-gray">{routeSteps(brief.share).join(' -> ')}</td>
                       <td className="p-3">
-                        <Badge className={brief.traffic.className}>{brief.traffic.label}</Badge>
+                        <SupportBadge brief={brief} />
                       </td>
                     </tr>
                   ))}
@@ -485,7 +505,7 @@ const ExplicacionHerederosSienna = () => {
                           </Badge>
                         )}
                         <Badge variant="outline">{formatPercent(brief.simulatedShare)}</Badge>
-                        <Badge className={brief.traffic.className}>{brief.traffic.label}</Badge>
+                        <SupportBadge brief={brief} />
                       </div>
                       <p className="mt-3 whitespace-normal break-words rounded-md bg-legal-gold/10 p-3 text-sm leading-relaxed text-gray-800">
                         {buildWhyIInheritText(brief.share, brief.simulatedShare, brief.simulatedAmount)}
@@ -616,7 +636,7 @@ const ExplicacionHerederosSienna = () => {
                   <CardHeader className="border-b bg-legal-blue/5">
                     <CardTitle className="flex items-center justify-between gap-2 text-base text-legal-blue">
                       <span>{brief.share.member.name}</span>
-                      <Badge className={brief.traffic.className}>{brief.traffic.label}</Badge>
+                      <SupportBadge brief={brief} />
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3 p-5">
@@ -627,7 +647,13 @@ const ExplicacionHerederosSienna = () => {
                       </p>
                     ))}
                     {brief.documents.length === 0 && (
-                      <p className="text-sm text-legal-gray">No hay documentos asociados directamente a este heredero.</p>
+                      <p className="text-sm text-legal-gray">
+                        No hay documentos asociados directamente a este heredero.{' '}
+                        <Link to={supportDocumentHref(brief)} className="font-medium text-legal-blue underline">
+                          Cargar soporte
+                        </Link>
+                        .
+                      </p>
                     )}
                     {brief.documents.map((document) => (
                       <div key={document.id} className="rounded-md border border-legal-blue/15 p-3">

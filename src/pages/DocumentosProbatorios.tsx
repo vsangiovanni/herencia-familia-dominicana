@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import Tesseract from 'tesseract.js';
 import { useQueryClient } from '@tanstack/react-query';
 import BackButton from '@/components/BackButton';
@@ -173,6 +174,7 @@ const findSpousePartner = (
 
 const DocumentosProbatorios = () => {
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
   const { data: workspace, refetch } = useSiennaWorkspace(true);
   const members = workspace?.members ?? [];
   const heirs = workspace?.heirs ?? [];
@@ -190,6 +192,7 @@ const DocumentosProbatorios = () => {
   const [ocrProgress, setOcrProgress] = useState(0);
   const [heirDrafts, setHeirDrafts] = useState<Record<string, Partial<ConfirmedHeir>>>({});
   const [viewerDocumentId, setViewerDocumentId] = useState<string | null>(null);
+  const [appliedPrefillKey, setAppliedPrefillKey] = useState('');
 
   const selectedHeir = useMemo(
     () => heirs.find((heir) => heir.heir_name === form.related_heir_name),
@@ -250,6 +253,38 @@ const DocumentosProbatorios = () => {
       spouse_name: spousePartner?.name || '',
     };
   };
+
+  useEffect(() => {
+    const requestedMemberId = searchParams.get('memberId') || searchParams.get('member') || '';
+    if (!requestedMemberId || !membersById.has(requestedMemberId)) return;
+
+    const intent = searchParams.get('intent') || '';
+    const prefillKey = `${requestedMemberId}:${intent}:${members.length}:${heirs.length}`;
+    if (appliedPrefillKey === prefillKey) return;
+
+    const member = membersById.get(requestedMemberId);
+    const linkedHeir = heirs.find((heir) => heir.sienna_member_id === requestedMemberId);
+    const autoRelatives = getAutoLinkedRelatives(requestedMemberId);
+    const isHeirSupport = intent === 'heir-support';
+
+    setForm((current) => ({
+      ...current,
+      ...autoRelatives,
+      title:
+        current.title ||
+        (member ? `${isHeirSupport ? 'Acta de nacimiento' : 'Documento de soporte'}: ${member.name}` : current.title),
+      document_type: isHeirSupport ? 'Acta de nacimiento' : current.document_type || 'Acta no clasificada',
+      related_member_id: requestedMemberId,
+      related_heir_name: linkedHeir?.heir_name || current.related_heir_name || '',
+      confirms_heir: isHeirSupport ? true : current.confirms_heir,
+      notes:
+        current.notes ||
+        (isHeirSupport
+          ? 'Soporte cargado desde Explicación de Herederos para validar el vínculo hereditario.'
+          : current.notes),
+    }));
+    setAppliedPrefillKey(prefillKey);
+  }, [appliedPrefillKey, heirs, members.length, membersById, searchParams]);
 
   const loadData = async () => {
     await refetch();
