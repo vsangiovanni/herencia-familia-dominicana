@@ -41,6 +41,93 @@ Endpoints canónicos actuales:
 - `MemberDetailSheet` es la ficha canónica reutilizable para abrir detalle de miembro desde árbol, hallazgos, dobles linajes y miembros.
 - El despliegue autorizado de este release subió frontend/backend solamente; no se ejecutaron migraciones, no se tocó la BD y no se sobrescribió `.env` remoto.
 
+## Estado operativo actual 2026-05-23
+
+Último estado documentado del aparato Sienna después de la ronda de ajustes visuales, PDF, conteos y enlaces accionables.
+
+### Fuente de verdad y conteos
+
+- El conteo principal de herederos finales debe venir del cálculo vivo del API: `/api/sienna-calculation.active_heir_count` o `active_heirs.length`.
+- El Dashboard ya no usa `confirmed_heirs.length` como número principal de herederos porque esa tabla representa registros documentales/manuales, no el universo calculado.
+- Estado esperado:
+  - Dashboard: **Herederos finales** = cálculo vivo.
+  - Explicación de herederos: **Herederos calculados** = cálculo vivo.
+  - Árbol Sienna: **Herederos finales** = cálculo vivo.
+  - El conteo de `confirmed_heirs` puede mostrarse solo como detalle secundario/documental.
+
+### Soporte documental accionable
+
+Se agregó un patrón común para convertir estados pendientes de soporte en acciones directas.
+
+- Helper central: `src/lib/siennaSupportLinks.ts`.
+- URL canónica:
+  - `/sienna/documentos?memberId=<id>&intent=heir-support`
+  - `/sienna/documentos?memberId=<id>&intent=member-support`
+- `heir-support` precarga en Documentos:
+  - miembro titular,
+  - heredero relacionado cuando existe,
+  - tipo `Acta de nacimiento`,
+  - checkbox `Esta acta confirma al heredero seleccionado`,
+  - nota de contexto,
+  - parentescos automáticos desde el árbol.
+- `member-support` precarga el miembro titular y contexto documental sin asumir confirmación hereditaria.
+
+Pantallas donde aplica:
+
+| Pantalla | Comportamiento |
+|----------|----------------|
+| `/sienna/explicacion-herederos` | Badges **Falta soporte** y **En progreso** abren Documentos con el miembro precargado |
+| `/sienna/filiacion` | Estado **sin confirmar** y **0 - cargar soporte** abren Documentos como soporte de heredero |
+| `/sienna/miembros-arbol` | Badge **0 actas** abre Documentos con el miembro precargado; si hereda usa `heir-support`, si no `member-support` |
+
+Regla UX: no todos los badges deben ser links. Solo se enlazan estados que tienen una acción clara para resolver el pendiente.
+
+### PDF individual de herencia
+
+- El PDF individual fue rediseñado como documento premium familiar/histórico.
+- Incluye:
+  - logo oficial,
+  - foto del miembro,
+  - monto heredado estimado,
+  - estado de validación,
+  - resumen ejecutivo,
+  - explicación humana,
+  - rutas genealógicas,
+  - doble linaje cuando aplica,
+  - tabla de vínculos,
+  - hallazgos,
+  - documentos relacionados,
+  - mosaico de documentos,
+  - timeline,
+  - observaciones,
+  - pie de página del Legado Sangiovanni.
+- La portada ya no imprime la línea superior derecha que causaba solapamiento.
+- Las secciones 5 a 8 comienzan en segunda página; documentos/timeline/validación/observaciones continúan en páginas posteriores.
+- Los PDF subidos como soporte se muestran como miniatura renderizada de la primera página cuando el navegador puede hacerlo; si no, usan fallback textual.
+- Una sola acta de nacimiento vinculada directamente o un documento marcado como `confirms_heir` basta para considerar soporte documental verificado.
+
+### Producción y datos
+
+- Últimos despliegues autorizados: frontend/assets y, cuando correspondió, backend/API. El deploy FTP evita sobrescribir `.env` remoto.
+- En la ronda posterior de frontend no se tocaron datos ni DB de producción.
+- Hubo una intervención previa y explícitamente autorizada por Víctor para confirmar herederos con soporte documental existente; esa operación tuvo backup local antes de escribir.
+- Regla vigente: salvo autorización explícita, los deploys no ejecutan migraciones ni scripts sobre producción.
+
+### Commits relevantes recientes
+
+| Commit | Cambio |
+|--------|--------|
+| `a176610` | Experiencia visual Sienna, dark/light, PDF premium, assets, documentación y deploy autorizado |
+| `e7de4bd` | Dashboard alineado al conteo calculado de herederos finales |
+| `7898bd6` | Soporte pendiente enlazado desde Explicación hacia Documentos con precarga |
+| `cc38449` | Patrón de soporte extendido a Filiación y Miembros; helper común de links |
+
+### Verificación reciente
+
+- `pnpm exec vite build`: OK.
+- `pnpm run test:sienna`: OK.
+- Producción verificada por presencia de bundles nuevos con los textos/enlaces esperados.
+
 ## Limpieza UX/UI aplicada
 
 - `/sienna/miembros-arbol`: la tabla principal queda como directorio compacto; columnas técnicas, notas largas y detalles de filiación se consultan bajo demanda en ficha/detalles.
