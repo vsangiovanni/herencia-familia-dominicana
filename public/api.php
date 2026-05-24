@@ -1383,8 +1383,8 @@ function classify_sienna_assistant_intent(string $question, array $conversationH
 
   if (is_internal_sienna_ai_request($question)) $type = 'internal_protected';
   elseif (is_sienna_small_talk_question($question)) $type = 'small_talk_greeting';
+  elseif (family_relation_query($question)) $type = 'family_relationship';
   elseif (preg_match('/\b(hermanos|hermanas|herman[ao]s?)\b/i', $normalized)) $type = 'family_siblings';
-  elseif ((family_relation_query($question)['relation'] ?? null) === 'cousins') $type = 'family_cousins';
   elseif (preg_match('/\b(padres|papas|progenitores)\b/i', $normalized)) $type = 'family_parents';
   elseif (preg_match('/\b(hijos|hijas|hij[ao]s?)\b/i', $normalized)) $type = 'family_children';
   elseif (preg_match('/\b(conyuge|espos[ao]|pareja)\b/i', $normalized)) $type = 'family_spouse';
@@ -1396,6 +1396,7 @@ function classify_sienna_assistant_intent(string $question, array $conversationH
   $deterministic = in_array($type, [
     'internal_protected',
     'small_talk_greeting',
+    'family_relationship',
     'family_siblings',
     'family_cousins',
     'family_parents',
@@ -1534,11 +1535,30 @@ function kinship_word(array $member, string $masculine, string $feminine): strin
 
 function family_relation_query(string $question): ?array {
   $normalized = normalize_ai_text($question);
-  $asksCousins = preg_match('/\bprim[ao]s?\b|\bprimas\b|\bprimos\b/i', $normalized);
-  if (!$asksCousins) return null;
+  $relationMatchers = [
+    ['great_grandparents', '/\b(bisabuel[oa]s?|bisabuelas|bisabuelos)\b/i'],
+    ['grandparents', '/\b(abuel[oa]s?|abuelas|abuelos)\b/i'],
+    ['parents', '/\b(padres|papas|progenitores|madre|padre|mama|papa)\b/i'],
+    ['siblings', '/\b(herman[ao]s?|hermanas|hermanos)\b/i'],
+    ['children', '/\b(hij[ao]s?|hijas|hijos)\b/i'],
+    ['spouse', '/\b(conyuge|espos[ao]|pareja)\b/i'],
+    ['uncles', '/\b(ti[ao]s?|tias|tios)\b/i'],
+    ['nephews', '/\b(sobrin[ao]s?|sobrinas|sobrinos)\b/i'],
+    ['cousins', '/\bprim[ao]s?\b|\bprimas\b|\bprimos\b/i'],
+  ];
+  $matched = null;
+  foreach ($relationMatchers as $candidate) {
+    if (preg_match($candidate[1], $normalized)) {
+      $matched = $candidate[0];
+      break;
+    }
+  }
+  if (!$matched) return null;
   return [
-    'relation' => 'cousins',
-    'gender' => preg_match('/\bprimas\b|\bprima\b/i', $normalized) ? 'f' : (preg_match('/\b(primos varones|primos hombres|primos masculinos)\b/i', $normalized) ? 'm' : 'all'),
+    'relation' => $matched,
+    'gender' => preg_match('/\b(abuelas|bisabuelas|madre|mama|hermanas|hijas|esposa|tias|sobrinas|primas|prima)\b/i', $normalized)
+      ? 'f'
+      : (preg_match('/\b(abuelos|bisabuelos|padre|papa|hermanos varones|hijos varones|esposo|tios|sobrinos|primos varones|primos hombres|primos masculinos)\b/i', $normalized) ? 'm' : 'all'),
     'age' => preg_match('/\b(menor|menores|mas joven|mas jovenes|menor que yo|menores que yo)\b/i', $normalized)
       ? 'younger'
       : (preg_match('/\b(mayor|mayores|mas viejo|mas viejos|mayor que yo|mayores que yo)\b/i', $normalized) ? 'older' : 'all'),
@@ -1567,6 +1587,10 @@ function resolve_kinship_label(?string $sourceMemberId, ?string $targetMemberId,
   foreach ($targetParents as $parentId) {
     foreach (($byId[$parentId]['parent_ids'] ?? []) as $id) $targetGrandparents[] = normalized_member_id($id);
   }
+  $sourceGreatGrandparents = [];
+  foreach ($sourceGrandparents as $grandparentId) {
+    foreach (($byId[$grandparentId]['parent_ids'] ?? []) as $id) $sourceGreatGrandparents[] = normalized_member_id($id);
+  }
 
   if (in_array($targetId, $sourceParents, true)) return kinship_word($target, 'tu padre', 'tu madre');
   if (in_array($sourceId, $targetParents, true)) return kinship_word($target, 'tu hijo', 'tu hija');
@@ -1575,6 +1599,8 @@ function resolve_kinship_label(?string $sourceMemberId, ?string $targetMemberId,
   if (count(array_intersect($sourceGrandparents, $targetParents)) > 0) return kinship_word($target, 'tu tío', 'tu tía');
   if (count(array_intersect($sourceParents, $targetGrandparents)) > 0) return kinship_word($target, 'tu sobrino', 'tu sobrina');
   if (count(array_intersect($sourceGrandparents, $targetGrandparents)) > 0) return kinship_word($target, 'tu primo', 'tu prima');
+  if (in_array($targetId, $sourceGrandparents, true)) return kinship_word($target, 'tu abuelo', 'tu abuela');
+  if (in_array($targetId, $sourceGreatGrandparents, true)) return kinship_word($target, 'tu bisabuelo', 'tu bisabuela');
   return null;
 }
 
@@ -1597,6 +1623,78 @@ function format_family_people_list(array $items): string {
     $lines[] = '- **' . $item['name'] . '**' . (count($dates) ? ' (' . implode(', ', $dates) . ')' : '');
   }
   return implode("\n", $lines);
+}
+
+function relation_group_label(array $query): string {
+  $gender = $query['gender'] ?? 'all';
+  $labels = [
+    'parents' => $gender === 'f' ? 'madres' : ($gender === 'm' ? 'padres' : 'padres'),
+    'grandparents' => $gender === 'f' ? 'abuelas' : ($gender === 'm' ? 'abuelos' : 'abuelos y abuelas'),
+    'great_grandparents' => $gender === 'f' ? 'bisabuelas' : ($gender === 'm' ? 'bisabuelos' : 'bisabuelos y bisabuelas'),
+    'siblings' => $gender === 'f' ? 'hermanas' : ($gender === 'm' ? 'hermanos varones' : 'hermanos y hermanas'),
+    'children' => $gender === 'f' ? 'hijas' : ($gender === 'm' ? 'hijos varones' : 'hijos e hijas'),
+    'spouse' => 'cónyuge',
+    'uncles' => $gender === 'f' ? 'tías' : ($gender === 'm' ? 'tíos' : 'tíos y tías'),
+    'nephews' => $gender === 'f' ? 'sobrinas' : ($gender === 'm' ? 'sobrinos' : 'sobrinos y sobrinas'),
+    'cousins' => $gender === 'f' ? 'primas' : ($gender === 'm' ? 'primos varones' : 'primos y primas'),
+  ];
+  return $labels[$query['relation'] ?? ''] ?? 'familiares';
+}
+
+function relation_age_label(array $query): string {
+  if (($query['age'] ?? '') === 'younger') return 'menores que tú';
+  if (($query['age'] ?? '') === 'older') return 'mayores que tú';
+  if (($query['gender'] ?? '') === 'f') return 'registradas';
+  return 'registrados';
+}
+
+function build_relationship_context(?array $member, array $members, string $question): array {
+  if (!$member || empty($member['id'])) return ['items' => [], 'omittedUnknownBirth' => 0, 'query' => family_relation_query($question)];
+  $query = family_relation_query($question) ?? ['relation' => 'cousins', 'gender' => 'all', 'age' => 'all'];
+  $sourceId = normalized_member_id($member['id'] ?? '');
+  $sourceBirthValue = parse_sienna_date_value($member['birth'] ?? null);
+  $omittedUnknownBirth = 0;
+  $items = [];
+  foreach ($members as $item) {
+    if (normalized_member_id($item['id'] ?? '') === $sourceId) continue;
+    $relation = resolve_kinship_label($sourceId, $item['id'] ?? null, $members);
+    if (!$relation) continue;
+    $matchesRelation = match ($query['relation'] ?? '') {
+      'parents' => $relation === 'tu padre' || $relation === 'tu madre',
+      'grandparents' => $relation === 'tu abuelo' || $relation === 'tu abuela',
+      'great_grandparents' => $relation === 'tu bisabuelo' || $relation === 'tu bisabuela',
+      'siblings' => $relation === 'tu hermano' || $relation === 'tu hermana',
+      'children' => $relation === 'tu hijo' || $relation === 'tu hija',
+      'spouse' => $relation === 'tu cónyuge',
+      'uncles' => $relation === 'tu tío' || $relation === 'tu tía',
+      'nephews' => $relation === 'tu sobrino' || $relation === 'tu sobrina',
+      'cousins' => $relation === 'tu primo' || $relation === 'tu prima',
+      default => false,
+    };
+    if (!$matchesRelation) continue;
+    if (($query['gender'] ?? 'all') !== 'all' && kinship_gender($item) !== $query['gender']) continue;
+    if (($query['age'] ?? 'all') !== 'all') {
+      $birthValue = parse_sienna_date_value($item['birth'] ?? null);
+      if (!$sourceBirthValue || !$birthValue) {
+        $omittedUnknownBirth++;
+        continue;
+      }
+      if (($query['age'] ?? '') === 'younger' && $birthValue <= $sourceBirthValue) continue;
+      if (($query['age'] ?? '') === 'older' && $birthValue >= $sourceBirthValue) continue;
+    }
+    $item['relation'] = $relation;
+    $items[] = $item;
+  }
+  usort($items, fn($a, $b) => (parse_sienna_date_value($a['birth'] ?? null) ?: 99999999) <=> (parse_sienna_date_value($b['birth'] ?? null) ?: 99999999));
+  $items = array_map(fn($item) => [
+    'name' => $item['name'] ?? '',
+    'relation' => $item['relation'] ?? '',
+    'birth' => $item['birth'] ?? null,
+    'death' => $item['death'] ?? null,
+    'inheritanceStatus' => $item['inheritance_status'] ?? null,
+    'inheritanceReason' => $item['inheritance_reason'] ?? null,
+  ], array_slice($items, 0, 32));
+  return ['items' => $items, 'omittedUnknownBirth' => $omittedUnknownBirth, 'query' => $query, 'sourceBirth' => $member['birth'] ?? null];
 }
 
 function build_cousin_context(?array $member, array $members, string $question): array {
@@ -1706,13 +1804,13 @@ function build_immediate_family_context(?array $member, array $members): ?array 
 function sienna_assistant_paths(): array {
   return [
     ['label' => 'Caso Alessandro', 'path' => '/sienna', 'purpose' => 'resumen ejecutivo del expediente, estado general, métricas y próximos puntos de revisión', 'keywords' => ['resumen', 'inicio', 'dashboard', 'portada', 'estado']],
-    ['label' => 'Árbol genealógico', 'path' => '/sienna/arbol', 'purpose' => 'visualizar ramas, ascendencia, descendencia y conexiones familiares', 'keywords' => ['arbol', 'árbol', 'ruta', 'rama', 'genealogia', 'genealogía', 'familia', 'primo', 'prima', 'primos', 'primas']],
-    ['label' => 'Miembros del árbol', 'path' => '/sienna/miembros', 'purpose' => 'consultar fichas de personas, parentescos, fechas, filiación y relaciones registradas', 'keywords' => ['miembro', 'persona', 'padre', 'madre', 'conyuge', 'cónyuge', 'editar', 'filiacion', 'filiación', 'primo', 'prima', 'primos', 'primas', 'menor', 'mayor']],
+    ['label' => 'Árbol genealógico', 'path' => '/sienna/arbol', 'purpose' => 'visualizar ramas, ascendencia, descendencia y conexiones familiares', 'keywords' => ['arbol', 'árbol', 'ruta', 'rama', 'genealogia', 'genealogía', 'familia', 'padre', 'madre', 'hermano', 'hermana', 'abuelo', 'abuela', 'bisabuelo', 'bisabuela', 'tio', 'tia', 'sobrino', 'sobrina', 'primo', 'prima', 'primos', 'primas']],
+    ['label' => 'Miembros del árbol', 'path' => '/sienna/miembros', 'purpose' => 'consultar fichas de personas, parentescos, fechas, filiación y relaciones registradas', 'keywords' => ['miembro', 'persona', 'padre', 'madre', 'conyuge', 'cónyuge', 'editar', 'filiacion', 'filiación', 'hermano', 'hermana', 'abuelo', 'abuela', 'bisabuelo', 'bisabuela', 'tio', 'tia', 'sobrino', 'sobrina', 'primo', 'prima', 'primos', 'primas', 'menor', 'mayor']],
     ['label' => 'Documentos probatorios', 'path' => '/sienna/documentos', 'purpose' => 'revisar actas, soportes, OCR, evidencias y documentos asociados al expediente', 'keywords' => ['documento', 'acta', 'evidencia', 'certificado', 'archivo', 'ocr', 'prueba']],
     ['label' => 'Explicación herederos', 'path' => '/sienna/explicacion', 'purpose' => 'entender herederos finales, porcentajes, montos, rutas familiares y razones del reparto', 'keywords' => ['hereda', 'heredero', 'reparto', 'monto', 'porcentaje', 'explicar', 'dinero']],
     ['label' => 'Dobles linajes', 'path' => '/sienna/linajes', 'purpose' => 'analizar convergencias, doble participación y cruces entre ramas familiares', 'keywords' => ['doble', 'linaje', 'convergencia', 'cruce', 'dos ramas']],
     ['label' => 'Hallazgos', 'path' => '/sienna/hallazgos', 'purpose' => 'ver pendientes, inconsistencias, validaciones y acciones sugeridas', 'keywords' => ['pendiente', 'inconsistencia', 'hallazgo', 'validacion', 'validación', 'error']],
-    ['label' => 'Filiación', 'path' => '/sienna/filiacion', 'purpose' => 'calcular o revisar relaciones de parentesco y conexiones genealógicas', 'keywords' => ['filiacion', 'filiación', 'parentesco', 'calculo', 'cálculo', 'primo', 'prima', 'primos', 'primas']],
+    ['label' => 'Filiación', 'path' => '/sienna/filiacion', 'purpose' => 'calcular o revisar relaciones de parentesco y conexiones genealógicas', 'keywords' => ['filiacion', 'filiación', 'parentesco', 'calculo', 'cálculo', 'padre', 'madre', 'hermano', 'hermana', 'abuelo', 'abuela', 'bisabuelo', 'bisabuela', 'tio', 'tia', 'sobrino', 'sobrina', 'primo', 'prima', 'primos', 'primas']],
   ];
 }
 
@@ -1845,8 +1943,8 @@ function build_compact_sienna_assistant_context(string $question, array $fullCon
     }
   }
   $familyContext = $detectedMemberRecord ? build_immediate_family_context($detectedMemberRecord, $fullContext['members_index'] ?? []) : null;
-  $extendedFamilyContext = ($detectedMemberRecord && (($contextPlan['intent']['type'] ?? '') === 'family_cousins'))
-    ? ['cousins' => build_cousin_context($detectedMemberRecord, $fullContext['members_index'] ?? [], $question)]
+  $extendedFamilyContext = ($detectedMemberRecord && (($contextPlan['intent']['type'] ?? '') === 'family_relationship'))
+    ? ['relationship' => build_relationship_context($detectedMemberRecord, $fullContext['members_index'] ?? [], $question)]
     : null;
 
   $matchingHeirs = [];
@@ -2050,12 +2148,32 @@ function build_deterministic_sienna_assistant_answer(string $question, array $co
   $siblings = $context['user']['memberContext']['immediateFamily']['siblings'] ?? [];
   $children = $context['user']['memberContext']['immediateFamily']['children'] ?? [];
   $spouse = $context['user']['memberContext']['immediateFamily']['spouse'] ?? null;
-  $cousinContext = $context['user']['memberContext']['extendedFamily']['cousins'] ?? null;
+  $relationshipContext = $context['user']['memberContext']['extendedFamily']['relationship'] ?? null;
   $relevantFamily = $context['relevantFamily'] ?? [];
 
   if ($intentType === 'small_talk_greeting') {
     return ($firstName ? 'Hola, ' . $firstName . '. ' : 'Hola. ')
       . 'Estoy aquí contigo. Pregúntame por una persona, una rama, un documento, un hallazgo o el reparto del expediente y te ayudo a ubicarlo sin cambiar nada.';
+  }
+
+  if ($intentType === 'family_relationship') {
+    if (!($context['user']['memberContext']['isDetectedMember'] ?? false)) {
+      return ($firstName ? $firstName . ', ' : '') . 'para responder eso necesito tener tu usuario asociado a un miembro del árbol. Puedes revisar esa asociación en **Administración de usuarios**.';
+    }
+    $items = $relationshipContext['items'] ?? [];
+    $query = $relationshipContext['query'] ?? [];
+    $relationText = relation_group_label($query);
+    $ageText = relation_age_label($query);
+    if (!count($items)) {
+      $unknownText = !empty($relationshipContext['omittedUnknownBirth']) ? ' Hay familiares que no pude comparar porque les falta fecha de nacimiento.' : '';
+      return ($firstName ? $firstName . ', ' : '') . 'no veo ' . $relationText . ' ' . $ageText . ' con los datos actuales del árbol.' . $unknownText . ' Puedes confirmarlo en **Miembros del árbol**.';
+    }
+    return implode("\n", array_filter([
+      ($firstName ? $firstName . ', ' : '') . 'según las conexiones familiares y fechas registradas, tus ' . $relationText . ' ' . $ageText . ' son:',
+      '',
+      format_family_people_list($items),
+      !empty($relationshipContext['omittedUnknownBirth']) ? "\nNo incluí familiares sin fecha de nacimiento porque no se puede comparar la edad con seguridad." : '',
+    ]));
   }
 
   if ($intentType === 'family_siblings') {
@@ -2069,26 +2187,6 @@ function build_deterministic_sienna_assistant_answer(string $question, array $co
       '',
       'Puedes revisar sus fichas en **Miembros del árbol**.',
     ]);
-  }
-
-  if ($intentType === 'family_cousins') {
-    if (!($context['user']['memberContext']['isDetectedMember'] ?? false)) {
-      return ($firstName ? $firstName . ', ' : '') . 'para responder eso necesito tener tu usuario asociado a un miembro del árbol. Puedes revisar esa asociación en **Administración de usuarios**.';
-    }
-    $items = $cousinContext['items'] ?? [];
-    $query = $cousinContext['query'] ?? [];
-    $genderText = ($query['gender'] ?? '') === 'f' ? 'primas' : ((($query['gender'] ?? '') === 'm') ? 'primos varones' : 'primos y primas');
-    $ageText = ($query['age'] ?? '') === 'younger' ? 'menores que tú' : ((($query['age'] ?? '') === 'older') ? 'mayores que tú' : 'registrados');
-    if (!count($items)) {
-      $unknownText = !empty($cousinContext['omittedUnknownBirth']) ? ' Hay familiares que no pude comparar porque les falta fecha de nacimiento.' : '';
-      return ($firstName ? $firstName . ', ' : '') . 'no veo ' . $genderText . ' ' . $ageText . ' con los datos actuales del árbol.' . $unknownText . ' Puedes confirmarlo en **Miembros del árbol**.';
-    }
-    return implode("\n", array_filter([
-      ($firstName ? $firstName . ', ' : '') . 'según las conexiones familiares y fechas registradas, tus ' . $genderText . ' ' . $ageText . ' son:',
-      '',
-      format_family_people_list($items),
-      !empty($cousinContext['omittedUnknownBirth']) ? "\nNo incluí familiares sin fecha de nacimiento porque no se puede comparar la edad con seguridad." : '',
-    ]));
   }
 
   if ($intentType === 'family_parents') {
