@@ -1416,9 +1416,36 @@ const formatFamilyPeopleList = (items = []) => items
       item.birth ? 'n. ' + item.birth : null,
       item.death ? 'm. ' + item.death : null,
     ].filter(Boolean).join(', ');
-    return '- **' + item.name + '**' + (dates ? ' (' + dates + ')' : '');
+    const via = item.via ? ' — relacionado por **' + item.via + '**' : '';
+    return '- **' + item.name + '**' + (dates ? ' (' + dates + ')' : '') + via;
   })
   .join('\n');
+
+const formatAncestorSiblingAnswer = (firstName, relationshipContext) => {
+  const items = relationshipContext?.items || [];
+  const query = relationshipContext?.query || {};
+  const baseText = query.baseRelation === 'great_grandparents'
+    ? 'bisabuelo/bisabuela'
+    : (query.baseRelation === 'grandparents' ? 'abuelo/abuela' : 'padre/madre');
+  if (!items.length) {
+    return (firstName ? firstName + ', ' : '') + 'no veo hermanos registrados para ese ' + baseText + ' con los datos actuales del árbol. Puedes confirmarlo en **Miembros del árbol**.';
+  }
+  const reciprocalPairs = items.filter((item) => item.via && items.some((other) => other.name === item.via));
+  if (reciprocalPairs.length >= 2) {
+    return [
+      (firstName ? firstName + ', ' : '') + 'en el árbol aparecen varios ' + baseText + ' posibles, y el vínculo relevante es que son hermanos entre sí:',
+      '',
+      formatFamilyPeopleList(reciprocalPairs),
+      '',
+      'Es decir: si te refieres a **Paolo (Paulino) Sangiovanni**, su hermano registrado es **Vincenzo (Vicente) Sangiovanni**; y si te refieres a **Vincenzo**, su hermano registrado es **Paolo**.',
+    ].join('\n');
+  }
+  return [
+    (firstName ? firstName + ', ' : '') + 'según las conexiones familiares registradas, encontré estos hermanos de tu ' + baseText + ':',
+    '',
+    formatFamilyPeopleList(items),
+  ].join('\n');
+};
 
 const relationGroupLabel = (query = {}) => {
   const gender = query.gender || 'all';
@@ -1818,6 +1845,9 @@ const buildDeterministicSiennaAssistantAnswer = (question, context) => {
     }
     const items = relationshipContext?.items || [];
     const query = relationshipContext?.query || {};
+    if (query.relation === 'sibling_of_ancestor') {
+      return formatAncestorSiblingAnswer(firstName, relationshipContext);
+    }
     const relationText = relationGroupLabel(query);
     const ageText = relationAgeLabel(query);
     if (!items.length) {

@@ -1630,9 +1630,37 @@ function format_family_people_list(array $items): string {
     $dates = [];
     if (!empty($item['birth'])) $dates[] = 'n. ' . $item['birth'];
     if (!empty($item['death'])) $dates[] = 'm. ' . $item['death'];
-    $lines[] = '- **' . $item['name'] . '**' . (count($dates) ? ' (' . implode(', ', $dates) . ')' : '');
+    $via = !empty($item['via']) ? ' — relacionado por **' . $item['via'] . '**' : '';
+    $lines[] = '- **' . $item['name'] . '**' . (count($dates) ? ' (' . implode(', ', $dates) . ')' : '') . $via;
   }
   return implode("\n", $lines);
+}
+
+function format_ancestor_sibling_answer(?string $firstName, ?array $relationshipContext): string {
+  $items = $relationshipContext['items'] ?? [];
+  $query = $relationshipContext['query'] ?? [];
+  $baseText = ($query['baseRelation'] ?? '') === 'great_grandparents'
+    ? 'bisabuelo/bisabuela'
+    : ((($query['baseRelation'] ?? '') === 'grandparents') ? 'abuelo/abuela' : 'padre/madre');
+  if (!count($items)) {
+    return ($firstName ? $firstName . ', ' : '') . 'no veo hermanos registrados para ese ' . $baseText . ' con los datos actuales del árbol. Puedes confirmarlo en **Miembros del árbol**.';
+  }
+  $names = array_map(fn($item) => $item['name'] ?? '', $items);
+  $reciprocalPairs = array_values(array_filter($items, fn($item) => !empty($item['via']) && in_array($item['via'], $names, true)));
+  if (count($reciprocalPairs) >= 2) {
+    return implode("\n", [
+      ($firstName ? $firstName . ', ' : '') . 'en el árbol aparecen varios ' . $baseText . ' posibles, y el vínculo relevante es que son hermanos entre sí:',
+      '',
+      format_family_people_list($reciprocalPairs),
+      '',
+      'Es decir: si te refieres a **Paolo (Paulino) Sangiovanni**, su hermano registrado es **Vincenzo (Vicente) Sangiovanni**; y si te refieres a **Vincenzo**, su hermano registrado es **Paolo**.',
+    ]);
+  }
+  return implode("\n", [
+    ($firstName ? $firstName . ', ' : '') . 'según las conexiones familiares registradas, encontré estos hermanos de tu ' . $baseText . ':',
+    '',
+    format_family_people_list($items),
+  ]);
 }
 
 function relation_group_label(array $query): string {
@@ -2218,6 +2246,9 @@ function build_deterministic_sienna_assistant_answer(string $question, array $co
     }
     $items = $relationshipContext['items'] ?? [];
     $query = $relationshipContext['query'] ?? [];
+    if (($query['relation'] ?? '') === 'sibling_of_ancestor') {
+      return format_ancestor_sibling_answer($firstName, $relationshipContext);
+    }
     $relationText = relation_group_label($query);
     $ageText = relation_age_label($query);
     if (!count($items)) {
