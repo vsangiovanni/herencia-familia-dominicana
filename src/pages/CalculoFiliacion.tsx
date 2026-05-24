@@ -6,6 +6,7 @@ import { useSiennaCalculation, useConfirmedHeirs, useSiennaWorkspace } from '@/h
 import { applySiennaCaseConfig, normalizeName } from '@/lib/dominicanInheritance';
 import { buildMemberPhotoLookup } from '@/lib/memberPhotos';
 import { countGenealogyInconsistencies } from '@/lib/siennaGenealogy';
+import { buildSiennaDocumentSupportHref } from '@/lib/siennaSupportLinks';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -19,6 +20,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { GitBranch, Scale, UserCheck, AlertTriangle } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 type DistributionLine = {
   line: string;
@@ -59,6 +61,33 @@ const prettyRoute = (routes: string[]) =>
     )
     .filter(Boolean)
     .join(' | ');
+
+const LinkedSupportBadge = ({
+  memberId,
+  status,
+}: {
+  memberId?: string;
+  status?: string | null;
+}) => {
+  const normalizedStatus = status || 'sin confirmar';
+  const badge = (
+    <Badge variant={normalizedStatus === 'confirmado' ? 'default' : 'secondary'}>
+      {normalizedStatus}
+    </Badge>
+  );
+
+  if (!memberId || normalizedStatus === 'confirmado') return badge;
+
+  return (
+    <Link
+      to={buildSiennaDocumentSupportHref(memberId, 'heir-support')}
+      className="inline-flex rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-legal-gold focus-visible:ring-offset-2"
+      title="Completar soporte documental del heredero"
+    >
+      {badge}
+    </Link>
+  );
+};
 
 const CalculoFiliacion = () => {
   const { data: workspace } = useSiennaWorkspace(false);
@@ -316,9 +345,7 @@ const CalculoFiliacion = () => {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={evidence?.status === 'confirmado' ? 'default' : 'secondary'}>
-                          {evidence?.status || 'sin confirmar'}
-                        </Badge>
+                        <LinkedSupportBadge memberId={item.memberId} status={evidence?.status} />
                       </TableCell>
                       <TableCell className="min-w-[220px] max-w-[360px] text-sm text-gray-600">
                         <p className="line-clamp-2">{item.route || 'Ruta pendiente en árbol'}</p>
@@ -367,7 +394,20 @@ const CalculoFiliacion = () => {
                       </div>
                     </TableCell>
                     <TableCell>{item.routes}</TableCell>
-                    <TableCell>{heirEvidenceByName.get(normalizeName(item.heir))?.evidence_count || 0}</TableCell>
+                    <TableCell>
+                      {(() => {
+                        const evidenceCount = heirEvidenceByName.get(normalizeName(item.heir))?.evidence_count || 0;
+                        if (!item.memberId || evidenceCount > 0) return evidenceCount;
+                        return (
+                          <Link
+                            to={buildSiennaDocumentSupportHref(item.memberId, 'heir-support')}
+                            className="font-medium text-legal-blue underline"
+                          >
+                            0 - cargar soporte
+                          </Link>
+                        );
+                      })()}
+                    </TableCell>
                     <TableCell className="text-right">
                       <Badge variant="secondary">{formatPercent(item.percentage)}</Badge>
                     </TableCell>

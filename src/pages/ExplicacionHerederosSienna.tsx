@@ -34,6 +34,7 @@ import {
   routeSteps,
 } from '@/lib/siennaHeirExplain';
 import { buildInheritancePlanFromApiRows, calculateHeirAmount, resolveHeirSimulatedShare } from '@/lib/siennaCalculation';
+import { buildSiennaDocumentSupportHref } from '@/lib/siennaSupportLinks';
 import { useAuth } from '@/context/AuthContext';
 import {
   AlertTriangle,
@@ -90,7 +91,7 @@ const initials = (name: string) =>
     .toUpperCase();
 
 const supportDocumentHref = (brief: HeirBrief) =>
-  `/sienna/documentos?memberId=${encodeURIComponent(brief.share.member.id)}&intent=heir-support`;
+  buildSiennaDocumentSupportHref(brief.share.member.id, 'heir-support');
 
 const SupportBadge = ({ brief }: { brief: HeirBrief }) => {
   const needsSupport = brief.traffic.label === 'Falta soporte' || brief.traffic.label === 'En progreso';

@@ -53,6 +53,7 @@ import { buildSecondParentOptions, buildUnionOptionsForParent } from '@/lib/sien
 import { formatPercent } from '@/lib/siennaHeirExplain';
 import { buildMemberPhotoLookup } from '@/lib/memberPhotos';
 import { buildInheritancePlanFromApiRows } from '@/lib/siennaCalculation';
+import { buildSiennaDocumentSupportHref } from '@/lib/siennaSupportLinks';
 import MemberTreeContextPanel from '@/components/sienna/MemberTreeContextPanel';
 import MemberRegistrationGuide from '@/components/sienna/MemberRegistrationGuide';
 import MemberVerificationBadge from '@/components/sienna/MemberVerificationBadge';
@@ -1298,7 +1299,22 @@ const MiembrosArbolSienna = () => {
                         </TableCell>
                         <TableCell className="min-w-[150px]">
                           <div className="flex items-center gap-2">
-                            <Badge variant="outline">{memberDocuments.length} acta(s)</Badge>
+                            {memberDocuments.length > 0 ? (
+                              <Badge variant="outline">{memberDocuments.length} acta(s)</Badge>
+                            ) : (
+                              <Link
+                                to={buildSiennaDocumentSupportHref(
+                                  member.id,
+                                  displayInherits ? 'heir-support' : 'member-support'
+                                )}
+                                className="inline-flex rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-legal-gold focus-visible:ring-offset-2"
+                                title="Cargar documento para este miembro"
+                              >
+                                <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-900">
+                                  0 actas
+                                </Badge>
+                              </Link>
+                            )}
                             <Dialog
                               onOpenChange={(open) => {
                                 if (open) {
