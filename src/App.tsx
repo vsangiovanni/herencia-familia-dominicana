@@ -13,6 +13,7 @@ import NavBar from './components/NavBar';
 import Footer from './components/Footer';
 import PageVisitTracker from './components/PageVisitTracker';
 import PwaInstallPrompt from './components/PwaInstallPrompt';
+import PullToRefresh from './components/PullToRefresh';
 import SoftLoadingIndicator from './components/SoftLoadingIndicator';
 
 const Auth = lazy(() => import('./pages/Auth'));
@@ -52,6 +53,7 @@ const AppContent = () => {
     <>
       <PageVisitTracker />
       {user && <PwaInstallPrompt />}
+      {user && <PullToRefresh />}
       <div className="min-h-screen flex flex-col">
         <NavBar />
         <main className={`flex-1 ${user ? 'md:pl-64' : ''}`}>
