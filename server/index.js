@@ -2175,7 +2175,9 @@ async function askOpenAISiennaAssistant({ question, context, suggestedPaths, con
     },
     body: JSON.stringify({
       model,
-      max_output_tokens: 260,
+      max_output_tokens: 1200,
+      reasoning: { effort: 'low' },
+      text: { verbosity: 'low' },
       input: [
         {
           role: 'system',
@@ -2244,7 +2246,9 @@ async function streamOpenAISiennaAssistant({ question, context, suggestedPaths =
     },
     body: JSON.stringify({
       model,
-      max_output_tokens: 260,
+      max_output_tokens: 1200,
+      reasoning: { effort: 'low' },
+      text: { verbosity: 'low' },
       stream: true,
       input: [
         { role: 'system', content: SIENNA_AI_SYSTEM_PROMPT },
@@ -2292,14 +2296,34 @@ const fallbackSiennaCuriosities = (context) => {
   const heirs = context.active_heirs || [];
   const findings = context.top_findings || [];
   const dual = context.dual_lineage_summary || {};
+  const members = context.members_index || [];
   const userMember = context.current_user_member || null;
   const firstName = context.current_user_first_name || null;
   const facts = [];
   const multiRouteHeirs = heirs.filter((heir) => (heir.sources || []).length > 1 || String(heir.route || '').includes('+'));
 
+  const siblingGroups = new Map();
+  members.forEach((member) => {
+    const parentIds = [...(member.parent_ids || [])].filter(Boolean).sort();
+    if (parentIds.length < 2) return;
+    const key = parentIds.join('|');
+    siblingGroups.set(key, [...(siblingGroups.get(key) || []), member]);
+  });
+
+  const broadSiblingGroup = [...siblingGroups.values()]
+    .sort((a, b) => b.length - a.length)
+    .find((group) => group.length >= 3);
+  if (broadSiblingGroup) {
+    facts.push(
+      'Un mismo par de padres conecta a ' +
+      broadSiblingGroup.slice(0, 2).map((member) => member.name).join(', ') +
+      ' y ' + (broadSiblingGroup.length - 2) + ' miembro(s) más del árbol.'
+    );
+  }
+
   if (userMember && firstName) {
-    if (userMember.inheritance_reason) {
-      facts.push(firstName + ', tu conexión familiar está marcada en el expediente por este motivo: ' + userMember.inheritance_reason);
+    if (userMember.inheritanceReason) {
+      facts.push(firstName + ', tu conexión familiar está marcada en el expediente por este motivo: ' + userMember.inheritanceReason);
     } else {
       facts.push(firstName + ', ya puedo leer estas curiosidades tomando como referencia tu ficha familiar: ' + userMember.name + '.');
     }
@@ -2339,6 +2363,17 @@ async function buildSiennaAiCuriosities(user = null) {
   const apiKey = process.env.OPENAI_API_KEY;
   const model = process.env.OPENAI_MODEL || SIENNA_AI_DEFAULT_MODEL;
   if (!apiKey) return { curiosities: fallback, model, mode: 'fallback' };
+  const familyForCuriosities = (context.members_index || []).slice(0, 140).map((member) => ({
+    id: member.id,
+    name: member.name,
+    birth: member.birth,
+    death: member.death,
+    parent_ids: member.parent_ids,
+    spouse_member_id: member.spouse_member_id,
+    relationship_to_parent: member.relationship_to_parent,
+    inheritance_status: member.inheritance_status,
+    inheritance_reason: member.inheritance_reason,
+  }));
 
   const response = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST',
@@ -2348,14 +2383,19 @@ async function buildSiennaAiCuriosities(user = null) {
     },
     body: JSON.stringify({
       model,
-      max_output_tokens: 120,
+      max_output_tokens: 500,
+      reasoning: { effort: 'low' },
+      text: { verbosity: 'low' },
       input: [
         {
           role: 'system',
           content: [
             'Redacta microcuriosidades reales y poco obvias para la portada del expediente familiar.',
             'Usa solo datos del contexto. No inventes nombres, montos, parentescos ni hechos.',
-            'Prioriza datos difíciles de detectar a simple vista: doble ruta, convergencia, validación histórica, patrón documental o cruce familiar.',
+            'Todos los miembros del arbol son familia de una forma u otra; no limites la mirada a familiares cercanos.',
+            'El usuario_miembro y su entorno tienen mayor peso, pero no son una restriccion: si el dato fuerte esta en una rama lejana, usalo.',
+            'Prioriza datos dificiles de detectar a simple vista: doble ruta, convergencia, validacion historica, patron documental, generacional o cruce familiar transversal.',
+            'Busca conexiones sutiles entre ramas, miembros lejanos, generaciones y rutas indirectas antes que datos obvios de familiares cercanos.',
             'Si hay usuario_miembro, puedes usar su primer nombre, pero no lo hagas si no aporta claridad.',
             'Evita iniciar varias líneas con “¿Sabías que...?”. No uses tono de mensaje personal si el dato habla de otra persona.',
             'Evita frases obvias como conteos simples, resúmenes generales o “hay X herederos”.',
@@ -2375,6 +2415,8 @@ async function buildSiennaAiCuriosities(user = null) {
               .slice(0, 8),
             hallazgos_sutiles: context.top_findings.slice(0, 8),
             dobles_linajes: context.dual_lineage_summary,
+            familia_amplia: familyForCuriosities,
+            criterio_familia: 'Todos son familia; usuario_miembro pesa mas, pero las curiosidades pueden venir de ramas no cercanas si son mas dificiles de percibir.',
             usuario_miembro: context.current_user_member ? {
               primer_nombre: context.current_user_first_name,
               miembro: context.current_user_member,

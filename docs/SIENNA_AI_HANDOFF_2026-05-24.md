@@ -133,6 +133,8 @@ Commits relacionados:
 - Las tarjetas de curiosidad ahora distinguen origen visual:
   - Verde: generado por Nano/OpenAI.
   - Azul: fallback/local.
+- Ajuste local 2026-05-25: las curiosidades IA reciben un indice amplio del arbol y el prompt exige curiosidades dificiles de percibir, no limitadas a familiares cercanos. El usuario asociado pesa mas, pero no restringe el universo familiar.
+- Auditoria IA 2026-05-25: las pantallas que consumen IA son `/sienna/asistente` y las curiosidades del Dashboard. Ambas usan backend/API; el frontend no decide hechos sucesorales ni genealogicos.
 
 Commits relacionados:
 

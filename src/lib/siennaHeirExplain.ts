@@ -636,6 +636,42 @@ export const downloadHeirBriefPdf = async (brief: HeirBriefExport, netAmount: nu
     ].forEach(([label, value]) => writeParagraph(`${label}: ${value}`, { size: 8.8, lineHeight: 4.2 }));
   };
 
+  const drawAcceptanceRelease = () => {
+    drawSectionTitle('12. Descargo y aceptacion');
+    writeParagraph(
+      `Yo, ${brief.share.member.name}, declaro haber recibido esta ficha individual de herencia, con la explicacion de mi participacion, ruta sucesoral, soporte documental, monto estimado y validaciones disponibles dentro del expediente familiar de ${caseCausanteName}.`,
+      { size: 9.1, lineHeight: 4.35 }
+    );
+    writeParagraph(
+      'Reconozco que la informacion presentada emana del calculo vigente del backend sobre los datos reales del expediente y acepto esta constancia para fines de revision, conciliacion y documentacion familiar, sin perjuicio de correcciones documentales o validaciones legales posteriores.',
+      { size: 9.1, lineHeight: 4.35 }
+    );
+    writeParagraph(
+      `Dejo constancia de que el monto indicado es estimado sobre el neto actualmente configurado (${formatMoney(netAmount)}) y sobre mi participacion calculada (${formatPercent(brief.simulatedShare)}).`,
+      { size: 9.1, lineHeight: 4.35 }
+    );
+
+    ensureSpace(31);
+    pdf.setFillColor(255, 253, 248);
+    pdf.setDrawColor(218, 190, 129);
+    pdf.roundedRect(margin, y, contentWidth, 28, 2, 2, 'FD');
+    const lineY = y + 16;
+    const columnWidth = (contentWidth - 18) / 2;
+    pdf.setDrawColor(120, 128, 145);
+    pdf.line(margin + 7, lineY, margin + 7 + columnWidth, lineY);
+    pdf.line(margin + 11 + columnWidth, lineY, margin + 11 + columnWidth * 2, lineY);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(7.8);
+    pdf.setTextColor(9, 27, 58);
+    pdf.text('Firma del heredero / receptor', margin + 7, lineY + 5.5);
+    pdf.text('Fecha', margin + 11 + columnWidth, lineY + 5.5);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(7.4);
+    pdf.setTextColor(95, 108, 126);
+    pdf.text('Documento de descargo y aceptacion para expediente familiar interno.', margin + 7, y + 25);
+    y += 32;
+  };
+
   const drawRouteTreeCopy = () => {
 
     drawSectionTitle(
@@ -822,15 +858,15 @@ export const downloadHeirBriefPdf = async (brief: HeirBriefExport, netAmount: nu
   pdf.setFont('times', 'bold');
   pdf.setFontSize(22);
   pdf.setTextColor(9, 27, 58);
-  pdf.text('REPORTE INDIVIDUAL', margin + 64, 19);
-  pdf.text('DE HERENCIA', margin + 64, 29);
+  pdf.text('DESCARGO Y ACEPTACION', margin + 64, 19);
+  pdf.text('INDIVIDUAL DE HERENCIA', margin + 64, 29);
   pdf.setDrawColor(196, 157, 73);
   pdf.line(margin + 64, 34, margin + 122, 34);
   pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(8.5);
   pdf.setTextColor(61, 65, 72);
-  pdf.text('Documento familiar generado para el Legado Sangiovanni', margin + 64, 40);
-  pdf.text('Gracias por preservar la historia, los documentos y la memoria de la familia.', margin + 64, 45);
+  pdf.text('Constancia familiar generada para el Legado Sangiovanni', margin + 64, 40);
+  pdf.text('Explicacion, validacion, descargo y aceptacion individual del heredero.', margin + 64, 45);
 
   pdf.setFontSize(7.5);
   pdf.setTextColor(85, 88, 95);
@@ -941,13 +977,7 @@ export const downloadHeirBriefPdf = async (brief: HeirBriefExport, netAmount: nu
 
   drawSystemValidation();
 
-  drawSectionTitle('12. Observaciones');
-  const observations = brief.traffic.issues.length
-    ? brief.traffic.issues
-    : ['Se recomienda preservar los documentos familiares originales y mantener actualizada cualquier validacion historica o legal adicional.'];
-  observations.forEach((issue) =>
-    writeParagraph(`- ${issue}`, { size: 9.2, color: brief.traffic.issues.length ? [125, 52, 52] : [45, 49, 57], lineHeight: 4.4 })
-  );
+  drawAcceptanceRelease();
 
   pdf.setFillColor(9, 27, 58);
   pdf.rect(0, pageHeight - 11, pageWidth, 11, 'F');

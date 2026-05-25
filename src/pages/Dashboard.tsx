@@ -20,6 +20,7 @@ import {
   ScrollText,
   Settings,
   Sparkles,
+  Star,
   TreePine,
   Users,
 } from 'lucide-react';
@@ -59,6 +60,8 @@ type BranchDistribution = {
   heirs: number;
 };
 
+type CuriositySource = 'ai' | 'default';
+
 const formatCompactNumber = (value: number | null | undefined) =>
   new Intl.NumberFormat('es-DO', { maximumFractionDigits: 0 }).format(Number(value || 0));
 
@@ -74,6 +77,29 @@ const statToneClasses: Record<StatCard['tone'], string> = {
   green: 'border-[#3FA37C]/35 bg-[#3FA37C]/14 text-[#3FA37C]',
   gold: 'border-[#D4AF37]/45 bg-[#D4AF37]/15 text-[#9B7418] dark:text-[#E6C768]',
   blue: 'border-[#355C9A]/35 bg-[#355C9A]/14 text-[#355C9A] dark:text-[#B8C0CC]',
+};
+
+const curiositySourceClasses: Record<CuriositySource, string> = {
+  ai: 'border-[#2E8B57]/40 bg-[#EAF8F0] text-[#1F7A4F] dark:border-[#3FA37C]/45 dark:bg-[#163324] dark:text-[#7ED7A6]',
+  default: 'border-[#D4AF37]/45 bg-[#FFF6D8] text-[#9B7418] dark:border-[#D4AF37]/45 dark:bg-[#2B2412] dark:text-[#E6C768]',
+};
+
+const CuriositySourceMark = ({ source }: { source: CuriositySource }) => {
+  const Icon = source === 'ai' ? Bot : Star;
+  const label = source === 'ai' ? 'Curiosidad generada por IA' : 'Curiosidad destacada';
+
+  return (
+    <span
+      className={cn(
+        'absolute right-3 top-3 inline-flex h-7 w-7 items-center justify-center rounded-full border shadow-sm',
+        curiositySourceClasses[source]
+      )}
+      title={label}
+      aria-label={label}
+    >
+      <Icon className="h-3.5 w-3.5" />
+    </span>
+  );
 };
 
 const HEIR_LINKS: DashboardLink[] = [
@@ -1022,6 +1048,7 @@ const Dashboard = () => {
 
   const displayCuriosityCards = aiCuriositiesData?.curiosities?.filter(Boolean).slice(0, 3) ?? [];
   const curiosityOrigin = aiCuriositiesData?.mode === 'openai' ? 'nano' : 'backend';
+  const curiositySource: CuriositySource = curiosityOrigin === 'nano' && displayCuriosityCards.length > 0 ? 'ai' : 'default';
   const curiosityCardClassName = curiosityOrigin === 'nano'
     ? 'border-[#2E8B57]/55 bg-[#F3FBF6] dark:border-[#3FA37C]/45 dark:bg-[#10251D]'
     : 'border-[#355C9A]/45 bg-[#F3F7FD] dark:border-[#5F8BD4]/40 dark:bg-[#101B2E]';
@@ -1141,7 +1168,8 @@ const Dashboard = () => {
                 </div>
               </div>
               <div className="mt-5 grid gap-3 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.9fr)] 2xl:grid-cols-[minmax(0,1.55fr)_minmax(380px,0.9fr)]">
-                <div className={cn('rounded-md border p-5 shadow-sm', curiosityCardClassName)}>
+                <div className={cn('relative rounded-md border p-5 pr-12 shadow-sm', curiosityCardClassName)}>
+                  <CuriositySourceMark source={curiositySource} />
                   <p className={cn('text-xs font-semibold uppercase tracking-wide', curiosityEyebrowClassName)}>
                     Sabías que...
                   </p>
@@ -1154,10 +1182,11 @@ const Dashboard = () => {
                     <div
                       key={`legacy-curiosity-${index}-${fact}`}
                       className={cn(
-                        'rounded-md border p-4 text-sm font-medium leading-relaxed text-[#1B2430] shadow-sm dark:text-[#F5F7FA]',
+                        'relative rounded-md border p-4 pr-12 text-sm font-medium leading-relaxed text-[#1B2430] shadow-sm dark:text-[#F5F7FA]',
                         curiosityCardClassName
                       )}
                     >
+                      <CuriositySourceMark source={curiositySource} />
                       {fact}
                     </div>
                   ))}

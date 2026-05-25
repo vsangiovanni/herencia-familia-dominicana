@@ -58,10 +58,13 @@ Endpoints canónicos actuales:
 | `GET /api/sienna-analysis-summary` | Resumen ejecutivo de métricas Sienna |
 | `GET /api/sienna-findings` | Hallazgos accionables por miembro |
 | `POST /api/sienna-ai-assistant` | Orientación IA read-only. No expone escritura ni permite modificar reparto, árbol o documentos |
+| `GET /api/sienna-ai-curiosities` | Curiosidades del Dashboard generadas por backend/IA con contexto amplio del árbol; el usuario asociado pesa más, pero no limita la familia |
 
 ## Estado del release 2026-05-22
 
 - Backend Node y PHP exponen el resumen Sienna, hallazgos y estado sucesoral efectivo para que React no replique reglas de negocio.
+- Ajuste local 2026-05-25: las curiosidades del Dashboard ya no se limitan a familiares cercanos; el backend entrega a la IA un índice amplio del árbol para buscar patrones difíciles de percibir.
+- Auditoria IA 2026-05-25: las pantallas con IA son `/sienna/asistente` y el bloque de curiosidades del Dashboard. Ambas consumen endpoints backend; React no decide hechos sucesorales ni genealogicos.
 - `/sienna/miembros-arbol` carga el workspace liviano para totales/listas y las fotos por separado mediante herederos confirmados con media; esto evita bloquear las tarjetas superiores por archivos pesados.
 - Las tablas/listas de miembros en Sienna se presentan en orden alfabetico cuando son tablas de consulta. El arbol conserva su orden logico propio para no romper la genealogia visual.
 - `/sienna/dobles-linajes` usa los casos calculados por API y ordena la auditoria por nombre de miembro.
@@ -142,10 +145,11 @@ Regla UX: no todos los badges deben ser links. Solo se enlazan estados que tiene
   - documentos relacionados,
   - mosaico de documentos,
   - timeline,
-  - observaciones,
+  - descargo y aceptacion con constancia de recepcion/firma,
   - pie de página del Legado Sangiovanni.
 - La portada ya no imprime la línea superior derecha que causaba solapamiento.
-- Las secciones 5 a 8 comienzan en segunda página; documentos/timeline/validación/observaciones continúan en páginas posteriores.
+- Ajuste local 2026-05-25: la portada identifica el documento como **Descargo y aceptación individual de herencia** y conserva la misma informacion de rutas, monto, soporte, hallazgos y validacion.
+- Las secciones 5 a 8 comienzan en segunda página; documentos/timeline/validación/descargo continúan en páginas posteriores.
 - Los PDF subidos como soporte se muestran como miniatura renderizada de la primera página cuando el navegador puede hacerlo; si no, usan fallback textual.
 - Una sola acta de nacimiento vinculada directamente o un documento marcado como `confirms_heir` basta para considerar soporte documental verificado.
 

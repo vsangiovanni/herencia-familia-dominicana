@@ -97,7 +97,7 @@ No deja espacio vacío cuando está oculto (`return null`).
 
 - Usa el mismo cálculo en vivo que el árbol para porcentajes, montos y neto después de honorarios.
 - Muestra doble linaje desglosado por rama cuando un heredero participa por más de una fuente.
-- El PDF individual incluye ruta sucesoral, soporte documental, marcador de fallecido si aplica y monto estimado.
+- El PDF individual funciona como descargo y aceptacion: mantiene ruta sucesoral, soporte documental, marcador de fallecido si aplica, monto estimado y agrega constancia de recepcion/firma.
 - En la tabla de resumen, las columnas **Heredero** y **Cadena de pago** tienen mayor ancho para lectura cómoda.
 - La **Cadena de pago** se presenta como una secuencia visual con cápsulas e iconos de origen, ramificación y heredero final, en vez de texto plano con separadores.
 

@@ -2604,7 +2604,9 @@ function ask_openai_sienna_assistant(string $question, array $context, array $su
 
   $payload = [
     'model' => $model,
-    'max_output_tokens' => 260,
+    'max_output_tokens' => 1200,
+    'reasoning' => ['effort' => 'low'],
+    'text' => ['verbosity' => 'low'],
     'input' => [
       [
         'role' => 'system',
@@ -2687,7 +2689,7 @@ function send_sienna_sse_event(string $event, array $payload): void {
   flush();
 }
 
-function stream_openai_sienna_assistant(string $question, array $context, array $conversationHistory, callable $onDelta): array {
+function stream_openai_sienna_assistant(string $question, array $context, array $suggestedPaths, array $conversationHistory, callable $onDelta): array {
   $apiKey = env_value('OPENAI_API_KEY');
   $model = env_value('OPENAI_MODEL') ?: sienna_ai_default_model();
   $deterministicAnswer = build_deterministic_sienna_assistant_answer($question, $context);
@@ -2703,7 +2705,9 @@ function stream_openai_sienna_assistant(string $question, array $context, array 
 
   $payload = [
     'model' => $model,
-    'max_output_tokens' => 260,
+    'max_output_tokens' => 1200,
+    'reasoning' => ['effort' => 'low'],
+    'text' => ['verbosity' => 'low'],
     'stream' => true,
     'input' => [
       ['role' => 'system', 'content' => sienna_ai_system_prompt()],
@@ -2760,12 +2764,35 @@ function fallback_sienna_curiosities(array $context): array {
   $heirs = $context['active_heirs'] ?? [];
   $findings = $context['top_findings'] ?? [];
   $dual = $context['dual_lineage_summary'] ?? [];
+  $members = $context['members_index'] ?? [];
   $userMember = $context['current_user_member'] ?? null;
   $firstName = $context['current_user_first_name'] ?? null;
   $facts = [];
   $multiRouteHeirs = array_values(array_filter($heirs, fn($heir) =>
     count($heir['sources'] ?? []) > 1 || str_contains((string)($heir['route'] ?? ''), '+')
   ));
+
+  $siblingGroups = [];
+  foreach ($members as $member) {
+    $parentIds = array_values(array_filter($member['parent_ids'] ?? []));
+    sort($parentIds);
+    if (count($parentIds) < 2) continue;
+    $key = implode('|', $parentIds);
+    $siblingGroups[$key] = [...($siblingGroups[$key] ?? []), $member];
+  }
+  usort($siblingGroups, fn($a, $b) => count($b) <=> count($a));
+  $broadSiblingGroup = null;
+  foreach ($siblingGroups as $group) {
+    if (count($group) >= 3) {
+      $broadSiblingGroup = $group;
+      break;
+    }
+  }
+  if ($broadSiblingGroup) {
+    $names = array_map(fn($member) => $member['name'] ?? 'miembro', array_slice($broadSiblingGroup, 0, 2));
+    $facts[] = 'Un mismo par de padres conecta a ' . implode(', ', $names) .
+      ' y ' . (count($broadSiblingGroup) - 2) . ' miembro(s) más del árbol.';
+  }
 
   if ($userMember && $firstName) {
     if (!empty($userMember['inheritanceReason'])) {
@@ -2818,20 +2845,36 @@ function build_sienna_ai_curiosities(?array $user = null): array {
   if (!$apiKey || !function_exists('curl_init')) {
     return ['curiosities' => $fallback, 'model' => $model, 'mode' => 'fallback'];
   }
+  $familyForCuriosities = array_slice(array_map(fn($member) => [
+    'id' => $member['id'] ?? null,
+    'name' => $member['name'] ?? '',
+    'birth' => $member['birth'] ?? null,
+    'death' => $member['death'] ?? null,
+    'parent_ids' => $member['parent_ids'] ?? [],
+    'spouse_member_id' => $member['spouse_member_id'] ?? null,
+    'relationship_to_parent' => $member['relationship_to_parent'] ?? null,
+    'inheritance_status' => $member['inheritance_status'] ?? null,
+    'inheritance_reason' => $member['inheritance_reason'] ?? null,
+  ], $context['members_index'] ?? []), 0, 140);
 
   $payload = [
     'model' => $model,
-    'max_output_tokens' => 120,
+    'max_output_tokens' => 500,
+    'reasoning' => ['effort' => 'low'],
+    'text' => ['verbosity' => 'low'],
     'input' => [
       [
         'role' => 'system',
         'content' => implode("\n", [
           'Redacta microcuriosidades reales y poco obvias para la portada del expediente familiar.',
           'Usa solo datos del contexto. No inventes nombres, montos, parentescos ni hechos.',
-	          'Prioriza datos difíciles de detectar a simple vista: doble ruta, convergencia, validación histórica, patrón documental o cruce familiar.',
+          'Todos los miembros del arbol son familia de una forma u otra; no limites la mirada a familiares cercanos.',
+          'El usuario_miembro y su entorno tienen mayor peso, pero no son una restriccion: si el dato fuerte esta en una rama lejana, usalo.',
+          'Prioriza datos dificiles de detectar a simple vista: doble ruta, convergencia, validacion historica, patron documental, generacional o cruce familiar transversal.',
+          'Busca conexiones sutiles entre ramas, miembros lejanos, generaciones y rutas indirectas antes que datos obvios de familiares cercanos.',
           'Si hay usuario_miembro, puedes usar su primer nombre, pero no lo hagas si no aporta claridad.',
           'Evita iniciar varias líneas con “¿Sabías que...?”. No uses tono de mensaje personal si el dato habla de otra persona.',
-	          'Evita frases obvias como conteos simples, resúmenes generales o “hay X herederos”.',
+          'Evita frases obvias como conteos simples, resúmenes generales o “hay X herederos”.',
           'No menciones que eres IA ni detalles técnicos.',
           'Devuelve exactamente 3 líneas, una curiosidad por línea.',
           'Cada línea debe ser breve, elegante y útil. Máximo 20 palabras.',
@@ -2846,13 +2889,15 @@ function build_sienna_ai_curiosities(?array $user = null): array {
           'herederos_multiruta' => array_slice(array_values(array_filter($context['active_heirs'] ?? [], fn($heir) =>
             count($heir['sources'] ?? []) > 1 || str_contains((string)($heir['route'] ?? ''), '+')
           )), 0, 8),
-	          'hallazgos_sutiles' => array_slice($context['top_findings'] ?? [], 0, 8),
-	          'dobles_linajes' => $context['dual_lineage_summary'] ?? [],
-	          'usuario_miembro' => isset($context['current_user_member']) ? [
-	            'primer_nombre' => $context['current_user_first_name'] ?? null,
-	            'miembro' => $context['current_user_member'],
-	          ] : null,
-	        ], JSON_UNESCAPED_UNICODE),
+          'hallazgos_sutiles' => array_slice($context['top_findings'] ?? [], 0, 8),
+          'dobles_linajes' => $context['dual_lineage_summary'] ?? [],
+          'familia_amplia' => $familyForCuriosities,
+          'criterio_familia' => 'Todos son familia; usuario_miembro pesa mas, pero las curiosidades pueden venir de ramas no cercanas si son mas dificiles de percibir.',
+          'usuario_miembro' => isset($context['current_user_member']) ? [
+            'primer_nombre' => $context['current_user_first_name'] ?? null,
+            'miembro' => $context['current_user_member'],
+          ] : null,
+        ], JSON_UNESCAPED_UNICODE),
       ],
     ],
   ];
@@ -3971,7 +4016,7 @@ try {
       if (is_internal_sienna_ai_request($question)) {
         send_sienna_sse_event('delta', ['delta' => build_internal_sienna_assistant_answer($question)]);
       } else {
-        stream_openai_sienna_assistant($question, $context, $conversationHistory, function (string $delta): void {
+        stream_openai_sienna_assistant($question, $context, $suggestedPaths, $conversationHistory, function (string $delta): void {
           send_sienna_sse_event('delta', ['delta' => $delta]);
         });
       }
