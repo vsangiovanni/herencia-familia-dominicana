@@ -10,6 +10,14 @@ Produccion: `https://herenciard.vmsencf.com`
 Frontend local: `http://localhost:8080/`  
 Backend local: `http://localhost:3001/api/health`
 
+Actualizacion posterior - 2026-05-24 21:15 AST:
+
+- GitHub actualizado hasta commit `1c78c01` (`Unify document and heir presentation table`).
+- Hostinger actualizado por MCP `hosting_deployStaticWebsite` usando `herenciard_deploy_full.zip`.
+- Produccion verificada con `/api/health`: `{"ok":true,"storage":"mysql","runtime":"php"}`.
+- No se tocaron DB, datos de produccion, migraciones ni `.env`.
+- La pagina `/sienna/documentos` quedo con una sola tabla unificada de Registro Documental.
+
 Estado al cierre de esta ronda:
 
 - Local reiniciado con `bash scripts/dev-up.sh`.
@@ -100,6 +108,121 @@ Funciones relevantes:
   - `build_sienna_context_plan`
 
 ## Cambios hechos en esta ronda
+
+### PWA / instalacion movil
+
+- La app se convirtio en PWA con nombre de producto `Legado Sangiovanni`.
+- `short_name`: `Sangiovanni`, para evitar que Android/iOS recorten a solo `Legado`.
+- Se agregaron manifest, iconos, Apple touch icon, favicon y service worker.
+- Regla importante: el service worker NO debe cachear API ni expediente offline. Solo assets estaticos seguros.
+- Android/Chrome puede mostrar invitacion de instalacion usando `beforeinstallprompt`; si el usuario acepta, Chrome instala la app.
+- iPhone/Safari no permite instalacion automatica ni disparar instalador nativo; se debe guiar con Compartir -> Agregar a pantalla de inicio.
+- Se agrego pull-to-refresh movil para refrescar datos de forma natural desde la app instalada.
+
+Commits relacionados:
+
+- `e0ac36e` Add Legado Sangiovanni PWA support
+- `f946eb8` Refine PWA name and Sangiovanni icon
+- `0b55911` Add Android PWA install prompt
+- `2642436` Add mobile pull to refresh
+
+### Dashboard / curiosidades IA
+
+- Victor detecto mensajes repetidos de curiosidades que parecian IA pero eran fallback.
+- Se ajusto para no presentar fallback repetitivo como si fuera Nano.
+- Las tarjetas de curiosidad ahora distinguen origen visual:
+  - Verde: generado por Nano/OpenAI.
+  - Azul: fallback/local.
+
+Commits relacionados:
+
+- `66056ea` Avoid repeated fallback dashboard curiosities
+- `f94d75d` Color dashboard curiosity cards by source
+
+### Memoria conversacional local por usuario
+
+- El historial local de Sienna en frontend se aislo por usuario para evitar que otro usuario vea contexto de Victor o mensajes en primera persona incorrectos.
+- Esto corrige el caso donde al entrar con otro usuario aparecia un mensaje que decia Victor.
+- La memoria sigue siendo local/frontend para continuidad de conversacion; no debe confundirse con datos del expediente ni guardarse como verdad del backend.
+
+Commit relacionado:
+
+- `fdcfed1` Isolate Sienna chat memory per user
+
+### Fotos, verificacion y Registro Documental
+
+- Se centralizo el componente `MemberPhoto` para aceptar estado de verificacion.
+- Borde de fotos:
+  - Verde sutil: miembro/heredero verificado.
+  - Rojo sutil: pendiente/no verificado.
+  - Neutral: sin estado conocido.
+- Se agrego foto del miembro en Registro Documental.
+- Se aplico el borde de verificacion en pantallas/tablas que usan `MemberPhoto`, incluyendo:
+  - Documentos Probatorios,
+  - Arbol Sienna,
+  - Explicacion de herederos,
+  - vistas relacionadas.
+- El borde se suavizo luego de feedback de Victor: borde fino + ring suave, no borde grueso.
+
+Commits relacionados:
+
+- `f6b7025` Show verified status on member photos
+- `465c2f4` Soften verified photo borders
+
+### Performance de Documentos Probatorios
+
+- Problema detectado: `DocumentosProbatorios` cargaba `useSiennaWorkspace(true)`, lo que hacia que el primer render pidiera media pesada/documentos completos en base64.
+- Correccion:
+  - La pagina ahora carga `useSiennaWorkspace(false)` para metadata ligera.
+  - Las fotos de herederos se cargan por `useConfirmedHeirs(true)`.
+  - El archivo completo del documento se pide bajo demanda solo cuando el usuario pulsa `Ver`.
+- Esto reduce el tiempo inicial de carga de tablas.
+
+Commit relacionado:
+
+- `7acf1c9` Load documents page without full media
+
+### Montos: fuente unica API/backend
+
+- Victor detecto que al guardar foto decia `Foto y monto guardados`.
+- Se encontro que la tabla `Presentacion de herederos` tenia monto editable manual y el update de foto reenviaba `inheritance_amount`.
+- Correcciones:
+  - Se elimino el input editable de monto en Documentos.
+  - La UI muestra `Monto calculado` de solo lectura desde `useSiennaCalculation`.
+  - Guardar foto ya no manda `inheritance_amount`.
+  - Backend Node y PHP ahora conservan `inheritance_amount` cuando un PUT de heredero no trae ese campo.
+  - El texto de toast ahora dice: `Foto guardada. El monto se mantiene calculado desde la API.`
+- Regla vigente: los montos no deben guardarse desde la tabla de Documentos; deben venir del calculo/API. Mantener esta filosofia.
+
+Commit relacionado:
+
+- `a54bbad` Keep photo updates from saving heir amounts
+
+### Unificacion de tablas en Documentos Probatorios
+
+- Victor pidio eliminar duplicacion entre `Presentacion de herederos` y `Registro Documental`.
+- Se elimino la tabla separada de Presentacion de herederos.
+- `Registro Documental` ahora es una sola tabla que combina:
+  - miembro/heredero,
+  - foto editable,
+  - borde verde/rojo por verificacion,
+  - estado y lineas familiares,
+  - documento,
+  - fecha,
+  - cantidad de actas,
+  - monto calculado por API,
+  - soporte,
+  - acciones: guardar foto, ver documento, eliminar documento.
+- Si un heredero no tiene documento vinculado, aparece en la misma tabla como `Sin documento vinculado` para poder completar la foto sin usar una segunda tabla.
+- Se verifico en produccion que el bundle contiene:
+  - `Miembro / heredero`,
+  - `Monto calculado`,
+  - `Guardar foto`,
+  - `Sin documento vinculado`.
+
+Commit relacionado:
+
+- `1c78c01` Unify document and heir presentation table
 
 ### Modelo y prompting
 
@@ -238,6 +361,18 @@ Frontend:
   - personalizacion por miembro.
 - `src/components/NavBar.tsx`
   - sidebar desktop con scroll interno.
+- `src/pages/DocumentosProbatorios.tsx`
+  - tabla unificada de Registro Documental,
+  - carga ligera sin media completa al primer render,
+  - fotos editables de herederos,
+  - monto calculado solo desde API,
+  - documentos completos bajo demanda al pulsar `Ver`.
+- `src/components/sienna/MemberPhoto.tsx`
+  - componente central para foto de miembro/heredero,
+  - borde visual segun verificacion.
+- `src/lib/memberPhotos.ts`
+  - lookup de fotos,
+  - resolucion de estado de verificacion desde herederos confirmados.
 
 Docs:
 
@@ -268,19 +403,31 @@ Leer en este orden:
 
 ## Pendientes / siguientes mejoras
 
-1. Eliminar duplicacion Node/PHP a futuro mediante contrato compartido o generacion, si el entorno lo permite.
-2. Agregar tests automatizados especificos del asistente conversacional, no solo pruebas manuales con curl.
-3. Exponer un endpoint admin-only de diagnostico de Sienna AI que no revele secretos, solo:
+1. Revisar visualmente en movil la tabla unificada de Documentos Probatorios despues del reinicio, especialmente ancho horizontal, inputs de foto y botones de accion.
+2. Probar manualmente en produccion:
+   - subir/cambiar foto desde la tabla unificada,
+   - verificar que el toast diga solo foto guardada,
+   - confirmar que el monto no cambia,
+   - abrir documento con `Ver`,
+   - revisar filas `Sin documento vinculado`.
+3. Evaluar si conviene agregar filtros en Registro Documental:
+   - con documento / sin documento,
+   - verificados / pendientes,
+   - linea Vincenzo / linea Paolo,
+   - busqueda por nombre.
+4. Eliminar duplicacion Node/PHP a futuro mediante contrato compartido o generacion, si el entorno lo permite.
+5. Agregar tests automatizados especificos del asistente conversacional y de Documentos, no solo pruebas manuales con curl.
+6. Exponer un endpoint admin-only de diagnostico de Sienna AI que no revele secretos, solo:
    - modelo configurado,
    - OpenAI configurado si/no,
    - modo ultimo request,
    - intencion detectada,
    - si uso contexto conversacional.
-4. Mejorar soporte de repreguntas mas ambiguas:
+7. Mejorar soporte de repreguntas mas ambiguas:
    - "y el otro?"
    - "cuanto le toca a ella?"
    - "por que a Gina si y a mi no?"
-5. Mantener prompts compactos: no enviar arbol entero, documentos completos ni listas gigantes.
+8. Mantener prompts compactos: no enviar arbol entero, documentos completos ni listas gigantes.
 
 ## Reglas de deploy para la proxima conversacion
 
@@ -299,3 +446,30 @@ Leer en este orden:
 - No tocar DB ni datos de produccion salvo autorizacion explicita.
 - No subir `.env`.
 - No ejecutar migraciones salvo autorizacion explicita.
+
+## Ultimos commits relevantes
+
+```text
+1c78c01 Unify document and heir presentation table
+a54bbad Keep photo updates from saving heir amounts
+7acf1c9 Load documents page without full media
+465c2f4 Soften verified photo borders
+f6b7025 Show verified status on member photos
+2642436 Add mobile pull to refresh
+f94d75d Color dashboard curiosity cards by source
+0b55911 Add Android PWA install prompt
+66056ea Avoid repeated fallback dashboard curiosities
+fdcfed1 Isolate Sienna chat memory per user
+f946eb8 Refine PWA name and Sangiovanni icon
+e0ac36e Add Legado Sangiovanni PWA support
+```
+
+## Estado para reinicio
+
+Antes de reiniciar la PC, estado conocido:
+
+- GitHub esta actualizado.
+- Hostinger esta actualizado.
+- Produccion responde OK en `/api/health`.
+- No hay una tarea de deploy pendiente.
+- Pendiente real: QA visual/manual posterior al reinicio, principalmente Documentos Probatorios en movil y flujo de guardar foto desde tabla unificada.
