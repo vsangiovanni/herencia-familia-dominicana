@@ -6,7 +6,7 @@ import BackButton from '@/components/BackButton';
 import DocumentHeader from '@/components/DocumentHeader';
 import MemberPhoto from '@/components/sienna/MemberPhoto';
 import { api, ConfirmedHeir, EvidenceDocument, SiennaFamilyMember } from '@/lib/api';
-import { invalidateSiennaData, useSiennaWorkspace } from '@/hooks/useSiennaData';
+import { invalidateSiennaData, useConfirmedHeirs, useSiennaWorkspace } from '@/hooks/useSiennaData';
 import { buildMemberPhotoLookup } from '@/lib/memberPhotos';
 import { getMemberLinkVerificationStatus } from '@/lib/siennaGenealogy';
 import { sortMembersByName } from '@/lib/siennaFamilyTree';
@@ -177,9 +177,10 @@ const findSpousePartner = (
 const DocumentosProbatorios = () => {
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
-  const { data: workspace, refetch } = useSiennaWorkspace(true);
+  const { data: workspace, refetch } = useSiennaWorkspace(false);
+  const { data: heirsWithPhotos } = useConfirmedHeirs(true);
   const members = workspace?.members ?? [];
-  const heirs = workspace?.heirs ?? [];
+  const heirs = heirsWithPhotos?.heirs ?? workspace?.heirs ?? [];
   const genealogy = useMemo(
     () => ({
       unions: workspace?.unions ?? [],
