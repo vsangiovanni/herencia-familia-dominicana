@@ -88,6 +88,18 @@ const renderAnswer = (answer: string) => {
   ));
 };
 
+const siennaThinkingMessages = [
+  'Sienna está hilando la respuesta...',
+  'Sienna está ordenando la idea para ti...',
+  'Sienna está conectando los puntos...',
+  'Sienna está preparando una respuesta clara...',
+];
+
+const pickThinkingMessage = (seed: string) => {
+  const index = Array.from(seed).reduce((total, char) => total + char.charCodeAt(0), 0) % siennaThinkingMessages.length;
+  return siennaThinkingMessages[index];
+};
+
 const AsistenteIA = () => {
   const location = useLocation();
   const { userProfile, user } = useAuth();
@@ -100,6 +112,7 @@ const AsistenteIA = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [hasStoredContext, setHasStoredContext] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [thinkingMessage, setThinkingMessage] = useState(siennaThinkingMessages[0]);
   const [error, setError] = useState<string | null>(null);
 
   const canSend = useMemo(() => question.trim().length >= 3 && !isSending, [question, isSending]);
@@ -190,6 +203,7 @@ const AsistenteIA = () => {
       .map((message) => ({ role: message.role, content: message.content.slice(0, 900) }));
     setError(null);
     setQuestion('');
+    setThinkingMessage(pickThinkingMessage(prompt + String(Date.now())));
     setMessages((current) => [...current, { role: 'user', content: prompt }, { role: 'assistant', content: '' }]);
     setIsSending(true);
     try {
@@ -299,8 +313,15 @@ const AsistenteIA = () => {
                   ))
                 )}
                 {isSending && !messages[messages.length - 1]?.content && (
-                  <div className="mr-auto max-w-[92%] rounded-md border border-legal-gold/25 bg-[#FFFDF7] px-4 py-3 text-sm text-gray-600 dark:bg-[#162033] dark:text-muted-foreground">
-                    Estoy revisando el expediente...
+                  <div className="mr-auto max-w-[92%] rounded-md border border-legal-gold/25 bg-[#FFFDF7] px-4 py-3 text-sm text-gray-600 shadow-sm dark:bg-[#162033] dark:text-muted-foreground">
+                    <span className="inline-flex items-center gap-2">
+                      <span>{thinkingMessage}</span>
+                      <span className="sienna-chat-dots" aria-hidden="true">
+                        <span />
+                        <span />
+                        <span />
+                      </span>
+                    </span>
                   </div>
                 )}
                 <div ref={messagesEndRef} />

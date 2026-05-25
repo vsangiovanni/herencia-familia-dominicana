@@ -60,7 +60,8 @@ type BranchDistribution = {
   heirs: number;
 };
 
-type CuriositySource = 'ai' | 'default';
+type CuriositySource = 'ai' | 'default' | 'pending';
+type CuriosityRevealEffect = 'fade' | 'type' | 'glow';
 
 const formatCompactNumber = (value: number | null | undefined) =>
   new Intl.NumberFormat('es-DO', { maximumFractionDigits: 0 }).format(Number(value || 0));
@@ -82,11 +83,12 @@ const statToneClasses: Record<StatCard['tone'], string> = {
 const curiositySourceClasses: Record<CuriositySource, string> = {
   ai: 'border-[#2E8B57]/40 bg-[#EAF8F0] text-[#1F7A4F] dark:border-[#3FA37C]/45 dark:bg-[#163324] dark:text-[#7ED7A6]',
   default: 'border-[#D4AF37]/45 bg-[#FFF6D8] text-[#9B7418] dark:border-[#D4AF37]/45 dark:bg-[#2B2412] dark:text-[#E6C768]',
+  pending: 'border-[#7B61FF]/35 bg-[#F3F0FF] text-[#5D47C8] dark:border-[#7B61FF]/45 dark:bg-[#1D1833] dark:text-[#B8AAFF]',
 };
 
 const CuriositySourceMark = ({ source }: { source: CuriositySource }) => {
-  const Icon = source === 'ai' ? Bot : Star;
-  const label = source === 'ai' ? 'Curiosidad generada por IA' : 'Curiosidad destacada';
+  const Icon = source === 'ai' ? Bot : source === 'pending' ? Sparkles : Star;
+  const label = source === 'ai' ? 'Curiosidad generada por IA' : source === 'pending' ? 'Sienna buscando una curiosidad' : 'Curiosidad destacada';
 
   return (
     <span
@@ -98,6 +100,55 @@ const CuriositySourceMark = ({ source }: { source: CuriositySource }) => {
       aria-label={label}
     >
       <Icon className="h-3.5 w-3.5" />
+    </span>
+  );
+};
+
+const curiosityLoadingMessages = [
+  'Sienna está buscando cositas que quizás no sabías...',
+  'Sienna está hilando detalles familiares poco obvios...',
+  'Sienna está encontrando una perlita escondida del legado...',
+  'Sienna está preparando una curiosidad fina para ti...',
+];
+
+const curiosityRevealClasses: Record<CuriosityRevealEffect, string> = {
+  fade: 'animate-in fade-in duration-700',
+  type: 'sienna-curiosity-type',
+  glow: 'sienna-curiosity-glow',
+};
+
+const CuriosityRevealText = ({
+  text,
+  effect,
+  className,
+}: {
+  text: string;
+  effect: CuriosityRevealEffect;
+  className?: string;
+}) => {
+  const [typedText, setTypedText] = useState(effect === 'type' ? '' : text);
+
+  useEffect(() => {
+    if (effect !== 'type') {
+      setTypedText(text);
+      return undefined;
+    }
+
+    setTypedText('');
+    let index = 0;
+    const stepMs = text.length > 110 ? 12 : 18;
+    const interval = window.setInterval(() => {
+      index += 1;
+      setTypedText(text.slice(0, index));
+      if (index >= text.length) window.clearInterval(interval);
+    }, stepMs);
+
+    return () => window.clearInterval(interval);
+  }, [effect, text]);
+
+  return (
+    <span key={effect + '-' + text} className={cn('block', curiosityRevealClasses[effect], className)}>
+      {effect === 'type' ? typedText : text}
     </span>
   );
 };
@@ -412,7 +463,7 @@ type DashboardPriority = {
   cta: string;
 };
 
-const chooseVariant = (seed: string, variants: string[]) => {
+const chooseVariant = <T,>(seed: string, variants: T[]) => {
   const index = Array.from(seed).reduce((total, char) => total + char.charCodeAt(0), 0) % variants.length;
   return variants[index];
 };
@@ -934,7 +985,7 @@ const Dashboard = () => {
   const { data: realtimeCalculationData } = useSiennaCalculation();
   const { data: confirmedHeirsData } = useConfirmedHeirs(false);
   const { data: familyData } = useSiennaFamily();
-  const { data: aiCuriositiesData } = useSiennaAiCuriosities();
+  const { data: aiCuriositiesData, isFetching: aiCuriositiesFetching, isLoading: aiCuriositiesLoading } = useSiennaAiCuriosities();
   const summary = analysisSummary?.summary;
   const realtimeCalculation = realtimeCalculationData?.calculation;
   const calculatedFinalHeirsTotal = Number(summary?.active_heir_count ?? 0);
@@ -1046,13 +1097,27 @@ const Dashboard = () => {
     return chooseVariant(`${firstName}-${priority.label}-curiosity-${dashboardVisitSeed}`, curiosityFacts);
   }, [curiosityCards, curiosityFacts, dashboardVisitSeed, firstName, priority.label]);
 
-  const displayCuriosityCards = aiCuriositiesData?.curiosities?.filter(Boolean).slice(0, 3) ?? [];
+  const aiCuriosityCards = aiCuriositiesData?.curiosities?.filter(Boolean).slice(0, 3) ?? [];
+  const curiosityPending = !aiCuriositiesData && (aiCuriositiesLoading || aiCuriositiesFetching);
+  const loadingCuriosityCards = useMemo(
+    () => selectCuriosityCards(curiosityLoadingMessages, dashboardVisitSeed + '-sienna-search', 3),
+    [dashboardVisitSeed]
+  );
+  const displayCuriosityCards = curiosityPending ? loadingCuriosityCards : aiCuriosityCards;
   const curiosityOrigin = aiCuriositiesData?.mode === 'openai' ? 'nano' : 'backend';
-  const curiositySource: CuriositySource = curiosityOrigin === 'nano' && displayCuriosityCards.length > 0 ? 'ai' : 'default';
-  const curiosityCardClassName = curiosityOrigin === 'nano'
+  const curiositySource: CuriositySource = curiosityPending ? 'pending' : curiosityOrigin === 'nano' && displayCuriosityCards.length > 0 ? 'ai' : 'default';
+  const curiosityRevealEffect = useMemo<CuriosityRevealEffect>(
+    () => chooseVariant(dashboardVisitSeed + '-' + (displayCuriosityCards[0] || curiosity || ''), ['fade', 'type', 'glow'] as CuriosityRevealEffect[]),
+    [curiosity, dashboardVisitSeed, displayCuriosityCards]
+  );
+  const curiosityCardClassName = curiosityPending
+    ? 'border-[#7B61FF]/35 bg-[#F8F6FF] dark:border-[#7B61FF]/35 dark:bg-[#171329]'
+    : curiosityOrigin === 'nano'
     ? 'border-[#2E8B57]/55 bg-[#F3FBF6] dark:border-[#3FA37C]/45 dark:bg-[#10251D]'
     : 'border-[#355C9A]/45 bg-[#F3F7FD] dark:border-[#5F8BD4]/40 dark:bg-[#101B2E]';
-  const curiosityEyebrowClassName = curiosityOrigin === 'nano'
+  const curiosityEyebrowClassName = curiosityPending
+    ? 'text-[#5D47C8] dark:text-[#B8AAFF]'
+    : curiosityOrigin === 'nano'
     ? 'text-[#1F7A4F] dark:text-[#7ED7A6]'
     : 'text-[#355C9A] dark:text-[#9BB8E8]';
 
@@ -1174,7 +1239,10 @@ const Dashboard = () => {
                     Sabías que...
                   </p>
                   <p className="mt-2 text-xl font-semibold leading-relaxed text-legal-blue dark:text-[#F5F7FA] sm:text-2xl">
-                    {displayCuriosityCards[0] || persona.curiosity}
+                    <CuriosityRevealText
+                      text={displayCuriosityCards[0] || persona.curiosity}
+                      effect={curiosityPending ? 'fade' : curiosityRevealEffect}
+                    />
                   </p>
                 </div>
                 <div className="grid gap-3">
@@ -1187,7 +1255,10 @@ const Dashboard = () => {
                       )}
                     >
                       <CuriositySourceMark source={curiositySource} />
-                      {fact}
+                      <CuriosityRevealText
+                        text={fact}
+                        effect={curiosityPending ? 'fade' : chooseVariant(dashboardVisitSeed + '-' + index + '-' + fact, ['fade', 'type', 'glow'] as CuriosityRevealEffect[])}
+                      />
                     </div>
                   ))}
                 </div>

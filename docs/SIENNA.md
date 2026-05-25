@@ -65,6 +65,7 @@ Endpoints canónicos actuales:
 - Backend Node y PHP exponen el resumen Sienna, hallazgos y estado sucesoral efectivo para que React no replique reglas de negocio.
 - Ajuste local 2026-05-25: las curiosidades del Dashboard ya no se limitan a familiares cercanos; el backend entrega a la IA un índice amplio del árbol para buscar patrones difíciles de percibir.
 - Auditoria IA 2026-05-25: las pantallas con IA son `/sienna/asistente` y el bloque de curiosidades del Dashboard. Ambas consumen endpoints backend; React no decide hechos sucesorales ni genealogicos.
+- Ajuste local 2026-05-25: el chat de Sienna agrega un resolvedor backend de hechos familiares para preguntas tipo `madre/padre/hijos/hermanos/cónyuge de [persona]`, incluyendo nacimiento o defunción cuando el usuario lo pide. Tambien expone la fecha del miembro autenticado y resuelve diferencias de edad contra personas mencionadas desde el backend. La IA conversa, pero el backend resuelve y confirma el dato.
 - `/sienna/miembros-arbol` carga el workspace liviano para totales/listas y las fotos por separado mediante herederos confirmados con media; esto evita bloquear las tarjetas superiores por archivos pesados.
 - Las tablas/listas de miembros en Sienna se presentan en orden alfabetico cuando son tablas de consulta. El arbol conserva su orden logico propio para no romper la genealogia visual.
 - `/sienna/dobles-linajes` usa los casos calculados por API y ordena la auditoria por nombre de miembro.
