@@ -61,9 +61,9 @@ const MemberPhoto = ({
         rounded === 'xl' ? 'rounded-xl' : 'rounded-full',
         className,
         pendingInheritance || resolvedVerificationStatus === 'pending'
-          ? 'border-2 border-red-500 ring-2 ring-red-300/70'
+          ? 'border border-red-400/80 ring-1 ring-red-200/60'
           : resolvedVerificationStatus === 'verified'
-            ? 'border-2 border-emerald-500 ring-2 ring-emerald-300/70'
+            ? 'border border-emerald-400/80 ring-1 ring-emerald-200/60'
             : 'border border-legal-blue/15'
       )}
     >
