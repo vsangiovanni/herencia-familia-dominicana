@@ -34,7 +34,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from '@/components/ui/use-toast';
 import { readFileAsDataUrl } from '@/lib/readFileAsDataUrl';
-import { Archive, Eye, FileImage, FileSearch, RefreshCcw, Save, Trash2, UserCheck } from 'lucide-react';
+import { Archive, Eye, FileImage, FileSearch, RefreshCcw, Save, Trash2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 type DocumentForm = Omit<EvidenceDocument, 'id' | 'created_at' | 'updated_at'>;
@@ -237,6 +237,44 @@ const DocumentosProbatorios = () => {
         left.heir_name.localeCompare(right.heir_name, 'es', { sensitivity: 'base' })
       ),
     [heirs]
+  );
+  const heirsByMemberId = useMemo(
+    () => new Map(heirs.filter((heir) => heir.sienna_member_id).map((heir) => [String(heir.sienna_member_id), heir])),
+    [heirs]
+  );
+  const heirsByName = useMemo(
+    () => new Map(heirs.map((heir) => [normalizeName(heir.heir_name), heir])),
+    [heirs]
+  );
+  const resolveDocumentHeir = useCallback(
+    (document: EvidenceDocument) => {
+      if (document.related_member_id && heirsByMemberId.has(String(document.related_member_id))) {
+        return heirsByMemberId.get(String(document.related_member_id)) || null;
+      }
+      if (document.primary_member_id && heirsByMemberId.has(String(document.primary_member_id))) {
+        return heirsByMemberId.get(String(document.primary_member_id)) || null;
+      }
+      if (document.related_heir_name && heirsByName.has(normalizeName(document.related_heir_name))) {
+        return heirsByName.get(normalizeName(document.related_heir_name)) || null;
+      }
+      if (document.primary_person && heirsByName.has(normalizeName(document.primary_person))) {
+        return heirsByName.get(normalizeName(document.primary_person)) || null;
+      }
+      return null;
+    },
+    [heirsByMemberId, heirsByName]
+  );
+  const documentedHeirKeys = useMemo(() => {
+    const keys = new Set<string>();
+    documents.forEach((document) => {
+      const heir = resolveDocumentHeir(document);
+      if (heir?.id) keys.add(heir.id);
+    });
+    return keys;
+  }, [documents, resolveDocumentHeir]);
+  const heirsWithoutDocuments = useMemo(
+    () => heirsSortedByName.filter((heir) => !documentedHeirKeys.has(heir.id)),
+    [documentedHeirKeys, heirsSortedByName]
   );
   const documentsSortedByTitle = useMemo(
     () =>
@@ -801,104 +839,6 @@ const DocumentosProbatorios = () => {
           </CardContent>
         </Card>
 
-        <details className="rounded-md border border-legal-gold/20 bg-white shadow-sm">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-legal-blue">
-            <span className="inline-flex items-center gap-2">
-              <UserCheck className="h-4 w-4" />
-              Presentación de herederos
-            </span>
-            <span className="text-xs font-normal text-legal-gray">Fotos editables; montos calculados por API</span>
-          </summary>
-          <div className="overflow-x-auto border-t border-legal-blue/10 p-4">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Heredero</TableHead>
-                  <TableHead>Líneas</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead>Actas</TableHead>
-                  <TableHead>Foto</TableHead>
-                  <TableHead>Monto calculado</TableHead>
-                  <TableHead className="text-right">Guardar</TableHead>
-                  <TableHead>Resumen</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {heirsSortedByName.map((heir) => {
-                  const draft = heirDrafts[heir.id] || {};
-                  const photo = draft.photo_data || heir.photo_data;
-                  const calculatedAmount = heir.sienna_member_id
-                    ? calculatedAmountsByMemberId.get(heir.sienna_member_id) ?? 0
-                    : 0;
-                  return (
-                  <TableRow key={heir.id}>
-                    <TableCell className="font-medium text-legal-blue min-w-[240px]">
-                      <div className="flex items-center gap-2">
-                        <MemberPhoto
-                          name={heir.heir_name}
-                          memberId={heir.sienna_member_id}
-                          photoData={photo}
-                          size="sm"
-                          verificationStatus={heir.status === 'confirmado' ? 'verified' : 'pending'}
-                        />
-                        {heir.heir_name}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-2">
-                        {heir.line_vincenzo && <Badge variant="outline">Vincenzo/Vicente</Badge>}
-                        {heir.line_paolo && <Badge variant="outline">Paolo/Paulino</Badge>}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={heir.status === 'confirmado' ? 'default' : 'secondary'}>
-                        {heir.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {evidenceByHeir[String(heir.sienna_member_id || '')] || evidenceByHeir[heir.heir_name] || heir.evidence_count || 0}
-                    </TableCell>
-                    <TableCell className="min-w-[220px]">
-                      <div className="flex items-center gap-3">
-                        <MemberPhoto
-                          name={heir.heir_name}
-                          memberId={heir.sienna_member_id}
-                          photoData={photo}
-                          size="md"
-                          verificationStatus={heir.status === 'confirmado' ? 'verified' : 'pending'}
-                        />
-                        <Input
-                          type="file"
-                          accept="image/*"
-                          className="min-w-[150px]"
-                          onChange={(event) => handleHeirPhoto(heir, event.target.files?.[0])}
-                        />
-                      </div>
-                    </TableCell>
-                    <TableCell className="min-w-[180px]">
-                      <p className="font-semibold text-legal-blue">{formatMoney(calculatedAmount)}</p>
-                      <p className="mt-1 text-xs text-legal-gray">Calculado por API</p>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => saveHeirPresentation(heir)}
-                      >
-                        <Save className="h-4 w-4 mr-2" />
-                        Guardar
-                      </Button>
-                    </TableCell>
-                    <TableCell className="min-w-[280px] text-sm text-gray-700">{heir.relationship_summary}</TableCell>
-                  </TableRow>
-                );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        </details>
-
         <Card className="border border-legal-gold/20 shadow-md">
           <CardHeader className="bg-legal-blue/5 border-b">
             <CardTitle className="flex items-center gap-2 text-legal-blue">
@@ -910,18 +850,18 @@ const DocumentosProbatorios = () => {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Miembro / heredero</TableHead>
+                  <TableHead>Estado</TableHead>
                   <TableHead>Documento</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Foto</TableHead>
-                  <TableHead>Miembro titular</TableHead>
                   <TableHead>Fecha</TableHead>
-                  <TableHead>Heredero vinculado</TableHead>
+                  <TableHead>Actas</TableHead>
+                  <TableHead>Monto calculado</TableHead>
                   <TableHead>Soporte</TableHead>
                   <TableHead className="text-right">Acción</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {documents.length === 0 && (
+                {documents.length === 0 && heirsWithoutDocuments.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={8} className="text-center text-legal-gray py-8">
                       Todavía no hay documentos guardados.
@@ -931,35 +871,90 @@ const DocumentosProbatorios = () => {
                 {documentsSortedByTitle.map((document) => {
                   const primaryMember = document.primary_member_id ? membersById.get(document.primary_member_id) || null : null;
                   const primaryName = primaryMember?.name || document.primary_person || '—';
+                  const linkedHeir = resolveDocumentHeir(document);
+                  const draft = linkedHeir ? heirDrafts[linkedHeir.id] || {} : {};
+                  const displayName = linkedHeir?.heir_name || primaryName;
+                  const displayMemberId = linkedHeir?.sienna_member_id || primaryMember?.id || null;
+                  const photo = draft.photo_data || linkedHeir?.photo_data || null;
+                  const calculatedAmount = linkedHeir?.sienna_member_id
+                    ? calculatedAmountsByMemberId.get(linkedHeir.sienna_member_id) ?? 0
+                    : 0;
+                  const evidenceCount = linkedHeir
+                    ? evidenceByHeir[String(linkedHeir.sienna_member_id || '')] || evidenceByHeir[linkedHeir.heir_name] || linkedHeir.evidence_count || 0
+                    : 0;
                   return (
                   <TableRow key={document.id}>
-                    <TableCell className="font-medium text-legal-blue">{document.title}</TableCell>
-                    <TableCell>{document.document_type}</TableCell>
-                    <TableCell>
-                      {primaryMember ? (
+                    <TableCell className="min-w-[280px]">
+                      <div className="flex items-center gap-3">
                         <MemberPhoto
-                          name={primaryMember.name}
-                          memberId={primaryMember.id}
-                          lookup={photoLookup}
+                          name={displayName}
+                          memberId={displayMemberId}
+                          photoData={photo || undefined}
+                          lookup={photo ? undefined : photoLookup}
                           size="sm"
-                          verificationStatus={verificationStatusForMember(primaryMember)}
+                          verificationStatus={
+                            linkedHeir
+                              ? linkedHeir.status === 'confirmado' ? 'verified' : 'pending'
+                              : verificationStatusForMember(primaryMember)
+                          }
                         />
+                        <div>
+                          <p className="font-medium text-legal-blue">{displayName}</p>
+                          {primaryMember && linkedHeir?.heir_name !== primaryMember.name && (
+                            <p className="text-xs text-legal-gray">Titular: {primaryMember.name}</p>
+                          )}
+                          {linkedHeir && (
+                            <Input
+                              type="file"
+                              accept="image/*"
+                              className="mt-2 h-8 max-w-[190px] text-xs"
+                              onChange={(event) => handleHeirPhoto(linkedHeir, event.target.files?.[0])}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {linkedHeir ? (
+                        <div className="space-y-1">
+                          <Badge variant={linkedHeir.status === 'confirmado' ? 'default' : 'secondary'}>
+                            {linkedHeir.status}
+                          </Badge>
+                          <div className="flex flex-wrap gap-1">
+                            {linkedHeir.line_vincenzo && <Badge variant="outline">Vincenzo/Vicente</Badge>}
+                            {linkedHeir.line_paolo && <Badge variant="outline">Paolo/Paulino</Badge>}
+                          </div>
+                        </div>
                       ) : (
                         <span className="text-legal-gray">—</span>
                       )}
                     </TableCell>
-                    <TableCell>{primaryName}</TableCell>
+                    <TableCell className="min-w-[260px]">
+                      <p className="font-medium text-legal-blue">{document.title}</p>
+                      <p className="text-xs text-legal-gray">{document.document_type}</p>
+                    </TableCell>
                     <TableCell>{document.event_date || '—'}</TableCell>
                     <TableCell>
-                      {document.related_heir_name || '—'}
-                      {document.related_member_id && membersById.get(document.related_member_id) && (
-                        <p className="text-xs text-legal-gray">Árbol: {membersById.get(document.related_member_id)?.name}</p>
-                      )}
+                      {evidenceCount}
                       {document.confirms_heir && <Badge className="ml-2">confirma</Badge>}
+                    </TableCell>
+                    <TableCell className="min-w-[150px]">
+                      <p className="font-semibold text-legal-blue">{formatMoney(calculatedAmount)}</p>
+                      <p className="text-xs text-legal-gray">API</p>
                     </TableCell>
                     <TableCell>{document.file_name || 'Transcripción manual'}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
+                        {linkedHeir && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => saveHeirPresentation(linkedHeir)}
+                          >
+                            <Save className="h-4 w-4" />
+                          </Button>
+                        )}
                         <Button
                           variant="outline"
                           size="sm"
@@ -981,6 +976,63 @@ const DocumentosProbatorios = () => {
                     </TableCell>
                   </TableRow>
                 )})}
+                {heirsWithoutDocuments.map((heir) => {
+                  const draft = heirDrafts[heir.id] || {};
+                  const photo = draft.photo_data || heir.photo_data;
+                  const calculatedAmount = heir.sienna_member_id
+                    ? calculatedAmountsByMemberId.get(heir.sienna_member_id) ?? 0
+                    : 0;
+                  return (
+                    <TableRow key={'heir-' + heir.id} className="bg-legal-blue/[0.02]">
+                      <TableCell className="min-w-[280px]">
+                        <div className="flex items-center gap-3">
+                          <MemberPhoto
+                            name={heir.heir_name}
+                            memberId={heir.sienna_member_id}
+                            photoData={photo}
+                            size="sm"
+                            verificationStatus={heir.status === 'confirmado' ? 'verified' : 'pending'}
+                          />
+                          <div>
+                            <p className="font-medium text-legal-blue">{heir.heir_name}</p>
+                            <Input
+                              type="file"
+                              accept="image/*"
+                              className="mt-2 h-8 max-w-[190px] text-xs"
+                              onChange={(event) => handleHeirPhoto(heir, event.target.files?.[0])}
+                            />
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <Badge variant={heir.status === 'confirmado' ? 'default' : 'secondary'}>{heir.status}</Badge>
+                          <div className="flex flex-wrap gap-1">
+                            {heir.line_vincenzo && <Badge variant="outline">Vincenzo/Vicente</Badge>}
+                            {heir.line_paolo && <Badge variant="outline">Paolo/Paulino</Badge>}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="min-w-[260px]">
+                        <p className="font-medium text-legal-blue">Sin documento vinculado</p>
+                        <p className="text-xs text-legal-gray">Pendiente de soporte documental</p>
+                      </TableCell>
+                      <TableCell>—</TableCell>
+                      <TableCell>{heir.evidence_count || 0}</TableCell>
+                      <TableCell className="min-w-[150px]">
+                        <p className="font-semibold text-legal-blue">{formatMoney(calculatedAmount)}</p>
+                        <p className="text-xs text-legal-gray">API</p>
+                      </TableCell>
+                      <TableCell>—</TableCell>
+                      <TableCell className="text-right">
+                        <Button type="button" variant="outline" size="sm" onClick={() => saveHeirPresentation(heir)}>
+                          <Save className="h-4 w-4 mr-2" />
+                          Guardar foto
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </CardContent>
