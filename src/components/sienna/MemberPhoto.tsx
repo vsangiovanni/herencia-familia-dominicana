@@ -3,6 +3,7 @@ import {
   MemberPhotoLookup,
   memberInitials,
   resolveMemberPhotoData,
+  resolveMemberPhotoVerificationStatus,
 } from '@/lib/memberPhotos';
 import { cn } from '@/lib/utils';
 import { User } from 'lucide-react';
@@ -23,6 +24,7 @@ type MemberPhotoProps = {
   size?: keyof typeof sizeClasses;
   className?: string;
   rounded?: 'full' | 'xl';
+  verificationStatus?: 'verified' | 'pending' | null;
   /** Resalta miembros con clasificación sucesoral pendiente (requiere_revision). */
   pendingInheritance?: boolean;
 };
@@ -35,22 +37,34 @@ const MemberPhoto = ({
   size = 'md',
   className,
   rounded = 'full',
+  verificationStatus,
   pendingInheritance = false,
 }: MemberPhotoProps) => {
   const resolvedPhoto =
     photoData || (lookup ? resolveMemberPhotoData(lookup, memberId, name) : null);
+  const resolvedVerificationStatus =
+    verificationStatus ?? (lookup ? resolveMemberPhotoVerificationStatus(lookup, memberId, name) : null);
+  const title = pendingInheritance
+    ? `${name}: pendiente de clasificación sucesoral`
+    : resolvedVerificationStatus === 'verified'
+      ? `${name}: verificado`
+      : resolvedVerificationStatus === 'pending'
+        ? `${name}: pendiente de verificación`
+        : undefined;
 
   return (
     <Avatar
-      title={pendingInheritance ? `${name}: pendiente de clasificación sucesoral` : undefined}
+      title={title}
       className={cn(
         sizeClasses[size],
         'shrink-0 border bg-legal-blue/[0.04]',
-        pendingInheritance
-          ? 'border-2 border-red-500 ring-2 ring-red-300/70'
-          : 'border border-legal-blue/15',
         rounded === 'xl' ? 'rounded-xl' : 'rounded-full',
-        className
+        className,
+        pendingInheritance || resolvedVerificationStatus === 'pending'
+          ? 'border-2 border-red-500 ring-2 ring-red-300/70'
+          : resolvedVerificationStatus === 'verified'
+            ? 'border-2 border-emerald-500 ring-2 ring-emerald-300/70'
+            : 'border border-legal-blue/15'
       )}
     >
       {resolvedPhoto ? (

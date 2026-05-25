@@ -5,7 +5,7 @@ import DocumentHeader from '@/components/DocumentHeader';
 import SoftLoadingIndicator from '@/components/SoftLoadingIndicator';
 import { api, ConfirmedHeir, MemberParentLink, SiennaFamilyMember } from '@/lib/api';
 import { invalidateSiennaData, useSiennaCalculation, useSiennaWorkspace } from '@/hooks/useSiennaData';
-import { formatUnionLabel, getParentLinksForChild, resolveSpouseDisplayLabel, SiennaGenealogyBundle } from '@/lib/siennaGenealogy';
+import { formatUnionLabel, getMemberLinkVerificationStatus, getParentLinksForChild, resolveSpouseDisplayLabel, SiennaGenealogyBundle } from '@/lib/siennaGenealogy';
 import MemberVerificationBadge from '@/components/sienna/MemberVerificationBadge';
 import MemberPhoto from '@/components/sienna/MemberPhoto';
 import MemberDetailSheet from '@/components/sienna/MemberDetailSheet';
@@ -215,6 +215,7 @@ const ClassicNode = ({
               size="lg"
               rounded="xl"
               className="border-2 border-legal-gold/60 shadow-lg"
+              verificationStatus={heir?.status === 'confirmado' ? 'verified' : getMemberLinkVerificationStatus(member, allMembers, genealogy).status}
             />
           </div>
 
@@ -1144,6 +1145,7 @@ const ArbolGenealogicoSienna = () => {
                       memberId={share.member.id}
                       photoData={heir?.photo_data}
                       size="xs"
+                      verificationStatus={heir?.status === 'confirmado' ? 'verified' : 'pending'}
                     />
                     <p className="text-xs font-semibold leading-tight text-legal-blue">
                       {heir?.heir_name || share.member.name}
@@ -1174,6 +1176,11 @@ const ArbolGenealogicoSienna = () => {
                               heirsByName.get(normalizeName(share.member.name))?.photo_data
                             }
                             size="sm"
+                            verificationStatus={
+                              (heirsByMemberId.get(share.member.id) || heirsByName.get(normalizeName(share.member.name)))?.status === 'confirmado'
+                                ? 'verified'
+                                : 'pending'
+                            }
                           />
                           <p className="font-medium text-legal-blue">{share.member.name}</p>
                         </div>

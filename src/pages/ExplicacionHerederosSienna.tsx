@@ -434,6 +434,7 @@ const ExplicacionHerederosSienna = () => {
                             memberId={brief.share.member.id}
                             photoData={brief.photo?.photo_data}
                             size="sm"
+                            verificationStatus={brief.photo?.status === 'confirmado' ? 'verified' : 'pending'}
                           />
                           <span className="font-medium text-legal-blue">{brief.share.member.name}</span>
                         </div>
@@ -496,6 +497,7 @@ const ExplicacionHerederosSienna = () => {
                       photoData={brief.photo?.photo_data}
                       size="lg"
                       className="border-2 border-legal-gold/40"
+                      verificationStatus={brief.photo?.status === 'confirmado' ? 'verified' : 'pending'}
                     />
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
@@ -610,6 +612,7 @@ const ExplicacionHerederosSienna = () => {
                               memberId={brief.share.member.id}
                               photoData={brief.photo?.photo_data}
                               size="sm"
+                              verificationStatus={brief.photo?.status === 'confirmado' ? 'verified' : 'pending'}
                             />
                             <div>
                               <p className="font-medium text-legal-blue">{brief.share.member.name}</p>

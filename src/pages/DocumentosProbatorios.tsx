@@ -7,6 +7,8 @@ import DocumentHeader from '@/components/DocumentHeader';
 import MemberPhoto from '@/components/sienna/MemberPhoto';
 import { api, ConfirmedHeir, EvidenceDocument, SiennaFamilyMember } from '@/lib/api';
 import { invalidateSiennaData, useSiennaWorkspace } from '@/hooks/useSiennaData';
+import { buildMemberPhotoLookup } from '@/lib/memberPhotos';
+import { getMemberLinkVerificationStatus } from '@/lib/siennaGenealogy';
 import { sortMembersByName } from '@/lib/siennaFamilyTree';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -178,6 +180,13 @@ const DocumentosProbatorios = () => {
   const { data: workspace, refetch } = useSiennaWorkspace(true);
   const members = workspace?.members ?? [];
   const heirs = workspace?.heirs ?? [];
+  const genealogy = useMemo(
+    () => ({
+      unions: workspace?.unions ?? [],
+      parent_links: workspace?.parent_links ?? [],
+    }),
+    [workspace?.parent_links, workspace?.unions]
+  );
   const [documentOverrides, setDocumentOverrides] = useState<Record<string, EvidenceDocument>>({});
   const documents = useMemo(
     () =>
@@ -201,6 +210,12 @@ const DocumentosProbatorios = () => {
   const membersById = useMemo(
     () => new Map(members.map((member) => [member.id, member])),
     [members]
+  );
+  const photoLookup = useMemo(() => buildMemberPhotoLookup(heirs), [heirs]);
+  const verificationStatusForMember = useCallback(
+    (member?: SiennaFamilyMember | null) =>
+      member ? getMemberLinkVerificationStatus(member, members, genealogy).status : null,
+    [genealogy, members]
   );
   const membersByName = useMemo(
     () => new Map(members.map((member) => [normalizeName(member.name), member])),
@@ -813,6 +828,7 @@ const DocumentosProbatorios = () => {
                           memberId={heir.sienna_member_id}
                           photoData={photo}
                           size="sm"
+                          verificationStatus={heir.status === 'confirmado' ? 'verified' : 'pending'}
                         />
                         {heir.heir_name}
                       </div>
@@ -838,6 +854,7 @@ const DocumentosProbatorios = () => {
                           memberId={heir.sienna_member_id}
                           photoData={photo}
                           size="md"
+                          verificationStatus={heir.status === 'confirmado' ? 'verified' : 'pending'}
                         />
                         <Input
                           type="file"
@@ -890,6 +907,7 @@ const DocumentosProbatorios = () => {
                 <TableRow>
                   <TableHead>Documento</TableHead>
                   <TableHead>Tipo</TableHead>
+                  <TableHead>Foto</TableHead>
                   <TableHead>Miembro titular</TableHead>
                   <TableHead>Fecha</TableHead>
                   <TableHead>Heredero vinculado</TableHead>
@@ -900,20 +918,32 @@ const DocumentosProbatorios = () => {
               <TableBody>
                 {documents.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-legal-gray py-8">
+                    <TableCell colSpan={8} className="text-center text-legal-gray py-8">
                       Todavía no hay documentos guardados.
                     </TableCell>
                   </TableRow>
                 )}
-                {documentsSortedByTitle.map((document) => (
+                {documentsSortedByTitle.map((document) => {
+                  const primaryMember = document.primary_member_id ? membersById.get(document.primary_member_id) || null : null;
+                  const primaryName = primaryMember?.name || document.primary_person || '—';
+                  return (
                   <TableRow key={document.id}>
                     <TableCell className="font-medium text-legal-blue">{document.title}</TableCell>
                     <TableCell>{document.document_type}</TableCell>
                     <TableCell>
-                      {document.primary_member_id && membersById.get(document.primary_member_id)
-                        ? membersById.get(document.primary_member_id)?.name
-                        : document.primary_person || '—'}
+                      {primaryMember ? (
+                        <MemberPhoto
+                          name={primaryMember.name}
+                          memberId={primaryMember.id}
+                          lookup={photoLookup}
+                          size="sm"
+                          verificationStatus={verificationStatusForMember(primaryMember)}
+                        />
+                      ) : (
+                        <span className="text-legal-gray">—</span>
+                      )}
                     </TableCell>
+                    <TableCell>{primaryName}</TableCell>
                     <TableCell>{document.event_date || '—'}</TableCell>
                     <TableCell>
                       {document.related_heir_name || '—'}
@@ -945,7 +975,7 @@ const DocumentosProbatorios = () => {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                )})}
               </TableBody>
             </Table>
           </CardContent>

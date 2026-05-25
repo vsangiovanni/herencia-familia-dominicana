@@ -35,6 +35,19 @@ export const resolveMemberPhotoData = (
   return photo && String(photo).trim() ? String(photo) : null;
 };
 
+export const resolveMemberPhotoVerificationStatus = (
+  lookup: MemberPhotoLookup,
+  memberId?: string | null,
+  memberName?: string | null
+): 'verified' | 'pending' | null => {
+  const heir =
+    (memberId ? lookup.byMemberId.get(String(memberId)) : undefined) ||
+    (memberName ? lookup.byName.get(normalizeName(memberName)) : undefined);
+
+  if (!heir) return null;
+  return heir.status === 'confirmado' ? 'verified' : 'pending';
+};
+
 export const memberInitials = (name?: string | null) => {
   const parts = String(name || '')
     .trim()
