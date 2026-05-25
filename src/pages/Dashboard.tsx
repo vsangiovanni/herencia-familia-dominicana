@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
 import PageHelp from '@/components/PageHelp';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { useConfirmedHeirs, useSiennaAiCuriosities, useSiennaAnalysisSummary, useSiennaCalculation, useSiennaFamily } from '@/hooks/useSiennaData';
+import { siennaQueryKeys, useConfirmedHeirs, useSiennaAiCuriosities, useSiennaAnalysisSummary, useSiennaCalculation, useSiennaFamily } from '@/hooks/useSiennaData';
 import { useSiennaPersonalization } from '@/hooks/useSiennaPersonalization';
 import type { FamilyUnion, MemberParentLink, SiennaFamilyMember } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -60,8 +61,63 @@ type BranchDistribution = {
   heirs: number;
 };
 
+type DashboardGraphRow = {
+  label: string;
+  value: number;
+  detail?: string;
+};
+
+type DashboardGraph = {
+  label: string;
+  title: string;
+  detail: string;
+  icon: React.ComponentType<{ className?: string }>;
+  tone: StatCard['tone'];
+  rows: DashboardGraphRow[];
+  empty: string;
+};
+
 type CuriositySource = 'ai' | 'default' | 'pending';
-type CuriosityRevealEffect = 'fade' | 'type' | 'glow';
+type CuriosityRevealEffect =
+  | 'fade'
+  | 'type'
+  | 'glow'
+  | 'rise'
+  | 'slide'
+  | 'softPop'
+  | 'wipe'
+  | 'flip'
+  | 'float'
+  | 'blurIn'
+  | 'spotlight'
+  | 'stagger'
+  | 'pulse'
+  | 'confetti'
+  | 'morph'
+  | 'burst'
+  | 'expand'
+  | 'spark';
+
+const curiosityRevealEffects: CuriosityRevealEffect[] = [
+  'fade',
+  'glow',
+  'rise',
+  'slide',
+  'softPop',
+  'wipe',
+  'flip',
+  'float',
+  'blurIn',
+  'spotlight',
+  'stagger',
+  'pulse',
+  'confetti',
+  'morph',
+  'burst',
+  'expand',
+  'spark',
+  'type',
+];
 
 const formatCompactNumber = (value: number | null | undefined) =>
   new Intl.NumberFormat('es-DO', { maximumFractionDigits: 0 }).format(Number(value || 0));
@@ -115,6 +171,21 @@ const curiosityRevealClasses: Record<CuriosityRevealEffect, string> = {
   fade: 'animate-in fade-in duration-700',
   type: 'sienna-curiosity-type',
   glow: 'sienna-curiosity-glow',
+  rise: 'sienna-curiosity-rise',
+  slide: 'sienna-curiosity-slide',
+  softPop: 'sienna-curiosity-soft-pop',
+  wipe: 'sienna-curiosity-wipe',
+  flip: 'sienna-curiosity-flip',
+  float: 'sienna-curiosity-float',
+  blurIn: 'sienna-curiosity-blur-in',
+  spotlight: 'sienna-curiosity-spotlight',
+  stagger: 'sienna-curiosity-stagger',
+  pulse: 'sienna-curiosity-pulse',
+  confetti: 'sienna-curiosity-confetti',
+  morph: 'sienna-curiosity-morph',
+  burst: 'sienna-curiosity-burst',
+  expand: 'sienna-curiosity-expand',
+  spark: 'sienna-curiosity-spark',
 };
 
 const CuriosityRevealText = ({
@@ -127,27 +198,36 @@ const CuriosityRevealText = ({
   className?: string;
 }) => {
   const [typedText, setTypedText] = useState(effect === 'type' ? '' : text);
+  const [typingDone, setTypingDone] = useState(effect !== 'type');
 
   useEffect(() => {
     if (effect !== 'type') {
       setTypedText(text);
+      setTypingDone(true);
       return undefined;
     }
 
     setTypedText('');
+    setTypingDone(false);
     let index = 0;
     const stepMs = text.length > 110 ? 12 : 18;
     const interval = window.setInterval(() => {
       index += 1;
       setTypedText(text.slice(0, index));
-      if (index >= text.length) window.clearInterval(interval);
+      if (index >= text.length) {
+        setTypingDone(true);
+        window.clearInterval(interval);
+      }
     }, stepMs);
 
     return () => window.clearInterval(interval);
   }, [effect, text]);
 
   return (
-    <span key={effect + '-' + text} className={cn('block', curiosityRevealClasses[effect], className)}>
+    <span
+      key={effect + '-' + text}
+      className={cn('block', curiosityRevealClasses[effect], effect === 'type' && typingDone && 'sienna-curiosity-type-done', className)}
+    >
       {effect === 'type' ? typedText : text}
     </span>
   );
@@ -454,6 +534,81 @@ const ChartPanel = ({
   </div>
 );
 
+const InsightGraphCard = ({ graph }: { graph: DashboardGraph }) => {
+  const Icon = graph.icon;
+  const max = Math.max(1, ...graph.rows.map((row) => row.value));
+  const totalGroups = graph.rows.length;
+  const totalPeople = graph.rows.reduce((sum, row) => sum + row.value, 0);
+  const topRow = graph.rows[0];
+
+  return (
+    <div className="flex h-full min-h-[360px] flex-col rounded-md border border-legal-blue/10 bg-white/85 p-4 shadow-sm dark:border-white/10 dark:bg-[#101827]/85">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wide text-legal-gray dark:text-[#8C97A8]">
+            {graph.label}
+          </p>
+          <h3 className="mt-1 font-serif text-xl font-bold leading-tight text-legal-blue dark:text-[#F5F7FA]">
+            {graph.title}
+          </h3>
+        </div>
+        <span className={cn('inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border', statToneClasses[graph.tone])}>
+          <Icon className="h-4.5 w-4.5" />
+        </span>
+      </div>
+      <p className="mt-2 text-sm leading-relaxed text-gray-600 dark:text-muted-foreground">
+        {graph.detail}
+      </p>
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <div className="rounded-md border border-legal-gold/20 bg-[#FFF9E7] px-3 py-2 dark:border-[#D4AF37]/20 dark:bg-[#241F12]">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-legal-gray dark:text-[#8C97A8]">Grupos</p>
+          <p className="mt-1 font-serif text-xl font-bold text-legal-blue dark:text-[#F5F7FA]">{formatCompactNumber(totalGroups)}</p>
+        </div>
+        <div className="rounded-md border border-[#3FA37C]/20 bg-[#ECF8F1] px-3 py-2 dark:border-[#3FA37C]/20 dark:bg-[#10251D]">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-legal-gray dark:text-[#8C97A8]">Conectados</p>
+          <p className="mt-1 font-serif text-xl font-bold text-legal-blue dark:text-[#F5F7FA]">{formatCompactNumber(totalPeople)}</p>
+        </div>
+      </div>
+      {topRow && (
+        <div className="mt-2 rounded-md border border-legal-blue/10 bg-[#F8F5EC] px-3 py-2 dark:border-white/10 dark:bg-[#0D1424]">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-legal-gray dark:text-[#8C97A8]">Dato dominante</p>
+          <p className="mt-1 truncate text-sm font-semibold text-legal-blue dark:text-[#F5F7FA]">{topRow.label}</p>
+          {topRow.detail && <p className="mt-0.5 truncate text-xs text-legal-gray dark:text-[#8C97A8]">{topRow.detail}</p>}
+        </div>
+      )}
+      <div className="mt-4 flex-1 space-y-3">
+        {graph.rows.length > 0 ? (
+          graph.rows.map((row, index) => (
+            <div key={row.label + index}>
+              <div className="mb-1 flex items-center justify-between gap-3 text-xs">
+                <span className="min-w-0 truncate font-medium text-gray-700 dark:text-muted-foreground">
+                  {row.label}
+                </span>
+                <span className="shrink-0 font-semibold text-legal-blue dark:text-[#F5F7FA]">
+                  {formatCompactNumber(row.value)}
+                </span>
+              </div>
+              <div className="h-3.5 overflow-hidden rounded-full bg-gray-100 dark:bg-muted">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-[#D4AF37] via-[#3FA37C] to-[#355C9A]"
+                  style={{ width: Math.max(10, (row.value / max) * 100) + '%' }}
+                />
+              </div>
+              {row.detail && (
+                <p className="mt-1 truncate text-[11px] text-legal-gray dark:text-[#8C97A8]">{row.detail}</p>
+              )}
+            </div>
+          ))
+        ) : (
+          <div className="rounded-md border border-dashed border-legal-blue/15 bg-[#F8F5EC] p-3 text-sm text-legal-gray dark:border-white/10 dark:bg-[#0D1424] dark:text-[#8C97A8]">
+            {graph.empty}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 type DashboardPriority = {
   label: string;
   headline: string;
@@ -510,6 +665,152 @@ const getGrandparentIds = (
     getParentIds(parent, parentLinks).forEach((grandparentId) => ids.add(grandparentId));
   });
   return Array.from(ids).sort();
+};
+
+const relationLabel = (member: SiennaFamilyMember) => {
+  const status = member.effective_inheritance_status || member.inheritance_status;
+  if (status === 'confirmado') return 'heredero';
+  if (member.death) return 'memoria';
+  return 'miembro';
+};
+
+const buildDashboardGraphs = ({
+  members,
+  parentLinks,
+}: {
+  members: SiennaFamilyMember[];
+  parentLinks: MemberParentLink[];
+}): DashboardGraph[] => {
+  const membersById = buildMemberIndex(members);
+  const parentPairs = new Map<string, SiennaFamilyMember[]>();
+  const grandparentClusters = new Map<string, SiennaFamilyMember[]>();
+  const decadeGroups = new Map<string, SiennaFamilyMember[]>();
+
+  members.forEach((member) => {
+    const parents = getParentIds(member, parentLinks).sort();
+    if (parents.length >= 2) {
+      const key = parents.join('|');
+      parentPairs.set(key, [...(parentPairs.get(key) || []), member]);
+    }
+
+    const grandparents = getGrandparentIds(member, membersById, parentLinks);
+    if (grandparents.length >= 2) {
+      const key = grandparents.join('|');
+      grandparentClusters.set(key, [...(grandparentClusters.get(key) || []), member]);
+    }
+
+    const year = parseYear(member.birth);
+    if (year) {
+      const decade = Math.floor(year / 10) * 10;
+      const label = decade + 's';
+      decadeGroups.set(label, [...(decadeGroups.get(label) || []), member]);
+    }
+  });
+
+  const formatAncestorPair = (ids: string) => {
+    const names = ids
+      .split('|')
+      .map((id) => membersById.get(id))
+      .filter(Boolean)
+      .map((member) => shortName(member!.name));
+    return names.slice(0, 2).join(' + ') || 'Raíz familiar';
+  };
+
+  const siblingRows = Array.from(parentPairs.entries())
+    .filter(([, group]) => group.length >= 2)
+    .map(([ids, group]) => ({
+      label: formatAncestorPair(ids),
+      value: group.length,
+      detail: joinNames(group, 2),
+    }))
+    .sort((left, right) => right.value - left.value || left.label.localeCompare(right.label, 'es'))
+    .slice(0, 4);
+
+  const grandparentRows = Array.from(grandparentClusters.entries())
+    .filter(([, group]) => group.length >= 2)
+    .map(([ids, group]) => ({
+      label: formatAncestorPair(ids),
+      value: group.length,
+      detail: joinNames(group, 2),
+    }))
+    .sort((left, right) => right.value - left.value || left.label.localeCompare(right.label, 'es'))
+    .slice(0, 4);
+
+  const cousinRows = Array.from(grandparentClusters.entries())
+    .map(([ids, group]) => {
+      const familyKeys = new Set(group.map((member) => getParentIds(member, parentLinks).sort().join('|')).filter(Boolean));
+      return {
+        label: formatAncestorPair(ids),
+        value: Math.max(0, group.length - Math.max(1, familyKeys.size)),
+        detail: familyKeys.size > 1 ? String(familyKeys.size) + ' hogares conectados' : joinNames(group, 2),
+      };
+    })
+    .filter((row) => row.value > 0)
+    .sort((left, right) => right.value - left.value || left.label.localeCompare(right.label, 'es'))
+    .slice(0, 4);
+
+  const decadeRows = Array.from(decadeGroups.entries())
+    .map(([label, group]) => ({
+      label,
+      value: group.length,
+      detail: joinNames([...group].sort((left, right) => left.name.localeCompare(right.name, 'es')), 2),
+    }))
+    .sort((left, right) => right.value - left.value || left.label.localeCompare(right.label, 'es'))
+    .slice(0, 4);
+
+  const heirStatusRows = Object.entries(
+    members.reduce<Record<string, SiennaFamilyMember[]>>((acc, member) => {
+      const label = relationLabel(member);
+      acc[label] = [...(acc[label] || []), member];
+      return acc;
+    }, {})
+  )
+    .map(([label, group]) => ({
+      label: label.charAt(0).toUpperCase() + label.slice(1),
+      value: group.length,
+      detail: joinNames(group, 2),
+    }))
+    .sort((left, right) => right.value - left.value)
+    .slice(0, 4);
+
+  return [
+    {
+      label: 'Por abuelos',
+      title: 'Raíces que más se repiten',
+      detail: 'Agrupa personas que comparten el mismo par de abuelos registrados.',
+      icon: TreePine,
+      tone: 'green',
+      rows: grandparentRows,
+      empty: 'Cuando haya más pares de abuelos conectados, este gráfico mostrará las raíces más repetidas.',
+    },
+    {
+      label: 'Por hermanos',
+      title: 'Núcleos con más hijos',
+      detail: 'Muestra grupos de hermanos completos según los padres vinculados.',
+      icon: Users,
+      tone: 'purple',
+      rows: siblingRows,
+      empty: 'No hay suficientes grupos de hermanos completos para graficar todavía.',
+    },
+    {
+      label: 'Por primos',
+      title: 'Primos por raíz común',
+      detail: 'Detecta ramas que comparten abuelos, pero vienen de hogares distintos.',
+      icon: GitMerge,
+      tone: 'blue',
+      rows: cousinRows,
+      empty: 'Aún no hay grupos de primos claros con la información parental actual.',
+    },
+    {
+      label: 'Generaciones',
+      title: 'Décadas con más vida',
+      detail: 'Concentra nacimientos por década para ver dónde pesa más la memoria familiar.',
+      icon: Sparkles,
+      tone: 'gold',
+      rows: decadeRows.length ? decadeRows : heirStatusRows,
+      empty: 'Faltan fechas de nacimiento suficientes para levantar este gráfico.',
+    },
+  ];
 };
 
 const getChildrenByParent = (members: SiennaFamilyMember[], parentLinks: MemberParentLink[]) => {
@@ -776,6 +1077,31 @@ const selectCuriosityCards = (facts: string[], seed: string, count = 3) => {
   return selected;
 };
 
+const selectCuriosityRevealEffects = (seed: string, count: number) => {
+  const storageKey = 'sienna.dashboard.revealEffectCursor.v1';
+  let cursor = Math.abs(hashString(seed)) % curiosityRevealEffects.length;
+
+  try {
+    const stored = Number(window.localStorage.getItem(storageKey));
+    if (Number.isFinite(stored)) cursor = stored % curiosityRevealEffects.length;
+  } catch {
+    // Si localStorage no está disponible, el hash mantiene una rotación estable.
+  }
+
+  const selected = Array.from(
+    { length: count },
+    (_, index) => curiosityRevealEffects[(cursor + index) % curiosityRevealEffects.length]
+  );
+
+  try {
+    window.localStorage.setItem(storageKey, String((cursor + count) % curiosityRevealEffects.length));
+  } catch {
+    // Sin almacenamiento, no hay bloqueo funcional.
+  }
+
+  return selected;
+};
+
 const buildDashboardPriority = ({
   hasFindingsAccess,
   hasDocumentAccess,
@@ -979,23 +1305,40 @@ const buildSiennaPersona = ({
 };
 
 const Dashboard = () => {
+  const queryClient = useQueryClient();
   const { isAdmin, hasAccess } = useAuth();
   const siennaPersonalization = useSiennaPersonalization();
   const { data: analysisSummary } = useSiennaAnalysisSummary();
   const { data: realtimeCalculationData } = useSiennaCalculation();
   const { data: confirmedHeirsData } = useConfirmedHeirs(false);
   const { data: familyData } = useSiennaFamily();
-  const { data: aiCuriositiesData, isFetching: aiCuriositiesFetching, isLoading: aiCuriositiesLoading } = useSiennaAiCuriosities();
+  const { data: aiCuriositiesData, isFetching: aiCuriositiesFetching, isLoading: aiCuriositiesLoading, refetch: refetchAiCuriosities } = useSiennaAiCuriosities();
   const summary = analysisSummary?.summary;
   const realtimeCalculation = realtimeCalculationData?.calculation;
   const calculatedFinalHeirsTotal = Number(summary?.active_heir_count ?? 0);
   const recognizedRegistryTotal = confirmedHeirsData?.heirs?.length ?? 0;
+  const [shuffleNonce, setShuffleNonce] = useState(0);
 
   const firstName = siennaPersonalization.firstName;
   const dashboardVisitSeed = useMemo(
     () => `${Date.now()}-${Math.random().toString(36).slice(2)}`,
     []
   );
+  const dashboardShuffleSeed = `${dashboardVisitSeed}-${shuffleNonce}`;
+
+  useEffect(() => {
+    const onPullRefresh = (event: Event) => {
+      if (!window.location.pathname.startsWith('/sienna') && window.location.pathname !== '/dashboard') return;
+      event.preventDefault();
+      window.localStorage.removeItem('sienna.dashboard.curiosityHistory.v2');
+      queryClient.invalidateQueries({ queryKey: siennaQueryKeys.aiCuriosities });
+      refetchAiCuriosities();
+      setShuffleNonce((current) => current + 1);
+    };
+
+    window.addEventListener('sienna:pull-refresh', onPullRefresh);
+    return () => window.removeEventListener('sienna:pull-refresh', onPullRefresh);
+  }, [queryClient, refetchAiCuriosities]);
 
   const primaryLinks = useMemo(
     () => HEIR_LINKS.filter((item) => item.primary && hasAccess(item.path)),
@@ -1080,35 +1423,46 @@ const Dashboard = () => {
           members: familyData?.members ?? [],
           unions: familyData?.unions ?? [],
           parentLinks: familyData?.parent_links ?? [],
-          seed: dashboardVisitSeed,
+          seed: dashboardShuffleSeed,
         }),
       ],
-    [dashboardVisitSeed, familyData?.members, familyData?.parent_links, familyData?.unions, firstName, siennaPersonalization.member]
+    [dashboardShuffleSeed, familyData?.members, familyData?.parent_links, familyData?.unions, firstName, siennaPersonalization.member]
   );
 
   const [curiosityCards, setCuriosityCards] = useState<string[]>(() => curiosityFacts.slice(0, 3));
 
   useEffect(() => {
-    setCuriosityCards(selectCuriosityCards(curiosityFacts, dashboardVisitSeed, 3));
-  }, [curiosityFacts, dashboardVisitSeed]);
+    setCuriosityCards(selectCuriosityCards(curiosityFacts, dashboardShuffleSeed, 3));
+  }, [curiosityFacts, dashboardShuffleSeed]);
 
   const curiosity = useMemo(() => {
     if (curiosityCards.length) return curiosityCards[0];
-    return chooseVariant(`${firstName}-${priority.label}-curiosity-${dashboardVisitSeed}`, curiosityFacts);
-  }, [curiosityCards, curiosityFacts, dashboardVisitSeed, firstName, priority.label]);
+    return chooseVariant(`${firstName}-${priority.label}-curiosity-${dashboardShuffleSeed}`, curiosityFacts);
+  }, [curiosityCards, curiosityFacts, dashboardShuffleSeed, firstName, priority.label]);
 
-  const aiCuriosityCards = aiCuriositiesData?.curiosities?.filter(Boolean).slice(0, 3) ?? [];
+  const aiCuriosityCards = aiCuriositiesData?.curiosities?.filter(Boolean) ?? [];
   const curiosityPending = !aiCuriositiesData && (aiCuriositiesLoading || aiCuriositiesFetching);
   const loadingCuriosityCards = useMemo(
-    () => selectCuriosityCards(curiosityLoadingMessages, dashboardVisitSeed + '-sienna-search', 3),
-    [dashboardVisitSeed]
+    () => selectCuriosityCards(curiosityLoadingMessages, dashboardShuffleSeed + '-sienna-search', 3),
+    [dashboardShuffleSeed]
   );
-  const displayCuriosityCards = curiosityPending ? loadingCuriosityCards : aiCuriosityCards;
+  const displayCuriosityCards = useMemo(() => {
+    if (curiosityPending) return loadingCuriosityCards;
+    const mixedPool = uniqueFacts([...aiCuriosityCards, ...curiosityCards, ...curiosityFacts]);
+    return selectCuriosityCards(mixedPool.length ? mixedPool : [curiosity], dashboardShuffleSeed + '-display', 3);
+  }, [aiCuriosityCards, curiosity, curiosityCards, curiosityFacts, curiosityPending, dashboardShuffleSeed, loadingCuriosityCards]);
+  const visibleCuriosityCards = displayCuriosityCards.length > 1 ? displayCuriosityCards.slice(1) : [curiosity].filter(Boolean);
   const curiosityOrigin = aiCuriositiesData?.mode === 'openai' ? 'nano' : 'backend';
   const curiositySource: CuriositySource = curiosityPending ? 'pending' : curiosityOrigin === 'nano' && displayCuriosityCards.length > 0 ? 'ai' : 'default';
-  const curiosityRevealEffect = useMemo<CuriosityRevealEffect>(
-    () => chooseVariant(dashboardVisitSeed + '-' + (displayCuriosityCards[0] || curiosity || ''), ['fade', 'type', 'glow'] as CuriosityRevealEffect[]),
-    [curiosity, dashboardVisitSeed, displayCuriosityCards]
+  const curiosityRevealEffectsForCards = useMemo(
+    () => {
+      const effects = selectCuriosityRevealEffects(
+        dashboardShuffleSeed + '-' + (displayCuriosityCards.join('|') || curiosity || 'fallback'),
+        1 + Math.max(1, visibleCuriosityCards.length)
+      );
+      return shuffleNonce > 0 ? ['confetti' as CuriosityRevealEffect, ...effects.slice(1)] : effects;
+    },
+    [curiosity, dashboardShuffleSeed, displayCuriosityCards, shuffleNonce, visibleCuriosityCards.length]
   );
   const curiosityCardClassName = curiosityPending
     ? 'border-[#7B61FF]/35 bg-[#F8F6FF] dark:border-[#7B61FF]/35 dark:bg-[#171329]'
@@ -1120,6 +1474,9 @@ const Dashboard = () => {
     : curiosityOrigin === 'nano'
     ? 'text-[#1F7A4F] dark:text-[#7ED7A6]'
     : 'text-[#355C9A] dark:text-[#9BB8E8]';
+  const primaryCuriosityEffect = curiosityPending ? 'fade' : curiosityRevealEffectsForCards[0] || 'fade';
+  const curiosityContainerEffect = (effect: CuriosityRevealEffect) => (effect === 'type' ? 'fade' : effect);
+  const curiosityTextEffect = (effect: CuriosityRevealEffect) => (effect === 'type' ? 'type' : 'fade');
 
   const persona = useMemo(
     () =>
@@ -1186,15 +1543,22 @@ const Dashboard = () => {
     [summary]
   );
 
-  const hasAnyLink = primaryLinks.length > 0 || secondaryLinks.length > 0 || adminLinks.length > 0 || legacyLinks.length > 0;
+  const dashboardGraphs = useMemo(
+    () =>
+      buildDashboardGraphs({
+        members: familyData?.members ?? [],
+        parentLinks: familyData?.parent_links ?? [],
+      }),
+    [familyData?.members, familyData?.parent_links]
+  );
 
   return (
     <div className="min-h-screen bg-[#F6F2E8] dark:bg-background">
       <section className="legacy-gradient border-b border-legal-blue/10 dark:border-[#243047]">
         <div className="app-shell py-8 sm:py-10">
-          <div className="legacy-surface relative overflow-hidden rounded-lg p-5 sm:p-7">
-            <div className="relative pr-12">
-              <div className="absolute right-0 top-0">
+          <div className="legacy-surface relative overflow-hidden rounded-lg p-4 sm:p-7">
+            <div className="relative sm:pr-12">
+              <div className="absolute right-0 top-0 hidden sm:block">
                 <PageHelp helpKey="dashboard" />
               </div>
               <div className="grid gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.8fr)] 2xl:grid-cols-[minmax(0,1.7fr)_minmax(380px,0.9fr)]">
@@ -1224,16 +1588,17 @@ const Dashboard = () => {
                   <p className="mt-2 text-sm leading-relaxed text-gray-600 dark:text-muted-foreground">
                     {formatMoney(summary?.estate?.distributableAmount)} netos calculados sobre el expediente vivo.
                   </p>
-                  <Button asChild className="btn-primary mt-4 w-full">
-                    <Link to={priority.path}>
-                      {priority.cta}
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Link>
-                  </Button>
                 </div>
               </div>
               <div className="mt-5 grid gap-3 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.9fr)] 2xl:grid-cols-[minmax(0,1.55fr)_minmax(380px,0.9fr)]">
-                <div className={cn('relative rounded-md border p-5 pr-12 shadow-sm', curiosityCardClassName)}>
+                <div
+                  key={`primary-curiosity-${dashboardShuffleSeed}-${displayCuriosityCards[0] || persona.curiosity}`}
+                  className={cn(
+                    'relative rounded-md border p-4 pr-10 shadow-sm sm:p-5 sm:pr-12',
+                    curiosityCardClassName,
+                    curiosityRevealClasses[curiosityContainerEffect(primaryCuriosityEffect)]
+                  )}
+                >
                   <CuriositySourceMark source={curiositySource} />
                   <p className={cn('text-xs font-semibold uppercase tracking-wide', curiosityEyebrowClassName)}>
                     Sabías que...
@@ -1241,26 +1606,27 @@ const Dashboard = () => {
                   <p className="mt-2 text-xl font-semibold leading-relaxed text-legal-blue dark:text-[#F5F7FA] sm:text-2xl">
                     <CuriosityRevealText
                       text={displayCuriosityCards[0] || persona.curiosity}
-                      effect={curiosityPending ? 'fade' : curiosityRevealEffect}
+                      effect={curiosityTextEffect(primaryCuriosityEffect)}
                     />
                   </p>
                 </div>
                 <div className="grid gap-3">
-                  {(displayCuriosityCards.length > 1 ? displayCuriosityCards.slice(1) : [persona.curiosity]).map((fact, index) => (
-                    <div
-                      key={`legacy-curiosity-${index}-${fact}`}
-                      className={cn(
-                        'relative rounded-md border p-4 pr-12 text-sm font-medium leading-relaxed text-[#1B2430] shadow-sm dark:text-[#F5F7FA]',
-                        curiosityCardClassName
-                      )}
-                    >
-                      <CuriositySourceMark source={curiositySource} />
-                      <CuriosityRevealText
-                        text={fact}
-                        effect={curiosityPending ? 'fade' : chooseVariant(dashboardVisitSeed + '-' + index + '-' + fact, ['fade', 'type', 'glow'] as CuriosityRevealEffect[])}
-                      />
-                    </div>
-                  ))}
+                  {visibleCuriosityCards.map((fact, index) => {
+                    const revealEffect = curiosityPending ? 'fade' : curiosityRevealEffectsForCards[index + 1] || 'fade';
+                    return (
+                      <div
+                        key={`legacy-curiosity-${dashboardShuffleSeed}-${index}-${fact}`}
+                        className={cn(
+                          'relative rounded-md border p-4 pr-10 text-sm font-medium leading-relaxed text-[#1B2430] shadow-sm dark:text-[#F5F7FA] sm:pr-12',
+                          curiosityCardClassName,
+                          curiosityRevealClasses[curiosityContainerEffect(revealEffect)]
+                        )}
+                      >
+                        <CuriositySourceMark source={curiositySource} />
+                        <CuriosityRevealText text={fact} effect={curiosityTextEffect(revealEffect)} />
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -1291,72 +1657,24 @@ const Dashboard = () => {
           ))}
         </div>
 
-        <div className="mb-6 max-w-3xl">
-          <h2 className="font-serif text-2xl font-bold text-legal-blue dark:text-[#F5F7FA]">Explorar el caso Alessandro</h2>
-          <p className="mt-2 text-sm leading-relaxed text-gray-600 dark:text-muted-foreground">
-            Las pantallas principales quedan arriba. Las herramientas formales, legacy y administrativas quedan separadas
-            para que el protagonismo lo tenga el expediente de Alessandro, no la estructura interna del sistema.
-          </p>
-        </div>
-
-        {primaryLinks.length > 0 && (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            {primaryLinks.map((item) => (
-              <HeirActionCard key={item.path} item={item} />
+        <section className="legacy-surface rounded-lg p-5 sm:p-6">
+          <div className="mb-5 max-w-3xl">
+            <p className="text-xs font-semibold uppercase tracking-wide text-legal-gray dark:text-[#8C97A8]">
+              Genialidades del árbol
+            </p>
+            <h2 className="mt-1 font-serif text-2xl font-bold text-legal-blue dark:text-[#F5F7FA]">
+              Patrones familiares que se entienden mejor cuando se ven.
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-gray-600 dark:text-muted-foreground">
+              Gráficos ligeros sobre abuelos, hermanos, primos y generaciones. La portada muestra hallazgos visuales; las acciones siguen viviendo en el menú.
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {dashboardGraphs.map((graph) => (
+              <InsightGraphCard key={graph.label} graph={graph} />
             ))}
           </div>
-        )}
-
-        {secondaryLinks.length > 0 && (
-          <div className="mt-8">
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-legal-gray">
-              También dentro del archivo
-            </h2>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {secondaryLinks.map((item) => (
-                <HeirActionCard key={item.path} item={item} />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {legacyLinks.length > 0 && (
-          <div className="legacy-surface mt-10 rounded-lg border-dashed p-4 sm:p-5">
-            <h2 className="mb-1 font-serif text-lg font-bold text-legal-blue dark:text-[#F5F7FA]">Caso y Legacy</h2>
-            <p className="mb-4 text-sm text-gray-600 dark:text-muted-foreground">
-              Quedan disponibles para consulta, pero ya no compiten con la experiencia principal.
-            </p>
-            <div className="grid gap-3 md:grid-cols-3">
-              {legacyLinks.map((item) => (
-                <HeirActionCard key={item.path} item={item} />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {adminLinks.length > 0 && (
-          <div className="legacy-surface mt-10 rounded-lg p-4 sm:p-5">
-            <h2 className="mb-1 font-serif text-lg font-bold text-legal-blue dark:text-[#F5F7FA]">Mesa técnica</h2>
-            <p className="mb-3 text-sm text-gray-600 dark:text-muted-foreground">
-              Acceso administrativo separado de la experiencia familiar principal.
-            </p>
-            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-              {adminLinks.map((item) => (
-                <Button key={item.path} asChild variant="outline" className="btn-secondary justify-start">
-                  <Link to={item.path}>{item.title}</Link>
-                </Button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {!hasAnyLink && (
-          <Card className="border border-dashed border-legal-blue/20">
-            <CardContent className="p-8 text-center text-legal-gray">
-              Su cuenta aún no tiene pantallas asignadas. Escríbale al administrador del expediente.
-            </CardContent>
-          </Card>
-        )}
+        </section>
       </div>
     </div>
   );

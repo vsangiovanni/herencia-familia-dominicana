@@ -1,6 +1,6 @@
 
 import React, { Suspense, lazy } from 'react';
-import { BrowserRouter, Navigate, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Navigate, Routes, Route, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from 'next-themes';
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -48,6 +48,7 @@ const queryClient = new QueryClient({
 
 const AppContent = () => {
   const { user } = useAuth();
+  const location = useLocation();
 
   return (
     <>
@@ -64,6 +65,7 @@ const AppContent = () => {
               </div>
             }
           >
+            <div key={location.pathname} className="page-route-fade">
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/auth" element={<Auth />} />
@@ -328,6 +330,7 @@ const AppContent = () => {
                 }
               />
             </Routes>
+            </div>
           </Suspense>
         </main>
         <div className={user ? 'md:pl-64' : ''}>

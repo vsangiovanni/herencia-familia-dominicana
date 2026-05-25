@@ -65,10 +65,15 @@ Endpoints canónicos actuales:
 
 - Backend Node y PHP exponen el resumen Sienna, hallazgos y estado sucesoral efectivo para que React no replique reglas de negocio.
 - Ajuste local 2026-05-25: las curiosidades del Dashboard ya no se limitan a familiares cercanos; el backend entrega a la IA un índice amplio del árbol para buscar patrones difíciles de percibir.
+- Ajuste local 2026-05-25: las tarjetas de curiosidades del Dashboard rotan con peso parejo real entre 18 transiciones visuales mediante cursor local. En pull refresh se fuerza confeti en la tarjeta principal; el efecto ahora envuelve la tarjeta completa, desaparece limpio al terminar y el efecto de escritura quita el cursor al finalizar.
 - Auditoria IA 2026-05-25: las pantallas con IA son `/sienna/asistente` y el bloque de curiosidades del Dashboard. Ambas consumen endpoints backend; React no decide hechos sucesorales ni genealogicos.
 - Ajuste local 2026-05-25: el chat de Sienna agrega un resolvedor backend de hechos familiares para preguntas tipo `madre/padre/hijos/hermanos/cónyuge de [persona]`, incluyendo nacimiento o defunción cuando el usuario lo pide. Tambien expone la fecha del miembro autenticado y resuelve diferencias de edad contra personas mencionadas desde el backend. La IA conversa, pero el backend resuelve y confirma el dato.
 - Ajuste local 2026-05-25: Documentos Probatorios incorpora `Interpretar con Sienna`; la IA puede leer imagen/transcripción, sugerir tipo, fecha, lugar, texto leído y vínculos contra miembros del árbol, pero el usuario debe aplicar/revisar y el guardado sigue pasando por backend/can_edit.
 - Refinamiento local 2026-05-25: al usar `Interpretar con Sienna` sobre imagen, el frontend ejecuta OCR primero, llena el formulario con esa base y luego manda OCR + imagen a IA para mejorar/completar sin pisar campos buenos.
+- Ajuste local 2026-05-25: la portada `/sienna` deja de mostrar bloques de enlaces que ya pertenecen al menú principal. En su lugar presenta `Genialidades del árbol` con gráficos de abuelos, hermanos, primos por raíz común y generaciones, usando datos familiares recibidos del backend.
+- Ajuste local 2026-05-25: las tarjetas de `Genialidades del árbol` se redistribuyen para ocupar mejor el alto disponible e incluyen mini métricas de grupos, personas conectadas y dato dominante.
+- Ajuste local 2026-05-25: las transiciones entre pantallas usan un `fade in` sutil global, respetando `prefers-reduced-motion`.
+- Ajuste local 2026-05-25: el pull refresh móvil en `/sienna` ya no recarga toda la página; invalida/refresca curiosidades IA, limpia la rotación local y baraja texto + transiciones para mostrar combinaciones nuevas siempre.
 - `/sienna/miembros-arbol` carga el workspace liviano para totales/listas y las fotos por separado mediante herederos confirmados con media; esto evita bloquear las tarjetas superiores por archivos pesados.
 - Las tablas/listas de miembros en Sienna se presentan en orden alfabetico cuando son tablas de consulta. El arbol conserva su orden logico propio para no romper la genealogia visual.
 - `/sienna/dobles-linajes` usa los casos calculados por API y ordena la auditoria por nombre de miembro.

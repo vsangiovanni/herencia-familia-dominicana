@@ -62,6 +62,14 @@ export default function PullToRefresh() {
         setIsRefreshing(true);
         setPullDistance(TRIGGER_DISTANCE);
         window.setTimeout(() => {
+          const handled = !window.dispatchEvent(new CustomEvent('sienna:pull-refresh', { cancelable: true }));
+          if (handled) {
+            window.setTimeout(() => {
+              setIsRefreshing(false);
+              reset();
+            }, 360);
+            return;
+          }
           window.location.reload();
         }, 180);
         return;
@@ -102,7 +110,7 @@ export default function PullToRefresh() {
         )}
       >
         <RefreshCcw className={cn('h-3.5 w-3.5', (armed || isRefreshing) && 'animate-spin')} />
-        {isRefreshing ? 'Actualizando...' : armed ? 'Suelta para actualizar' : 'Desliza para actualizar'}
+        {isRefreshing ? 'Buscando cositas nuevas...' : armed ? 'Suelta para refrescar' : 'Desliza para refrescar'}
       </div>
     </div>
   );
