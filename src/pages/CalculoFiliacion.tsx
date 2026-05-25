@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import BackButton from '@/components/BackButton';
 import DocumentHeader from '@/components/DocumentHeader';
 import MemberPhoto from '@/components/sienna/MemberPhoto';
+import TablePaginationControls from '@/components/TablePaginationControls';
 import { useSiennaCalculation, useConfirmedHeirs, useSiennaWorkspace } from '@/hooks/useSiennaData';
 import { applySiennaCaseConfig, normalizeName } from '@/lib/dominicanInheritance';
 import { buildMemberPhotoLookup } from '@/lib/memberPhotos';
@@ -103,6 +104,10 @@ const CalculoFiliacion = () => {
     lawyerFeePercentage
   );
   const realtimeCalculation = realtimeCalculationData?.calculation;
+  const [distributionPage, setDistributionPage] = useState(1);
+  const [distributionPageSize, setDistributionPageSize] = useState(10);
+  const [heirTotalsPage, setHeirTotalsPage] = useState(1);
+  const [heirTotalsPageSize, setHeirTotalsPageSize] = useState(10);
 
   const genealogy = useMemo(
     () => ({ unions, parent_links: parentLinks }),
@@ -176,6 +181,25 @@ const CalculoFiliacion = () => {
       .map(([line, percentage]) => ({ line, percentage }))
       .sort((a, b) => b.percentage - a.percentage || a.line.localeCompare(b.line, 'es'));
   }, [distributionLines]);
+
+  const distributionTotalPages = Math.max(1, Math.ceil(distributionLines.length / distributionPageSize));
+  const paginatedDistributionLines = useMemo(
+    () => distributionLines.slice((distributionPage - 1) * distributionPageSize, distributionPage * distributionPageSize),
+    [distributionLines, distributionPage, distributionPageSize]
+  );
+  const heirTotalsTotalPages = Math.max(1, Math.ceil(totalsByHeir.length / heirTotalsPageSize));
+  const paginatedTotalsByHeir = useMemo(
+    () => totalsByHeir.slice((heirTotalsPage - 1) * heirTotalsPageSize, heirTotalsPage * heirTotalsPageSize),
+    [heirTotalsPage, heirTotalsPageSize, totalsByHeir]
+  );
+
+  useEffect(() => {
+    setDistributionPage((current) => Math.min(current, distributionTotalPages));
+  }, [distributionTotalPages]);
+
+  useEffect(() => {
+    setHeirTotalsPage((current) => Math.min(current, heirTotalsTotalPages));
+  }, [heirTotalsTotalPages]);
 
   const totalPercentage = realtimeCalculation?.total_share ?? totalsByHeir.reduce((sum, item) => sum + item.percentage, 0);
   const totalAmount = realtimeCalculation?.active_heirs.reduce((sum, item) => sum + Number(item.amount), 0) ?? totalsByHeir.reduce((sum, item) => sum + item.amount, 0);
@@ -311,7 +335,8 @@ const CalculoFiliacion = () => {
               Detalle por Línea y Filiación
             </CardTitle>
           </CardHeader>
-          <CardContent className="p-6 overflow-x-auto">
+          <CardContent className="space-y-4 p-6">
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -325,7 +350,7 @@ const CalculoFiliacion = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {distributionLines.map((item) => {
+                {paginatedDistributionLines.map((item) => {
                   const evidence =
                     heirEvidenceByMemberId.get(item.memberId) || heirEvidenceByName.get(normalizeName(item.heir));
 
@@ -361,6 +386,16 @@ const CalculoFiliacion = () => {
                 })}
               </TableBody>
             </Table>
+            </div>
+            <TablePaginationControls
+              page={distributionPage}
+              pageSize={distributionPageSize}
+              totalItems={distributionLines.length}
+              totalPages={distributionTotalPages}
+              onPageChange={setDistributionPage}
+              onPageSizeChange={setDistributionPageSize}
+              itemLabel="lineas"
+            />
           </CardContent>
         </Card>
 
@@ -368,7 +403,8 @@ const CalculoFiliacion = () => {
           <CardHeader className="bg-legal-blue/5 border-b">
             <CardTitle className="text-legal-blue">Resultado Acumulado por Heredero</CardTitle>
           </CardHeader>
-          <CardContent className="p-6 overflow-x-auto">
+          <CardContent className="space-y-4 p-6">
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -380,7 +416,7 @@ const CalculoFiliacion = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {totalsByHeir.map((item) => (
+                {paginatedTotalsByHeir.map((item) => (
                   <TableRow key={item.heir}>
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2">
@@ -418,6 +454,16 @@ const CalculoFiliacion = () => {
                 ))}
               </TableBody>
             </Table>
+            </div>
+            <TablePaginationControls
+              page={heirTotalsPage}
+              pageSize={heirTotalsPageSize}
+              totalItems={totalsByHeir.length}
+              totalPages={heirTotalsTotalPages}
+              onPageChange={setHeirTotalsPage}
+              onPageSizeChange={setHeirTotalsPageSize}
+              itemLabel="herederos"
+            />
           </CardContent>
         </Card>
 

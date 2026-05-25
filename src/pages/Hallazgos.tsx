@@ -6,6 +6,7 @@ import SoftLoadingIndicator from '@/components/SoftLoadingIndicator';
 import MemberPhoto from '@/components/sienna/MemberPhoto';
 import MemberDetailSheet from '@/components/sienna/MemberDetailSheet';
 import { IssueDraft, MemberIssueFixPanel } from '@/components/sienna/MemberIssueFixPanel';
+import TablePaginationControls from '@/components/TablePaginationControls';
 import { useConfirmedHeirs, useSiennaFindings, useSiennaWorkspace, invalidateSiennaData } from '@/hooks/useSiennaData';
 import { buildMemberPhotoLookup } from '@/lib/memberPhotos';
 import { useQueryClient } from '@tanstack/react-query';
@@ -66,6 +67,8 @@ const Hallazgos = () => {
   const [drafts, setDrafts] = useState<Record<string, IssueDraft>>({});
   const [savingRowId, setSavingRowId] = useState<string | null>(null);
   const [detailMemberId, setDetailMemberId] = useState<string | null>(null);
+  const [findingsPage, setFindingsPage] = useState(1);
+  const [findingsPageSize, setFindingsPageSize] = useState(10);
   const detailMember = useMemo(
     () => members.find((member) => member.id === detailMemberId) || null,
     [detailMemberId, members]
@@ -140,6 +143,19 @@ const Hallazgos = () => {
       );
     }).sort((left, right) => left.memberName.localeCompare(right.memberName, 'es', { sensitivity: 'base' }));
   }, [kindFilter, rows, search]);
+  const findingsTotalPages = Math.max(1, Math.ceil(filteredRows.length / findingsPageSize));
+  const paginatedRows = useMemo(
+    () => filteredRows.slice((findingsPage - 1) * findingsPageSize, findingsPage * findingsPageSize),
+    [filteredRows, findingsPage, findingsPageSize]
+  );
+
+  useEffect(() => {
+    setFindingsPage((current) => Math.min(current, findingsTotalPages));
+  }, [findingsTotalPages]);
+
+  useEffect(() => {
+    setFindingsPage(1);
+  }, [kindFilter, search]);
 
   const completionPercent = members.length
     ? Math.round(((members.length - summary.membersAffected) / members.length) * 100)
@@ -399,12 +415,12 @@ const Hallazgos = () => {
                       <TableHead>Prioridad</TableHead>
                     </TableRow>
                   </TableHeader>
-                  <TableBody>{filteredRows.map((row) => renderRow(row))}</TableBody>
+                  <TableBody>{paginatedRows.map((row) => renderRow(row))}</TableBody>
                 </Table>
               </div>
 
               <div className="space-y-4 md:hidden">
-                {filteredRows.map((row) => {
+                {paginatedRows.map((row) => {
                   const draft = drafts[row.id] || row.defaults;
                   return (
                     <div key={row.id} className="rounded-lg border border-legal-gold/25 bg-white p-4">
@@ -453,6 +469,15 @@ const Hallazgos = () => {
               {filteredRows.length === 0 && rows.length > 0 && (
                 <p className="text-center text-sm text-legal-gray">Ningún caso coincide con el filtro.</p>
               )}
+              <TablePaginationControls
+                page={findingsPage}
+                pageSize={findingsPageSize}
+                totalItems={filteredRows.length}
+                totalPages={findingsTotalPages}
+                onPageChange={setFindingsPage}
+                onPageSizeChange={setFindingsPageSize}
+                itemLabel="hallazgos"
+              />
             </CardContent>
           </Card>
         )}

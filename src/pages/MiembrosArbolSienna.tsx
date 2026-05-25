@@ -58,6 +58,7 @@ import MemberTreeContextPanel from '@/components/sienna/MemberTreeContextPanel';
 import MemberRegistrationGuide from '@/components/sienna/MemberRegistrationGuide';
 import MemberVerificationBadge from '@/components/sienna/MemberVerificationBadge';
 import PageHelp from '@/components/PageHelp';
+import TablePaginationControls from '@/components/TablePaginationControls';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import {
   AlertTriangle,
@@ -250,6 +251,8 @@ const MiembrosArbolSienna = () => {
   const [detailMemberId, setDetailMemberId] = useState<string | null>(null);
   const [caseConfigRevision, setCaseConfigRevision] = useState(0);
   const [deletingMemberId, setDeletingMemberId] = useState<string | null>(null);
+  const [membersPage, setMembersPage] = useState(1);
+  const [membersPageSize, setMembersPageSize] = useState(10);
   const formSectionRef = useRef<HTMLDivElement>(null);
   const detailMember = useMemo(
     () => members.find((member) => member.id === detailMemberId) || null,
@@ -483,6 +486,19 @@ const MiembrosArbolSienna = () => {
       return haystack.includes(query);
     });
   }, [memberContexts, search, sortedMembers]);
+  const membersTotalPages = Math.max(1, Math.ceil(filteredMembers.length / membersPageSize));
+  const paginatedMembers = useMemo(
+    () => filteredMembers.slice((membersPage - 1) * membersPageSize, membersPage * membersPageSize),
+    [filteredMembers, membersPage, membersPageSize]
+  );
+
+  useEffect(() => {
+    setMembersPage((current) => Math.min(current, membersTotalPages));
+  }, [membersTotalPages]);
+
+  useEffect(() => {
+    setMembersPage(1);
+  }, [search]);
 
   const draftMembers = useMemo(() => {
     if (!form.name.trim() && !form.id) return members;
@@ -1223,7 +1239,7 @@ const MiembrosArbolSienna = () => {
                   </TableRow>
                 )}
                 {!loading &&
-                  filteredMembers.map((member) => {
+                  paginatedMembers.map((member) => {
                     const context = memberContexts.get(member.id);
                     if (!context) return null;
                     const linkedHeir = heirsByMemberId.get(member.id) || heirsByName.get(normalizeName(member.name));
@@ -1447,6 +1463,15 @@ const MiembrosArbolSienna = () => {
                   })}
               </TableBody>
             </Table>
+            <TablePaginationControls
+              page={membersPage}
+              pageSize={membersPageSize}
+              totalItems={filteredMembers.length}
+              totalPages={membersTotalPages}
+              onPageChange={setMembersPage}
+              onPageSizeChange={setMembersPageSize}
+              itemLabel="miembros"
+            />
           </CardContent>
         </Card>
       </div>

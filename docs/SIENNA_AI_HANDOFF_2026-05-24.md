@@ -473,3 +473,43 @@ Antes de reiniciar la PC, estado conocido:
 - Produccion responde OK en `/api/health`.
 - No hay una tarea de deploy pendiente.
 - Pendiente real: QA visual/manual posterior al reinicio, principalmente Documentos Probatorios en movil y flujo de guardar foto desde tabla unificada.
+
+## UI release posterior - tablas y documentos (2026-05-24 noche)
+
+Cambios locales documentados y preparados para GitHub/Hostinger:
+
+- `src/pages/DocumentosProbatorios.tsx`
+  - Registro Documental paginado y ordenado alfabéticamente por miembro/heredero.
+  - Selector de filas 10/25/50 y navegación estable con botones de flecha.
+  - Guardado automático de foto al seleccionar archivo.
+  - Eliminado el botón de disquete para foto.
+  - Eliminada la columna de monto calculado.
+  - Ampliadas columnas de miembro/heredero y soporte.
+  - Estado muestra Verificado/Pendiente en vez de guion.
+  - Botón eliminar solo visible para admin y con confirmación.
+- `server/index.js`
+  - `DELETE /api/evidence-documents/:id` ahora requiere `requireAdmin`, no solo editor.
+- `src/components/TablePaginationControls.tsx`
+  - Nuevo componente común de paginación con contador, filas 10/25/50 y flechas estables.
+- Paginación aplicada a tablas largas:
+  - `src/pages/MiembrosArbolSienna.tsx`
+  - `src/pages/Hallazgos.tsx`
+  - `src/pages/AdminUsers.tsx`
+  - `src/components/PageVisitsStats.tsx`
+  - `src/pages/CalculoFiliacion.tsx`
+- `src/pages/ExplicacionHerederosSienna.tsx`
+  - Tabla de explicación con mayor ancho para heredero y cadena de pago.
+  - Cadena de pago renderizada con cápsulas e iconos en vez de `A -> B -> C`.
+
+Validación ejecutada:
+
+```sh
+pnpm build
+```
+
+Restricciones del release:
+
+- No tocar DB.
+- No ejecutar migraciones.
+- No subir ni sobrescribir `.env`.
+- Deploy a Hostinger debe ser solo archivos generados de `dist/` vía script FTP seguro.

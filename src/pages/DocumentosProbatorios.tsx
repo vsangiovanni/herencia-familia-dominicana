@@ -6,7 +6,8 @@ import BackButton from '@/components/BackButton';
 import DocumentHeader from '@/components/DocumentHeader';
 import MemberPhoto from '@/components/sienna/MemberPhoto';
 import { api, ConfirmedHeir, EvidenceDocument, SiennaFamilyMember } from '@/lib/api';
-import { invalidateSiennaData, useConfirmedHeirs, useSiennaCalculation, useSiennaWorkspace } from '@/hooks/useSiennaData';
+import { useAuth } from '@/context/AuthContext';
+import { invalidateSiennaData, useConfirmedHeirs, useSiennaWorkspace } from '@/hooks/useSiennaData';
 import { buildMemberPhotoLookup } from '@/lib/memberPhotos';
 import { getMemberLinkVerificationStatus } from '@/lib/siennaGenealogy';
 import { sortMembersByName } from '@/lib/siennaFamilyTree';
@@ -34,10 +35,15 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from '@/components/ui/use-toast';
 import { readFileAsDataUrl } from '@/lib/readFileAsDataUrl';
-import { Archive, Eye, FileImage, FileSearch, RefreshCcw, Save, Trash2 } from 'lucide-react';
+import { Archive, ChevronLeft, ChevronRight, Eye, FileImage, FileSearch, RefreshCcw, Save, Trash2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 type DocumentForm = Omit<EvidenceDocument, 'id' | 'created_at' | 'updated_at'>;
+type RegistryRow =
+  | { type: 'document'; document: EvidenceDocument }
+  | { type: 'heir'; heir: ConfirmedHeir };
+
+const registryPageSizeOptions = [10, 25, 50];
 
 const emptyForm: DocumentForm = {
   title: '',
@@ -134,13 +140,6 @@ const parseDocument = (text: string, knownPeople: string[]): Partial<DocumentFor
   };
 };
 
-const formatMoney = (amount: number | string | null | undefined) =>
-  new Intl.NumberFormat('es-DO', {
-    style: 'currency',
-    currency: 'DOP',
-    minimumFractionDigits: 2,
-  }).format(Number(amount || 0));
-
 const normalizeName = (value: string) =>
   value
     .normalize('NFD')
@@ -177,12 +176,9 @@ const findSpousePartner = (
 const DocumentosProbatorios = () => {
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
+  const { isAdmin } = useAuth();
   const { data: workspace, refetch } = useSiennaWorkspace(false);
   const { data: heirsWithPhotos } = useConfirmedHeirs(true);
-  const { data: realtimeCalculation } = useSiennaCalculation(
-    workspace?.settings?.estate_amount as number | string | undefined,
-    workspace?.settings?.lawyer_fee_percentage as number | string | undefined
-  );
   const members = workspace?.members ?? [];
   const heirs = heirsWithPhotos?.heirs ?? workspace?.heirs ?? [];
   const genealogy = useMemo(
@@ -205,6 +201,9 @@ const DocumentosProbatorios = () => {
   const [saveBusy, setSaveBusy] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
   const [heirDrafts, setHeirDrafts] = useState<Record<string, Partial<ConfirmedHeir>>>({});
+  const [photoSavingIds, setPhotoSavingIds] = useState<Set<string>>(() => new Set());
+  const [registryPage, setRegistryPage] = useState(1);
+  const [registryPageSize, setRegistryPageSize] = useState(10);
   const [viewerDocumentId, setViewerDocumentId] = useState<string | null>(null);
   const [appliedPrefillKey, setAppliedPrefillKey] = useState('');
 
@@ -215,10 +214,6 @@ const DocumentosProbatorios = () => {
   const membersById = useMemo(
     () => new Map(members.map((member) => [member.id, member])),
     [members]
-  );
-  const calculatedAmountsByMemberId = useMemo(
-    () => new Map((realtimeCalculation?.calculation.active_heirs ?? []).map((row) => [row.member_id, row.amount])),
-    [realtimeCalculation?.calculation.active_heirs]
   );
   const photoLookup = useMemo(() => buildMemberPhotoLookup(heirs), [heirs]);
   const verificationStatusForMember = useCallback(
@@ -275,13 +270,6 @@ const DocumentosProbatorios = () => {
   const heirsWithoutDocuments = useMemo(
     () => heirsSortedByName.filter((heir) => !documentedHeirKeys.has(heir.id)),
     [documentedHeirKeys, heirsSortedByName]
-  );
-  const documentsSortedByTitle = useMemo(
-    () =>
-      [...documents].sort((left, right) =>
-        (left.title || '').localeCompare(right.title || '', 'es', { sensitivity: 'base' })
-      ),
-    [documents]
   );
   const knownPeople = useMemo(() => membersSortedByName.map((member) => member.name), [membersSortedByName]);
   const getAutoLinkedRelatives = (memberId: string) => {
@@ -535,9 +523,20 @@ const DocumentosProbatorios = () => {
 
   const deleteDocument = async (id?: string) => {
     if (!id) return;
+    if (!isAdmin) {
+      toast({
+        title: 'Acceso restringido',
+        description: 'Solo los administradores pueden eliminar documentos probatorios.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    const ok = window.confirm('Se eliminará este documento probatorio. Esta acción no se puede deshacer. ¿Continuar?');
+    if (!ok) return;
     await api.deleteEvidenceDocument(id);
     invalidateSiennaData(queryClient);
     await loadData();
+    toast({ title: 'Documento eliminado', description: 'El registro documental fue eliminado.' });
   };
 
   const updateHeirDraft = (id: string, value: Partial<ConfirmedHeir>) => {
@@ -558,10 +557,7 @@ const DocumentosProbatorios = () => {
       photo_file_name: file.name,
       photo_file_type: file.type,
     });
-  };
-
-  const saveHeirPresentation = async (heir: ConfirmedHeir) => {
-    const draft = heirDrafts[heir.id] || {};
+    setPhotoSavingIds((current) => new Set(current).add(heir.id));
     try {
       await api.updateConfirmedHeir(heir.id, {
         sienna_member_id: heir.sienna_member_id || null,
@@ -571,20 +567,36 @@ const DocumentosProbatorios = () => {
         line_paolo: heir.line_paolo,
         status: heir.status,
         notes: heir.notes,
-        photo_file_name: draft.photo_file_name ?? heir.photo_file_name ?? null,
-        photo_file_type: draft.photo_file_type ?? heir.photo_file_type ?? null,
-        photo_data: draft.photo_data ?? heir.photo_data ?? null,
+        photo_file_name: file.name,
+        photo_file_type: file.type,
+        photo_data: photoData,
       });
       invalidateSiennaData(queryClient);
       await loadData();
-      toast({ title: 'Heredero actualizado', description: 'Foto guardada. El monto se mantiene calculado desde la API.' });
+      toast({ title: 'Foto guardada', description: 'La imagen quedó registrada automáticamente.' });
     } catch (error) {
       toast({
-        title: 'No se pudo actualizar el heredero',
+        title: 'No se pudo guardar la foto',
         description: error instanceof Error ? error.message : 'Error desconocido',
         variant: 'destructive',
       });
+    } finally {
+      setPhotoSavingIds((current) => {
+        const next = new Set(current);
+        next.delete(heir.id);
+        return next;
+      });
     }
+  };
+
+  const renderVerificationStatus = (status?: string | null) => {
+    const normalized = (status || '').toLowerCase();
+    const verified = normalized === 'confirmado' || normalized === 'verified' || normalized === 'verificado';
+    return (
+      <Badge variant={verified ? 'default' : 'secondary'}>
+        {verified ? 'Verificado' : 'Pendiente'}
+      </Badge>
+    );
   };
 
   const evidenceByHeir = useMemo(() => {
@@ -595,6 +607,44 @@ const DocumentosProbatorios = () => {
       return acc;
     }, {});
   }, [documents]);
+
+  const registryRows = useMemo<RegistryRow[]>(
+    () => {
+      const memberNameForRow = (row: RegistryRow) => {
+        if (row.type === 'heir') return row.heir.heir_name || '';
+
+        const linkedHeir = resolveDocumentHeir(row.document);
+        if (linkedHeir?.heir_name) return linkedHeir.heir_name;
+
+        const primaryMember = row.document.primary_member_id
+          ? membersById.get(row.document.primary_member_id) || null
+          : null;
+        return primaryMember?.name || row.document.primary_person || row.document.related_heir_name || '';
+      };
+
+      return [
+        ...documents.map((document) => ({ type: 'document' as const, document })),
+        ...heirsWithoutDocuments.map((heir) => ({ type: 'heir' as const, heir })),
+      ].sort((left, right) => {
+        const byMember = memberNameForRow(left).localeCompare(memberNameForRow(right), 'es', { sensitivity: 'base' });
+        if (byMember !== 0) return byMember;
+
+        const leftDocumentTitle = left.type === 'document' ? left.document.title || '' : '';
+        const rightDocumentTitle = right.type === 'document' ? right.document.title || '' : '';
+        return leftDocumentTitle.localeCompare(rightDocumentTitle, 'es', { sensitivity: 'base' });
+      });
+    },
+    [documents, heirsWithoutDocuments, membersById, resolveDocumentHeir]
+  );
+  const registryTotalPages = Math.max(1, Math.ceil(registryRows.length / registryPageSize));
+  const paginatedRegistryRows = useMemo(
+    () => registryRows.slice((registryPage - 1) * registryPageSize, registryPage * registryPageSize),
+    [registryPage, registryPageSize, registryRows]
+  );
+
+  useEffect(() => {
+    setRegistryPage((current) => Math.min(current, registryTotalPages));
+  }, [registryTotalPages]);
 
   const viewerDocument = useMemo(
     () => documents.find((document) => document.id === viewerDocumentId) || null,
@@ -846,29 +896,107 @@ const DocumentosProbatorios = () => {
               Registro Documental
             </CardTitle>
           </CardHeader>
-          <CardContent className="p-6 overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Miembro / heredero</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead>Documento</TableHead>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead>Actas</TableHead>
-                  <TableHead>Monto calculado</TableHead>
-                  <TableHead>Soporte</TableHead>
-                  <TableHead className="text-right">Acción</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {documents.length === 0 && heirsWithoutDocuments.length === 0 && (
+          <CardContent className="p-6 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-legal-gray">
+                Mostrando {registryRows.length === 0 ? 0 : (registryPage - 1) * registryPageSize + 1}
+                {' '}a {Math.min(registryPage * registryPageSize, registryRows.length)} de {registryRows.length} registros
+              </p>
+              <div className="flex items-center gap-2">
+                <Label className="text-sm text-legal-gray">Filas</Label>
+                <Select
+                  value={String(registryPageSize)}
+                  onValueChange={(value) => {
+                    setRegistryPageSize(Number(value));
+                    setRegistryPage(1);
+                  }}
+                >
+                  <SelectTrigger className="h-9 w-[90px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {registryPageSizeOptions.map((size) => (
+                      <SelectItem key={size} value={String(size)}>{size}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-legal-gray py-8">
-                      Todavía no hay documentos guardados.
-                    </TableCell>
+                    <TableHead className="min-w-[340px]">Miembro / heredero</TableHead>
+                    <TableHead className="min-w-[140px]">Estado</TableHead>
+                    <TableHead className="min-w-[260px]">Documento</TableHead>
+                    <TableHead className="min-w-[110px]">Fecha</TableHead>
+                    <TableHead className="w-[90px] text-center">Actas</TableHead>
+                    <TableHead className="min-w-[260px]">Soporte</TableHead>
+                    <TableHead className="text-right">Acción</TableHead>
                   </TableRow>
-                )}
-                {documentsSortedByTitle.map((document) => {
+                </TableHeader>
+                <TableBody>
+                  {registryRows.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center text-legal-gray py-8">
+                        Todavía no hay documentos guardados.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {paginatedRegistryRows.map((row) => {
+                    if (row.type === 'heir') {
+                      const heir = row.heir;
+                      const draft = heirDrafts[heir.id] || {};
+                      const photo = draft.photo_data || heir.photo_data;
+                      return (
+                        <TableRow key={'heir-' + heir.id} className="bg-legal-blue/[0.02]">
+                          <TableCell className="min-w-[340px]">
+                            <div className="flex items-center gap-3">
+                              <MemberPhoto
+                                name={heir.heir_name}
+                                memberId={heir.sienna_member_id}
+                                photoData={photo}
+                                size="sm"
+                                verificationStatus={heir.status === 'confirmado' ? 'verified' : 'pending'}
+                              />
+                              <div>
+                                <p className="font-medium text-legal-blue">{heir.heir_name}</p>
+                                <Input
+                                  type="file"
+                                  accept="image/*"
+                                  className="mt-2 h-8 max-w-[230px] text-xs"
+                                  disabled={photoSavingIds.has(heir.id)}
+                                  onChange={(event) => handleHeirPhoto(heir, event.target.files?.[0])}
+                                />
+                                {photoSavingIds.has(heir.id) && (
+                                  <p className="mt-1 text-xs text-legal-gray">Guardando foto...</p>
+                                )}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="space-y-1">
+                              {renderVerificationStatus(heir.status)}
+                              <div className="flex flex-wrap gap-1">
+                                {heir.line_vincenzo && <Badge variant="outline">Vincenzo/Vicente</Badge>}
+                                {heir.line_paolo && <Badge variant="outline">Paolo/Paulino</Badge>}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="min-w-[260px]">
+                            <p className="font-medium text-legal-blue">Sin documento vinculado</p>
+                            <p className="text-xs text-legal-gray">Pendiente de soporte documental</p>
+                          </TableCell>
+                          <TableCell>—</TableCell>
+                          <TableCell className="text-center">{heir.evidence_count || 0}</TableCell>
+                          <TableCell className="min-w-[260px]">—</TableCell>
+                          <TableCell className="text-right">—</TableCell>
+                        </TableRow>
+                      );
+                    }
+
+                    const document = row.document;
                   const primaryMember = document.primary_member_id ? membersById.get(document.primary_member_id) || null : null;
                   const primaryName = primaryMember?.name || document.primary_person || '—';
                   const linkedHeir = resolveDocumentHeir(document);
@@ -876,15 +1004,15 @@ const DocumentosProbatorios = () => {
                   const displayName = linkedHeir?.heir_name || primaryName;
                   const displayMemberId = linkedHeir?.sienna_member_id || primaryMember?.id || null;
                   const photo = draft.photo_data || linkedHeir?.photo_data || null;
-                  const calculatedAmount = linkedHeir?.sienna_member_id
-                    ? calculatedAmountsByMemberId.get(linkedHeir.sienna_member_id) ?? 0
-                    : 0;
                   const evidenceCount = linkedHeir
                     ? evidenceByHeir[String(linkedHeir.sienna_member_id || '')] || evidenceByHeir[linkedHeir.heir_name] || linkedHeir.evidence_count || 0
                     : 0;
+                  const primaryVerificationStatus = linkedHeir
+                    ? linkedHeir.status
+                    : verificationStatusForMember(primaryMember);
                   return (
                   <TableRow key={document.id}>
-                    <TableCell className="min-w-[280px]">
+                    <TableCell className="min-w-[340px]">
                       <div className="flex items-center gap-3">
                         <MemberPhoto
                           name={displayName}
@@ -907,54 +1035,38 @@ const DocumentosProbatorios = () => {
                             <Input
                               type="file"
                               accept="image/*"
-                              className="mt-2 h-8 max-w-[190px] text-xs"
+                              className="mt-2 h-8 max-w-[230px] text-xs"
+                              disabled={photoSavingIds.has(linkedHeir.id)}
                               onChange={(event) => handleHeirPhoto(linkedHeir, event.target.files?.[0])}
                             />
+                          )}
+                          {linkedHeir && photoSavingIds.has(linkedHeir.id) && (
+                            <p className="mt-1 text-xs text-legal-gray">Guardando foto...</p>
                           )}
                         </div>
                       </div>
                     </TableCell>
                     <TableCell>
-                      {linkedHeir ? (
-                        <div className="space-y-1">
-                          <Badge variant={linkedHeir.status === 'confirmado' ? 'default' : 'secondary'}>
-                            {linkedHeir.status}
-                          </Badge>
-                          <div className="flex flex-wrap gap-1">
-                            {linkedHeir.line_vincenzo && <Badge variant="outline">Vincenzo/Vicente</Badge>}
-                            {linkedHeir.line_paolo && <Badge variant="outline">Paolo/Paulino</Badge>}
-                          </div>
+                      <div className="space-y-1">
+                        {renderVerificationStatus(primaryVerificationStatus)}
+                        <div className="flex flex-wrap gap-1">
+                          {linkedHeir?.line_vincenzo && <Badge variant="outline">Vincenzo/Vicente</Badge>}
+                          {linkedHeir?.line_paolo && <Badge variant="outline">Paolo/Paulino</Badge>}
                         </div>
-                      ) : (
-                        <span className="text-legal-gray">—</span>
-                      )}
+                      </div>
                     </TableCell>
                     <TableCell className="min-w-[260px]">
                       <p className="font-medium text-legal-blue">{document.title}</p>
                       <p className="text-xs text-legal-gray">{document.document_type}</p>
                     </TableCell>
                     <TableCell>{document.event_date || '—'}</TableCell>
-                    <TableCell>
+                    <TableCell className="text-center">
                       {evidenceCount}
                       {document.confirms_heir && <Badge className="ml-2">confirma</Badge>}
                     </TableCell>
-                    <TableCell className="min-w-[150px]">
-                      <p className="font-semibold text-legal-blue">{formatMoney(calculatedAmount)}</p>
-                      <p className="text-xs text-legal-gray">API</p>
-                    </TableCell>
-                    <TableCell>{document.file_name || 'Transcripción manual'}</TableCell>
+                    <TableCell className="min-w-[260px]">{document.file_name || 'Transcripción manual'}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
-                        {linkedHeir && (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => saveHeirPresentation(linkedHeir)}
-                          >
-                            <Save className="h-4 w-4" />
-                          </Button>
-                        )}
                         <Button
                           variant="outline"
                           size="sm"
@@ -964,77 +1076,58 @@ const DocumentosProbatorios = () => {
                           <Eye className="mr-1 h-4 w-4" />
                           Ver
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => deleteDocument(document.id)}
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        {isAdmin && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => deleteDocument(document.id)}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
                 )})}
-                {heirsWithoutDocuments.map((heir) => {
-                  const draft = heirDrafts[heir.id] || {};
-                  const photo = draft.photo_data || heir.photo_data;
-                  const calculatedAmount = heir.sienna_member_id
-                    ? calculatedAmountsByMemberId.get(heir.sienna_member_id) ?? 0
-                    : 0;
-                  return (
-                    <TableRow key={'heir-' + heir.id} className="bg-legal-blue/[0.02]">
-                      <TableCell className="min-w-[280px]">
-                        <div className="flex items-center gap-3">
-                          <MemberPhoto
-                            name={heir.heir_name}
-                            memberId={heir.sienna_member_id}
-                            photoData={photo}
-                            size="sm"
-                            verificationStatus={heir.status === 'confirmado' ? 'verified' : 'pending'}
-                          />
-                          <div>
-                            <p className="font-medium text-legal-blue">{heir.heir_name}</p>
-                            <Input
-                              type="file"
-                              accept="image/*"
-                              className="mt-2 h-8 max-w-[190px] text-xs"
-                              onChange={(event) => handleHeirPhoto(heir, event.target.files?.[0])}
-                            />
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <Badge variant={heir.status === 'confirmado' ? 'default' : 'secondary'}>{heir.status}</Badge>
-                          <div className="flex flex-wrap gap-1">
-                            {heir.line_vincenzo && <Badge variant="outline">Vincenzo/Vicente</Badge>}
-                            {heir.line_paolo && <Badge variant="outline">Paolo/Paulino</Badge>}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="min-w-[260px]">
-                        <p className="font-medium text-legal-blue">Sin documento vinculado</p>
-                        <p className="text-xs text-legal-gray">Pendiente de soporte documental</p>
-                      </TableCell>
-                      <TableCell>—</TableCell>
-                      <TableCell>{heir.evidence_count || 0}</TableCell>
-                      <TableCell className="min-w-[150px]">
-                        <p className="font-semibold text-legal-blue">{formatMoney(calculatedAmount)}</p>
-                        <p className="text-xs text-legal-gray">API</p>
-                      </TableCell>
-                      <TableCell>—</TableCell>
-                      <TableCell className="text-right">
-                        <Button type="button" variant="outline" size="sm" onClick={() => saveHeirPresentation(heir)}>
-                          <Save className="h-4 w-4 mr-2" />
-                          Guardar foto
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                </TableBody>
+              </Table>
+            </div>
+
+            {registryRows.length > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+                <p className="text-sm text-legal-gray">
+                  Usa las flechas para navegar el registro documental.
+                </p>
+                <div className="flex items-center gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    aria-label="Página anterior"
+                    title="Página anterior"
+                    disabled={registryPage === 1}
+                    onClick={() => setRegistryPage((current) => Math.max(1, current - 1))}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="min-w-[110px] rounded-md border bg-white px-3 py-2 text-center text-sm font-medium text-legal-blue">
+                    {registryPage} / {registryTotalPages}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    aria-label="Página siguiente"
+                    title="Página siguiente"
+                    disabled={registryPage === registryTotalPages}
+                    onClick={() => setRegistryPage((current) => Math.min(registryTotalPages, current + 1))}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 

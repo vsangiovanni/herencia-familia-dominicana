@@ -4,6 +4,7 @@ import { api } from '@/lib/api';
 import type { SiennaFamilyMember } from '@/lib/api';
 import DocumentHeader from '@/components/DocumentHeader';
 import SoftLoadingIndicator from '@/components/SoftLoadingIndicator';
+import TablePaginationControls from '@/components/TablePaginationControls';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -104,6 +105,12 @@ const AdminUsers = () => {
   const [auditUserId, setAuditUserId] = useState<string>('all');
   const [auditPathFilter, setAuditPathFilter] = useState('');
   const [savingMemberForUserId, setSavingMemberForUserId] = useState<string | null>(null);
+  const [usersPage, setUsersPage] = useState(1);
+  const [usersPageSize, setUsersPageSize] = useState(10);
+  const [auditSummaryPage, setAuditSummaryPage] = useState(1);
+  const [auditSummaryPageSize, setAuditSummaryPageSize] = useState(10);
+  const [usagePage, setUsagePage] = useState(1);
+  const [usagePageSize, setUsagePageSize] = useState(10);
   const [newUser, setNewUser] = useState({
     email: '',
     full_name: '',
@@ -462,6 +469,42 @@ const AdminUsers = () => {
     });
   }, [auditPathFilter, auditUserId, visits]);
 
+  const usersTotalPages = Math.max(1, Math.ceil(filteredUsers.length / usersPageSize));
+  const paginatedFilteredUsers = useMemo(
+    () => filteredUsers.slice((usersPage - 1) * usersPageSize, usersPage * usersPageSize),
+    [filteredUsers, usersPage, usersPageSize]
+  );
+  const auditSummaryTotalPages = Math.max(1, Math.ceil(usersWithAudit.length / auditSummaryPageSize));
+  const paginatedUsersWithAudit = useMemo(
+    () => usersWithAudit.slice((auditSummaryPage - 1) * auditSummaryPageSize, auditSummaryPage * auditSummaryPageSize),
+    [auditSummaryPage, auditSummaryPageSize, usersWithAudit]
+  );
+  const usageTotalPages = Math.max(1, Math.ceil(auditRows.length / usagePageSize));
+  const paginatedAuditRows = useMemo(
+    () => auditRows.slice((usagePage - 1) * usagePageSize, usagePage * usagePageSize),
+    [auditRows, usagePage, usagePageSize]
+  );
+
+  useEffect(() => {
+    setUsersPage((current) => Math.min(current, usersTotalPages));
+  }, [usersTotalPages]);
+
+  useEffect(() => {
+    setAuditSummaryPage((current) => Math.min(current, auditSummaryTotalPages));
+  }, [auditSummaryTotalPages]);
+
+  useEffect(() => {
+    setUsagePage((current) => Math.min(current, usageTotalPages));
+  }, [usageTotalPages]);
+
+  useEffect(() => {
+    setUsersPage(1);
+  }, [roleFilter, search, statusFilter]);
+
+  useEffect(() => {
+    setUsagePage(1);
+  }, [auditPathFilter, auditUserId]);
+
   const dashboardStats = useMemo(() => {
     const approved = users.filter((user) => user.is_approved).length;
     const pending = users.length - approved;
@@ -614,6 +657,7 @@ const AdminUsers = () => {
                 ) : filteredUsers.length === 0 ? (
                   <div className="py-8 text-center text-legal-gray">No hay usuarios para los filtros aplicados.</div>
                 ) : (
+                  <>
                   <div className="overflow-x-auto">
                     <table className="w-full min-w-[1380px] border-collapse">
                       <thead>
@@ -630,7 +674,7 @@ const AdminUsers = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredUsers.map((item) => (
+                        {paginatedFilteredUsers.map((item) => (
                           <tr key={item.user.id} className="hover:bg-gray-50">
                             <td className="border px-3 py-2">
                               <p className="font-medium text-legal-blue">{item.user.full_name || 'Sin nombre'}</p>
@@ -714,6 +758,16 @@ const AdminUsers = () => {
                       </tbody>
                     </table>
                   </div>
+                  <TablePaginationControls
+                    page={usersPage}
+                    pageSize={usersPageSize}
+                    totalItems={filteredUsers.length}
+                    totalPages={usersTotalPages}
+                    onPageChange={setUsersPage}
+                    onPageSizeChange={setUsersPageSize}
+                    itemLabel="usuarios"
+                  />
+                  </>
                 )}
               </CardContent>
             </Card>
@@ -740,7 +794,7 @@ const AdminUsers = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {usersWithAudit.map((item) => (
+                    {paginatedUsersWithAudit.map((item) => (
                       <tr key={item.user.id}>
                         <td className="border px-3 py-2">
                           <p className="font-medium">{item.user.full_name || 'Sin nombre'}</p>
@@ -767,6 +821,15 @@ const AdminUsers = () => {
                     ))}
                   </tbody>
                 </table>
+                <TablePaginationControls
+                  page={auditSummaryPage}
+                  pageSize={auditSummaryPageSize}
+                  totalItems={usersWithAudit.length}
+                  totalPages={auditSummaryTotalPages}
+                  onPageChange={setAuditSummaryPage}
+                  onPageSizeChange={setAuditSummaryPageSize}
+                  itemLabel="usuarios"
+                />
               </CardContent>
             </Card>
           </TabsContent>
@@ -858,7 +921,7 @@ const AdminUsers = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {auditRows.map((visit) => {
+                      {paginatedAuditRows.map((visit) => {
                         const profile = usersById.get(visit.user_id);
                         return (
                           <tr key={visit.id}>
@@ -876,6 +939,15 @@ const AdminUsers = () => {
                     </tbody>
                   </table>
                 </div>
+                <TablePaginationControls
+                  page={usagePage}
+                  pageSize={usagePageSize}
+                  totalItems={auditRows.length}
+                  totalPages={usageTotalPages}
+                  onPageChange={setUsagePage}
+                  onPageSizeChange={setUsagePageSize}
+                  itemLabel="visitas"
+                />
               </CardContent>
             </Card>
           </TabsContent>

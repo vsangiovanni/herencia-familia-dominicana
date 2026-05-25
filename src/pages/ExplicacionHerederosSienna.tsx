@@ -93,6 +93,30 @@ const initials = (name: string) =>
 const supportDocumentHref = (brief: HeirBrief) =>
   buildSiennaDocumentSupportHref(brief.share.member.id, 'heir-support');
 
+const PaymentChain = ({ steps }: { steps: string[] }) => {
+  if (!steps.length) return <span className="text-legal-gray">Ruta pendiente</span>;
+
+  return (
+    <div className="flex min-w-[360px] flex-wrap items-center gap-1.5">
+      {steps.map((step, index) => (
+        <React.Fragment key={step + '-' + index}>
+          <span className="inline-flex max-w-[220px] items-center gap-1.5 rounded-full border border-legal-blue/15 bg-legal-blue/5 px-2.5 py-1 text-xs font-medium text-legal-blue">
+            {index === 0 ? (
+              <Landmark className="h-3.5 w-3.5 shrink-0 text-legal-gold" />
+            ) : index === steps.length - 1 ? (
+              <Users className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+            ) : (
+              <GitBranch className="h-3.5 w-3.5 shrink-0 text-legal-gold" />
+            )}
+            <span className="truncate">{step}</span>
+          </span>
+          {index < steps.length - 1 && <GitMerge className="h-4 w-4 shrink-0 text-legal-gold" />}
+        </React.Fragment>
+      ))}
+    </div>
+  );
+};
+
 const SupportBadge = ({ brief }: { brief: HeirBrief }) => {
   const needsSupport = brief.traffic.label === 'Falta soporte' || brief.traffic.label === 'En progreso';
   const badge = <Badge className={brief.traffic.className}>{brief.traffic.label}</Badge>;
@@ -413,21 +437,21 @@ const ExplicacionHerederosSienna = () => {
             )}
 
             <div className="overflow-x-auto rounded-md border border-legal-blue/15">
-              <table className="w-full min-w-[640px] text-sm">
+              <table className="w-full min-w-[1080px] text-sm">
                 <thead className="bg-legal-blue/5 text-left text-legal-blue">
                   <tr>
-                    <th className="p-3">Heredero</th>
+                    <th className="min-w-[320px] p-3">Heredero</th>
                     <th className="p-3">%</th>
                     <th className="p-3">Monto</th>
                     <th className="p-3">Ramas</th>
-                    <th className="p-3">Cadena de pago</th>
+                    <th className="min-w-[420px] p-3">Cadena de pago</th>
                     <th className="p-3">Soporte</th>
                   </tr>
                 </thead>
                 <tbody>
                   {briefs.map((brief) => (
                     <tr key={brief.share.member.id} className="border-t border-legal-blue/10">
-                      <td className="p-3">
+                      <td className="min-w-[320px] p-3">
                         <div className="flex items-center gap-2">
                           <MemberPhoto
                             name={brief.share.member.name}
@@ -442,7 +466,9 @@ const ExplicacionHerederosSienna = () => {
                       <td className="p-3">{formatPercent(brief.simulatedShare)}</td>
                       <td className="p-3">{formatMoney(brief.simulatedAmount)}</td>
                       <td className="p-3 text-xs text-legal-gray">{brief.share.sources.join(', ') || '-'}</td>
-                      <td className="p-3 text-xs text-legal-gray">{routeSteps(brief.share).join(' -> ')}</td>
+                      <td className="min-w-[420px] p-3">
+                        <PaymentChain steps={routeSteps(brief.share)} />
+                      </td>
                       <td className="p-3">
                         <SupportBadge brief={brief} />
                       </td>

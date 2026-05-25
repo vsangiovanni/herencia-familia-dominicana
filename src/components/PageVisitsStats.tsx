@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { 
@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { RefreshCw, Eye, Calendar } from 'lucide-react';
 import { formatDominicanDateTime } from '@/lib/dateTime';
+import TablePaginationControls from '@/components/TablePaginationControls';
 
 interface PageVisit {
   id: string;
@@ -39,6 +40,10 @@ const PageVisitsStats = () => {
   const [stats, setStats] = useState<PageStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [showDetailedView, setShowDetailedView] = useState(false);
+  const [statsPage, setStatsPage] = useState(1);
+  const [statsPageSize, setStatsPageSize] = useState(10);
+  const [visitsPage, setVisitsPage] = useState(1);
+  const [visitsPageSize, setVisitsPageSize] = useState(10);
 
   const fetchVisits = async () => {
     try {
@@ -100,6 +105,25 @@ const PageVisitsStats = () => {
     fetchVisits();
   }, []);
 
+  const statsTotalPages = Math.max(1, Math.ceil(stats.length / statsPageSize));
+  const paginatedStats = useMemo(
+    () => stats.slice((statsPage - 1) * statsPageSize, statsPage * statsPageSize),
+    [stats, statsPage, statsPageSize]
+  );
+  const visitsTotalPages = Math.max(1, Math.ceil(visits.length / visitsPageSize));
+  const paginatedVisits = useMemo(
+    () => visits.slice((visitsPage - 1) * visitsPageSize, visitsPage * visitsPageSize),
+    [visits, visitsPage, visitsPageSize]
+  );
+
+  useEffect(() => {
+    setStatsPage((current) => Math.min(current, statsTotalPages));
+  }, [statsTotalPages]);
+
+  useEffect(() => {
+    setVisitsPage((current) => Math.min(current, visitsTotalPages));
+  }, [visitsTotalPages]);
+
   if (loading) {
     return (
       <Card>
@@ -153,7 +177,7 @@ const PageVisitsStats = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {stats.map((stat) => (
+                  {paginatedStats.map((stat) => (
                     <TableRow key={stat.page_path}>
                       <TableCell>
                         <div>
@@ -181,6 +205,15 @@ const PageVisitsStats = () => {
                   ))}
                 </TableBody>
               </Table>
+              <TablePaginationControls
+                page={statsPage}
+                pageSize={statsPageSize}
+                totalItems={stats.length}
+                totalPages={statsTotalPages}
+                onPageChange={setStatsPage}
+                onPageSizeChange={setStatsPageSize}
+                itemLabel="paginas"
+              />
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -194,7 +227,7 @@ const PageVisitsStats = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {visits.map((visit) => (
+                  {paginatedVisits.map((visit) => (
                     <TableRow key={visit.id}>
                       <TableCell>
                         <div>
@@ -229,6 +262,15 @@ const PageVisitsStats = () => {
                   ))}
                 </TableBody>
               </Table>
+              <TablePaginationControls
+                page={visitsPage}
+                pageSize={visitsPageSize}
+                totalItems={visits.length}
+                totalPages={visitsTotalPages}
+                onPageChange={setVisitsPage}
+                onPageSizeChange={setVisitsPageSize}
+                itemLabel="visitas"
+              />
             </div>
           )}
         </CardContent>

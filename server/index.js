@@ -3678,7 +3678,7 @@ app.post('/api/evidence-documents', requireAuth, requireEditor, async (req, res)
   res.status(201).json({ ok: true });
 });
 
-app.delete('/api/evidence-documents/:id', requireAuth, requireEditor, async (req, res) => {
+app.delete('/api/evidence-documents/:id', requireAuth, requireAdmin, async (req, res) => {
   await query('DELETE FROM evidence_documents WHERE id = :id', { id: req.params.id });
   invalidateSiennaApiCache();
   res.json({ ok: true });

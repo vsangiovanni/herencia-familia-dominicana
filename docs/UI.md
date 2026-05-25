@@ -62,6 +62,10 @@ No deja espacio vacío cuando está oculto (`return null`).
 - El botón **Recalcular parentescos automáticos** completa padre, madre y cónyuge desde el árbol actual.
 - La ayuda contextual de `documentos-probatorios` refleja este flujo.
 - Los PDF individuales de explicación muestran imágenes de actas cuando el documento es imagen o base64 compatible; PDF y otros formatos conservan resumen textual.
+- El **Registro Documental** está paginado con controles estables de flechas, selector 10/25/50 y orden alfabético por miembro/heredero.
+- La foto del heredero se guarda automáticamente al seleccionar una imagen en la tabla; no hay botón adicional de disquete.
+- El botón de eliminar documentos solo se muestra a administradores, exige confirmación en frontend y el endpoint backend requiere rol `admin`.
+- La tabla evita mostrar monto calculado; prioriza miembro/heredero, estado, documento, fecha, actas y soporte.
 
 ## Árbol Sienna
 
@@ -76,6 +80,7 @@ No deja espacio vacío cuando está oculto (`return null`).
 - Incluye columna de foto (si existe en herederos confirmados).
 - Incluye columna con total de actas/documentos vinculados por miembro.
 - Botón **Ver documentación** abre un visor interno (imagen, PDF o texto transcrito).
+- La tabla principal está paginada con el patrón común: selector 10/25/50, contador y flechas.
 
 ## Navegación móvil
 
@@ -86,9 +91,25 @@ No deja espacio vacío cuando está oculto (`return null`).
 
 - La página `hallazgos` consume datos en tiempo real y no texto fijo.
 - El usuario ve hallazgos actuales según el estado del expediente en la base de datos.
+- La tabla desktop y las tarjetas móviles comparten la misma paginación para mantener consistencia.
 
 ## Explicación para herederos
 
 - Usa el mismo cálculo en vivo que el árbol para porcentajes, montos y neto después de honorarios.
 - Muestra doble linaje desglosado por rama cuando un heredero participa por más de una fuente.
 - El PDF individual incluye ruta sucesoral, soporte documental, marcador de fallecido si aplica y monto estimado.
+- En la tabla de resumen, las columnas **Heredero** y **Cadena de pago** tienen mayor ancho para lectura cómoda.
+- La **Cadena de pago** se presenta como una secuencia visual con cápsulas e iconos de origen, ramificación y heredero final, en vez de texto plano con separadores.
+
+## Paginación común de tablas
+
+- Componente reutilizable: `src/components/TablePaginationControls.tsx`.
+- Patrón visual: contador de registros, selector de filas 10/25/50 y navegación estable `‹  X / Y  ›`.
+- Se usa en tablas largas de:
+  - Documentos Probatorios.
+  - Miembros del Árbol.
+  - Hallazgos.
+  - Admin Users.
+  - PageVisitsStats.
+  - Cálculo por Filiación.
+- No se pagina contenido pequeño o estático donde el control añade fricción sin beneficio.
