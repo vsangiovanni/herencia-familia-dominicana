@@ -5,7 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import BackButton from '@/components/BackButton';
 import DocumentHeader from '@/components/DocumentHeader';
 import MemberPhoto from '@/components/sienna/MemberPhoto';
-import { api, ConfirmedHeir, EvidenceDocument, SiennaFamilyMember } from '@/lib/api';
+import { api, ConfirmedHeir, EvidenceDocument, EvidenceDocumentAiInterpretation, SiennaFamilyMember } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { invalidateSiennaData, useConfirmedHeirs, useSiennaWorkspace } from '@/hooks/useSiennaData';
 import { buildMemberPhotoLookup } from '@/lib/memberPhotos';
@@ -35,7 +35,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from '@/components/ui/use-toast';
 import { readFileAsDataUrl } from '@/lib/readFileAsDataUrl';
-import { Archive, ChevronLeft, ChevronRight, Eye, FileImage, FilePlus2, FileSearch, RefreshCcw, Save, Trash2 } from 'lucide-react';
+import { Archive, Bot, ChevronLeft, ChevronRight, Eye, FileImage, FilePlus2, FileSearch, RefreshCcw, Save, Sparkles, Trash2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 type DocumentForm = Omit<EvidenceDocument, 'id' | 'created_at' | 'updated_at'>;
@@ -198,8 +198,10 @@ const DocumentosProbatorios = () => {
   );
   const [form, setForm] = useState<DocumentForm>(emptyForm);
   const [ocrBusy, setOcrBusy] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
   const [saveBusy, setSaveBusy] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
+  const [aiInterpretation, setAiInterpretation] = useState<EvidenceDocumentAiInterpretation | null>(null);
   const [heirDrafts, setHeirDrafts] = useState<Record<string, Partial<ConfirmedHeir>>>({});
   const [photoSavingIds, setPhotoSavingIds] = useState<Set<string>>(() => new Set());
   const [registryPage, setRegistryPage] = useState(1);
@@ -383,62 +385,120 @@ const DocumentosProbatorios = () => {
     if (!form.title) updateForm('title', file.name.replace(/\.[^.]+$/, ''));
   };
 
-  const interpretImage = async () => {
-    if (!form.file_data) {
-      toast({ title: 'Sube una imagen primero' });
+  const buildOcrInterpretedForm = (current: DocumentForm, text: string): DocumentForm => {
+    const parsed = parseDocument(text, knownPeople);
+    const findMemberId = (name?: string | null) => {
+      if (!name) return '';
+      return membersByName.get(normalizeName(name))?.id || '';
+    };
+    const primaryMemberId = findMemberId(parsed.primary_person);
+    const fatherMemberId = findMemberId(parsed.father_name);
+    const motherMemberId = findMemberId(parsed.mother_name);
+    const spouseMemberId = findMemberId(parsed.spouse_name);
+    const detectedPrimaryMemberId = primaryMemberId || current.related_member_id || '';
+    const autoRelatives = detectedPrimaryMemberId ? getAutoLinkedRelatives(detectedPrimaryMemberId) : null;
+
+    return {
+      ...current,
+      ...parsed,
+      primary_member_id: autoRelatives?.primary_member_id || primaryMemberId || current.primary_member_id,
+      related_member_id: current.related_member_id || primaryMemberId || '',
+      primary_person: autoRelatives?.primary_person || parsed.primary_person || current.primary_person,
+      father_member_id: autoRelatives?.father_member_id || fatherMemberId || current.father_member_id,
+      father_name: autoRelatives?.father_name || parsed.father_name || current.father_name,
+      mother_member_id: autoRelatives?.mother_member_id || motherMemberId || current.mother_member_id,
+      mother_name: autoRelatives?.mother_name || parsed.mother_name || current.mother_name,
+      spouse_member_id: autoRelatives?.spouse_member_id || spouseMemberId || current.spouse_member_id,
+      spouse_name: autoRelatives?.spouse_name || parsed.spouse_name || current.spouse_name,
+      extracted_text: text,
+      file_data: current.file_data,
+      file_name: current.file_name,
+      file_type: current.file_type,
+      notes: current.notes,
+      related_heir_name: current.related_heir_name,
+      confirms_heir: current.confirms_heir,
+    };
+  };
+
+  const runOcrFromImage = async (source: DocumentForm) => {
+    const result = await Tesseract.recognize(source.file_data || '', 'spa+eng', {
+      logger: (message) => {
+        if (message.status === 'recognizing text') setOcrProgress(Math.round(message.progress * 100));
+      },
+    });
+    return buildOcrInterpretedForm(source, result.data.text);
+  };
+
+  const interpretWithAi = async () => {
+    const hasText = Boolean((form.extracted_text || form.notes || '').trim());
+    const hasImage = Boolean(form.file_data && form.file_type?.startsWith('image/'));
+    if (!hasText && !hasImage) {
+      toast({
+        title: 'Falta contenido',
+        description: 'Sube una imagen o agrega una transcripción para que Sienna pueda interpretarla.',
+      });
       return;
     }
 
-    setOcrBusy(true);
-    setOcrProgress(0);
+    setAiBusy(true);
     try {
-      const result = await Tesseract.recognize(form.file_data, 'spa+eng', {
-        logger: (message) => {
-          if (message.status === 'recognizing text') setOcrProgress(Math.round(message.progress * 100));
-        },
+      let draft = form;
+      if (hasImage) {
+        setOcrBusy(true);
+        setOcrProgress(0);
+        draft = await runOcrFromImage(form);
+        setForm(draft);
+        setOcrBusy(false);
+      }
+      const interpretation = await api.interpretEvidenceDocumentAi(draft);
+      setAiInterpretation(interpretation);
+      toast({
+        title: interpretation.mode === 'openai' ? 'Sienna interpretó el documento' : 'Interpretación preliminar lista',
+        description: 'Revisa las sugerencias antes de aplicarlas al formulario.',
       });
-      const parsed = parseDocument(result.data.text, knownPeople);
-      const findMemberId = (name?: string | null) => {
-        if (!name) return '';
-        return membersByName.get(normalizeName(name))?.id || '';
-      };
-      const primaryMemberId = findMemberId(parsed.primary_person);
-      const fatherMemberId = findMemberId(parsed.father_name);
-      const motherMemberId = findMemberId(parsed.mother_name);
-      const spouseMemberId = findMemberId(parsed.spouse_name);
-      setForm((current) => {
-        const detectedPrimaryMemberId = primaryMemberId || current.related_member_id || '';
-        const autoRelatives = detectedPrimaryMemberId ? getAutoLinkedRelatives(detectedPrimaryMemberId) : null;
-        return {
-          ...current,
-          ...parsed,
-          primary_member_id: autoRelatives?.primary_member_id || primaryMemberId || current.primary_member_id,
-          related_member_id: current.related_member_id || primaryMemberId || '',
-          primary_person: autoRelatives?.primary_person || parsed.primary_person || current.primary_person,
-          father_member_id: autoRelatives?.father_member_id || fatherMemberId || current.father_member_id,
-          father_name: autoRelatives?.father_name || parsed.father_name || current.father_name,
-          mother_member_id: autoRelatives?.mother_member_id || motherMemberId || current.mother_member_id,
-          mother_name: autoRelatives?.mother_name || parsed.mother_name || current.mother_name,
-          spouse_member_id: autoRelatives?.spouse_member_id || spouseMemberId || current.spouse_member_id,
-          spouse_name: autoRelatives?.spouse_name || parsed.spouse_name || current.spouse_name,
-          file_data: current.file_data,
-          file_name: current.file_name,
-          file_type: current.file_type,
-          notes: current.notes,
-          related_heir_name: current.related_heir_name,
-          confirms_heir: current.confirms_heir,
-        };
-      });
-      toast({ title: 'Documento interpretado', description: 'Revisa y ajusta los datos antes de guardar.' });
     } catch (error) {
       toast({
-        title: 'No se pudo interpretar automáticamente',
-        description: error instanceof Error ? error.message : 'Puedes completar los datos manualmente.',
+        title: 'No se pudo interpretar con Sienna',
+        description: error instanceof Error ? error.message : 'Puedes continuar con OCR o transcripción manual.',
         variant: 'destructive',
       });
     } finally {
       setOcrBusy(false);
+      setAiBusy(false);
     }
+  };
+
+  const applyAiInterpretation = () => {
+    if (!aiInterpretation?.suggestions) return;
+    const suggestions = aiInterpretation.suggestions;
+    setForm((current) => {
+      const relatedMemberId = suggestions.related_member_id || current.related_member_id || '';
+      const primaryMemberId = suggestions.primary_member_id || relatedMemberId || current.primary_member_id || '';
+      const linkedHeir = heirs.find((heir) => heir.sienna_member_id === relatedMemberId);
+      return {
+        ...current,
+        title: suggestions.title || current.title,
+        document_type: suggestions.document_type || current.document_type,
+        primary_member_id: primaryMemberId,
+        primary_person: suggestions.primary_person || memberNameById(primaryMemberId, membersById) || current.primary_person,
+        event_date: suggestions.event_date || current.event_date,
+        event_place: suggestions.event_place || current.event_place,
+        father_member_id: suggestions.father_member_id || current.father_member_id,
+        father_name: suggestions.father_name || memberNameById(suggestions.father_member_id, membersById) || current.father_name,
+        mother_member_id: suggestions.mother_member_id || current.mother_member_id,
+        mother_name: suggestions.mother_name || memberNameById(suggestions.mother_member_id, membersById) || current.mother_name,
+        spouse_member_id: suggestions.spouse_member_id || current.spouse_member_id,
+        spouse_name: suggestions.spouse_name || memberNameById(suggestions.spouse_member_id, membersById) || current.spouse_name,
+        related_member_id: relatedMemberId,
+        related_heir_name: suggestions.related_heir_name || linkedHeir?.heir_name || current.related_heir_name,
+        people_involved: Array.isArray(suggestions.people_involved) && suggestions.people_involved.length
+          ? suggestions.people_involved
+          : current.people_involved,
+        extracted_text: suggestions.extracted_text || aiInterpretation.summary || current.extracted_text,
+        notes: suggestions.notes || current.notes,
+      };
+    });
+    toast({ title: 'Sugerencias aplicadas', description: 'Revisa los campos antes de guardar en el expediente.' });
   };
 
   const saveDocument = async () => {
@@ -745,18 +805,58 @@ const DocumentosProbatorios = () => {
 
                 <Button
                   type="button"
-                  onClick={interpretImage}
-                  disabled={ocrBusy || !form.file_data || form.file_type === 'application/pdf'}
-                  className="w-full bg-legal-blue hover:bg-legal-blue/90"
+                  onClick={interpretWithAi}
+                  disabled={aiBusy || ocrBusy || (!form.file_data && !(form.extracted_text || form.notes)?.trim())}
+                  className="w-full justify-center bg-legal-blue text-white hover:bg-legal-blue/90"
                 >
-                  <FileSearch className="h-4 w-4 mr-2" />
-                  {ocrBusy ? `Interpretando ${ocrProgress}%` : 'Interpretar imagen'}
+                  {ocrBusy ? <FileSearch className="h-4 w-4 mr-2" /> : <Sparkles className="h-4 w-4 mr-2" />}
+                  {ocrBusy ? `Interpretando imagen ${ocrProgress}%` : aiBusy ? 'Sienna interpretando...' : 'Interpretar documento'}
                 </Button>
 
                 {form.file_type === 'application/pdf' && (
                   <p className="text-sm text-legal-gray">
-                    El PDF queda registrado, pero la interpretación automática está enfocada en imágenes de actas.
+                    El PDF queda registrado. Para interpretación con Sienna, pega una transcripción o texto leído del documento.
                   </p>
+                )}
+
+                {aiInterpretation && (
+                  <div className="space-y-3 rounded-md border border-legal-gold/25 bg-[#FFFDF7] p-4 text-sm shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="flex items-center gap-2 font-semibold text-legal-blue">
+                          <Bot className="h-4 w-4 text-legal-gold" />
+                          Lectura de Sienna
+                        </p>
+                        <p className="mt-1 text-gray-700">{aiInterpretation.summary}</p>
+                      </div>
+                      <Badge variant="outline" className="shrink-0">
+                        {aiInterpretation.mode === 'openai' ? 'IA' : 'Preliminar'} · {aiInterpretation.confidence}
+                      </Badge>
+                    </div>
+                    {aiInterpretation.warnings.length > 0 && (
+                      <ul className="space-y-1 text-xs text-amber-800">
+                        {aiInterpretation.warnings.map((warning, index) => (
+                          <li key={index}>• {warning}</li>
+                        ))}
+                      </ul>
+                    )}
+                    <div className="grid gap-2 text-xs text-gray-700 sm:grid-cols-2">
+                      <span><strong>Tipo:</strong> {aiInterpretation.suggestions.document_type || '—'}</span>
+                      <span><strong>Fecha:</strong> {aiInterpretation.suggestions.event_date || '—'}</span>
+                      <span><strong>Titular:</strong> {aiInterpretation.suggestions.primary_person || memberNameById(aiInterpretation.suggestions.primary_member_id, membersById) || '—'}</span>
+                      <span><strong>Lugar:</strong> {aiInterpretation.suggestions.event_place || '—'}</span>
+                    </div>
+                    {aiInterpretation.suggestions.extracted_text && (
+                      <div className="rounded border border-legal-blue/10 bg-white/70 p-2 text-xs text-gray-700">
+                        <strong className="text-legal-blue">Texto sugerido:</strong>{' '}
+                        {String(aiInterpretation.suggestions.extracted_text).slice(0, 420)}
+                        {String(aiInterpretation.suggestions.extracted_text).length > 420 ? '...' : ''}
+                      </div>
+                    )}
+                    <Button type="button" variant="secondary" size="sm" onClick={applyAiInterpretation}>
+                      Aplicar sugerencias al formulario
+                    </Button>
+                  </div>
                 )}
               </div>
 

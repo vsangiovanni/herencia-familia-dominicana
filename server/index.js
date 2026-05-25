@@ -2655,6 +2655,269 @@ async function buildSiennaAiCuriosities(user = null) {
   return { curiosities: curiosities.length ? curiosities : fallback, model, mode: curiosities.length ? 'openai' : 'fallback' };
 }
 
+const EVIDENCE_DOCUMENT_TYPES = [
+  'Acta de nacimiento',
+  'Acta de defunción',
+  'Acta de matrimonio',
+  'Documento de identidad',
+  'Sentencia o acto legal',
+  'Acta no clasificada',
+];
+
+const extractJsonObjectFromText = (value = '') => {
+  const text = String(value || '').trim();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) return null;
+    try {
+      return JSON.parse(match[0]);
+    } catch {
+      return null;
+    }
+  }
+};
+
+const sanitizeDocumentAiText = (value, max = 220) => String(value || '').replace(/\s+/g, ' ').trim().slice(0, max);
+
+const buildEvidenceDocumentAiSuggestions = (raw = {}, members = []) => {
+  const membersById = new Map(members.map((member) => [normalizedMemberId(member.id), member]));
+  const memberValue = (value) => {
+    const id = normalizedMemberId(value);
+    return id && membersById.has(id) ? membersById.get(id).id : null;
+  };
+  const memberName = (id) => {
+    const member = membersById.get(normalizedMemberId(id));
+    return member?.name || null;
+  };
+  const documentType = EVIDENCE_DOCUMENT_TYPES.includes(raw.document_type)
+    ? raw.document_type
+    : 'Acta no clasificada';
+  const people = Array.isArray(raw.people_involved)
+    ? raw.people_involved.map((item) => sanitizeDocumentAiText(item, 120)).filter(Boolean).slice(0, 12)
+    : [];
+  const suggestions = {
+    title: sanitizeDocumentAiText(raw.title, 180),
+    document_type: documentType,
+    primary_member_id: memberValue(raw.primary_member_id),
+    father_member_id: memberValue(raw.father_member_id),
+    mother_member_id: memberValue(raw.mother_member_id),
+    spouse_member_id: memberValue(raw.spouse_member_id),
+    related_member_id: memberValue(raw.related_member_id),
+    primary_person: sanitizeDocumentAiText(raw.primary_person, 160),
+    father_name: sanitizeDocumentAiText(raw.father_name, 160),
+    mother_name: sanitizeDocumentAiText(raw.mother_name, 160),
+    spouse_name: sanitizeDocumentAiText(raw.spouse_name, 160),
+    related_heir_name: sanitizeDocumentAiText(raw.related_heir_name, 160),
+    event_date: sanitizeDocumentAiText(raw.event_date, 80),
+    event_place: sanitizeDocumentAiText(raw.event_place, 180),
+    people_involved: people,
+    extracted_text: String(raw.extracted_text || raw.transcription || raw.summary || '').trim().slice(0, 6000),
+    notes: sanitizeDocumentAiText(raw.notes, 600),
+  };
+  if (suggestions.primary_member_id) suggestions.primary_person = memberName(suggestions.primary_member_id) || suggestions.primary_person;
+  if (suggestions.father_member_id) suggestions.father_name = memberName(suggestions.father_member_id) || suggestions.father_name;
+  if (suggestions.mother_member_id) suggestions.mother_name = memberName(suggestions.mother_member_id) || suggestions.mother_name;
+  if (suggestions.spouse_member_id) suggestions.spouse_name = memberName(suggestions.spouse_member_id) || suggestions.spouse_name;
+  if (!suggestions.title && suggestions.primary_person) suggestions.title = suggestions.document_type + ': ' + suggestions.primary_person;
+  return {
+    summary: sanitizeDocumentAiText(raw.summary, 800),
+    confidence: ['alta', 'media', 'baja'].includes(raw.confidence) ? raw.confidence : 'media',
+    warnings: Array.isArray(raw.warnings) ? raw.warnings.map((item) => sanitizeDocumentAiText(item, 220)).filter(Boolean).slice(0, 6) : [],
+    suggestions,
+  };
+};
+
+const fallbackEvidenceDocumentInterpretation = (draft = {}, members = []) => {
+  const text = String(draft.extracted_text || draft.notes || '').trim();
+  const normalized = normalizeAiText(text + ' ' + (draft.title || '') + ' ' + (draft.document_type || ''));
+  const documentType = /defuncion|fallec|muerte|deceso/.test(normalized)
+    ? 'Acta de defunción'
+    : (/nacimiento|nacio|nacido|birth/.test(normalized) ? 'Acta de nacimiento'
+      : (/matrimonio|casad|marriage/.test(normalized) ? 'Acta de matrimonio'
+        : (/cedula|identidad|pasaporte/.test(normalized) ? 'Documento de identidad' : (draft.document_type || 'Acta no clasificada'))));
+  const membersByName = new Map(members.map((member) => [compactAiName(member.name), member]));
+  const mentioned = members.filter((member) => normalized.includes(compactAiName(member.name))).slice(0, 8);
+  const primary = draft.related_member_id ? members.find((member) => normalizedMemberId(member.id) === normalizedMemberId(draft.related_member_id)) : mentioned[0];
+  return {
+    summary: text ? 'Lectura preliminar basada en la transcripción disponible. Revisa los campos antes de guardar.' : 'No hay texto suficiente para interpretar automáticamente.',
+    confidence: text ? 'baja' : 'baja',
+    warnings: ['Interpretación preliminar; confirma contra el documento antes de guardar.'],
+    suggestions: {
+      title: draft.title || (primary ? documentType + ': ' + primary.name : documentType),
+      document_type: documentType,
+      primary_member_id: primary?.id || null,
+      father_member_id: null,
+      mother_member_id: null,
+      spouse_member_id: null,
+      related_member_id: primary?.id || draft.related_member_id || null,
+      primary_person: primary?.name || draft.primary_person || '',
+      father_name: '',
+      mother_name: '',
+      spouse_name: '',
+      related_heir_name: draft.related_heir_name || '',
+      event_date: draft.event_date || '',
+      event_place: draft.event_place || '',
+      people_involved: mentioned.map((member) => member.name),
+      extracted_text: text || (draft.notes || ''),
+      notes: draft.notes || '',
+    },
+  };
+};
+
+async function interpretEvidenceDocumentWithAi(documentDraft = {}) {
+  const family = await loadSiennaFamilyBundle();
+  const members = family.members || [];
+  const apiKey = process.env.OPENAI_API_KEY;
+  const model = process.env.OPENAI_MODEL || SIENNA_AI_DEFAULT_MODEL;
+  if (!apiKey) {
+    return { ...fallbackEvidenceDocumentInterpretation(documentDraft, members), model, mode: 'fallback' };
+  }
+
+  const memberCatalog = members.slice(0, 180).map((member) => ({
+    id: member.id,
+    name: member.name,
+    birth: member.birth,
+    death: member.death,
+    parent_ids: member.parent_ids,
+    spouse_member_id: member.spouse_member_id,
+  }));
+  const promptPayload = {
+    document_draft: {
+      title: documentDraft.title || '',
+      document_type: documentDraft.document_type || '',
+      primary_member_id: documentDraft.primary_member_id || '',
+      event_date: documentDraft.event_date || '',
+      event_place: documentDraft.event_place || '',
+      related_member_id: documentDraft.related_member_id || '',
+      extracted_text: String(documentDraft.extracted_text || '').slice(0, 9000),
+      notes: String(documentDraft.notes || '').slice(0, 2500),
+      file_name: documentDraft.file_name || '',
+      file_type: documentDraft.file_type || '',
+    },
+    member_catalog: memberCatalog,
+    allowed_document_types: EVIDENCE_DOCUMENT_TYPES,
+      output_contract: {
+      summary: 'resumen breve de lo que parece ser el documento',
+      confidence: 'alta|media|baja',
+      warnings: ['dudas concretas sin decidir validez legal'],
+      title: 'titulo sugerido',
+      document_type: 'uno de allowed_document_types',
+      event_date: 'fecha textual detectada',
+      event_place: 'lugar detectado',
+      primary_member_id: 'id exacto del catalogo o null',
+      father_member_id: 'id exacto del catalogo o null',
+      mother_member_id: 'id exacto del catalogo o null',
+      spouse_member_id: 'id exacto del catalogo o null',
+      related_member_id: 'id exacto del catalogo o null',
+      primary_person: 'nombre leído si no hay id claro',
+      father_name: 'nombre leído si no hay id claro',
+      mother_name: 'nombre leído si no hay id claro',
+      spouse_name: 'nombre leído si no hay id claro',
+      people_involved: ['nombres detectados'],
+      extracted_text: 'transcripción o lectura estructurada de lo visible, apta para el campo Texto leído / transcripción',
+      notes: 'nota corta de interpretación para revisión humana',
+    },
+  };
+  const content = [
+    {
+      type: 'input_text',
+      text: JSON.stringify(promptPayload),
+    },
+  ];
+  if (String(documentDraft.file_type || '').startsWith('image/') && String(documentDraft.file_data || '').startsWith('data:image/')) {
+    content.push({
+      type: 'input_image',
+      image_url: documentDraft.file_data,
+      detail: 'low',
+    });
+  }
+
+  const response = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + apiKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      max_output_tokens: 900,
+      reasoning: { effort: 'low' },
+      text: {
+        verbosity: 'low',
+        format: {
+          type: 'json_schema',
+          name: 'evidence_document_interpretation',
+          schema: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              summary: { type: 'string' },
+              confidence: { type: 'string', enum: ['alta', 'media', 'baja'] },
+              warnings: { type: 'array', items: { type: 'string' } },
+              title: { type: 'string' },
+              document_type: { type: 'string', enum: EVIDENCE_DOCUMENT_TYPES },
+              event_date: { type: 'string' },
+              event_place: { type: 'string' },
+              primary_member_id: { type: ['string', 'null'] },
+              father_member_id: { type: ['string', 'null'] },
+              mother_member_id: { type: ['string', 'null'] },
+              spouse_member_id: { type: ['string', 'null'] },
+              related_member_id: { type: ['string', 'null'] },
+              primary_person: { type: 'string' },
+              father_name: { type: 'string' },
+              mother_name: { type: 'string' },
+              spouse_name: { type: 'string' },
+              related_heir_name: { type: 'string' },
+              people_involved: { type: 'array', items: { type: 'string' } },
+              extracted_text: { type: 'string' },
+              notes: { type: 'string' },
+            },
+            required: ['summary', 'confidence', 'warnings', 'title', 'document_type', 'event_date', 'event_place', 'primary_member_id', 'father_member_id', 'mother_member_id', 'spouse_member_id', 'related_member_id', 'primary_person', 'father_name', 'mother_name', 'spouse_name', 'related_heir_name', 'people_involved', 'extracted_text', 'notes'],
+          },
+        },
+      },
+      input: [
+        {
+          role: 'system',
+          content: [
+            'Interpreta documentos probatorios del expediente familiar Sangiovanni.',
+            'No decides herencia, filiación efectiva, validez legal ni confirmación final.',
+            'Solo extraes datos visibles o transcritos y sugieres vínculos contra el catálogo enviado.',
+            'Debes intentar llenar todos los campos del formulario: tipo, título, fecha, lugar, titular, padre, madre, cónyuge, personas involucradas, texto leído y notas.',
+            'El campo extracted_text debe contener la mejor transcripción o lectura estructurada de lo visible, incluyendo incertidumbres si la imagen está borrosa.',
+            'Si no estás seguro de una persona, deja el id en null y conserva el nombre leído.',
+            'Si un campo no se puede leer, déjalo vacío y explica la duda en warnings o notes.',
+            'Nunca inventes fechas, lugares, nombres ni relaciones.',
+            'Responde solo JSON válido según el contrato.',
+          ].join('\n'),
+        },
+        { role: 'user', content },
+      ],
+    }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    return {
+      ...fallbackEvidenceDocumentInterpretation(documentDraft, members),
+      model,
+      mode: 'fallback',
+      warning: payload?.error?.message || 'No se pudo consultar el modelo configurado.',
+    };
+  }
+  const rawText = payload.output_text
+    || payload.output?.flatMap((item) => item.content || []).map((part) => part.text || '').join('\n').trim()
+    || '';
+  const parsed = extractJsonObjectFromText(rawText) || {};
+  return {
+    ...buildEvidenceDocumentAiSuggestions(parsed, members),
+    model,
+    mode: 'openai',
+  };
+}
+
 async function syncMemberFiliation({
   memberId,
   parentId,
@@ -3867,6 +4130,17 @@ app.get('/api/evidence-documents/:id', requireAuth, async (req, res) => {
     return res.status(404).json({ message: 'Documento no encontrado' });
   }
   res.json({ document });
+});
+
+app.post('/api/evidence-documents/interpret-ai', requireAuth, async (req, res) => {
+  const draft = req.body?.document || {};
+  const hasText = String(draft.extracted_text || draft.notes || '').trim().length >= 12;
+  const hasImage = String(draft.file_type || '').startsWith('image/') && String(draft.file_data || '').startsWith('data:image/');
+  if (!hasText && !hasImage) {
+    return res.status(400).json({ message: 'Sube una imagen o agrega una transcripción para interpretar el documento.' });
+  }
+  const result = await interpretEvidenceDocumentWithAi(draft);
+  res.json(result);
 });
 
 app.post('/api/evidence-documents', requireAuth, requireEditor, async (req, res) => {

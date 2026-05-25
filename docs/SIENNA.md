@@ -59,6 +59,7 @@ Endpoints canónicos actuales:
 | `GET /api/sienna-findings` | Hallazgos accionables por miembro |
 | `POST /api/sienna-ai-assistant` | Orientación IA read-only. No expone escritura ni permite modificar reparto, árbol o documentos |
 | `GET /api/sienna-ai-curiosities` | Curiosidades del Dashboard generadas por backend/IA con contexto amplio del árbol; el usuario asociado pesa más, pero no limita la familia |
+| `POST /api/evidence-documents/interpret-ai` | Interpretación asistida de documentos probatorios. Sugiere clasificación/campos contra catálogo backend, pero no guarda ni confirma herencia automáticamente |
 
 ## Estado del release 2026-05-22
 
@@ -66,6 +67,8 @@ Endpoints canónicos actuales:
 - Ajuste local 2026-05-25: las curiosidades del Dashboard ya no se limitan a familiares cercanos; el backend entrega a la IA un índice amplio del árbol para buscar patrones difíciles de percibir.
 - Auditoria IA 2026-05-25: las pantallas con IA son `/sienna/asistente` y el bloque de curiosidades del Dashboard. Ambas consumen endpoints backend; React no decide hechos sucesorales ni genealogicos.
 - Ajuste local 2026-05-25: el chat de Sienna agrega un resolvedor backend de hechos familiares para preguntas tipo `madre/padre/hijos/hermanos/cónyuge de [persona]`, incluyendo nacimiento o defunción cuando el usuario lo pide. Tambien expone la fecha del miembro autenticado y resuelve diferencias de edad contra personas mencionadas desde el backend. La IA conversa, pero el backend resuelve y confirma el dato.
+- Ajuste local 2026-05-25: Documentos Probatorios incorpora `Interpretar con Sienna`; la IA puede leer imagen/transcripción, sugerir tipo, fecha, lugar, texto leído y vínculos contra miembros del árbol, pero el usuario debe aplicar/revisar y el guardado sigue pasando por backend/can_edit.
+- Refinamiento local 2026-05-25: al usar `Interpretar con Sienna` sobre imagen, el frontend ejecuta OCR primero, llena el formulario con esa base y luego manda OCR + imagen a IA para mejorar/completar sin pisar campos buenos.
 - `/sienna/miembros-arbol` carga el workspace liviano para totales/listas y las fotos por separado mediante herederos confirmados con media; esto evita bloquear las tarjetas superiores por archivos pesados.
 - Las tablas/listas de miembros en Sienna se presentan en orden alfabetico cuando son tablas de consulta. El arbol conserva su orden logico propio para no romper la genealogia visual.
 - `/sienna/dobles-linajes` usa los casos calculados por API y ordena la auditoria por nombre de miembro.

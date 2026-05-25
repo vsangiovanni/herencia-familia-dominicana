@@ -3178,6 +3178,243 @@ function build_sienna_ai_curiosities(?array $user = null): array {
   ];
 }
 
+function evidence_document_types(): array {
+  return [
+    'Acta de nacimiento',
+    'Acta de defunción',
+    'Acta de matrimonio',
+    'Documento de identidad',
+    'Sentencia o acto legal',
+    'Acta no clasificada',
+  ];
+}
+
+function extract_json_object_from_text(string $value): ?array {
+  $text = trim($value);
+  if ($text === '') return null;
+  $decoded = json_decode($text, true);
+  if (is_array($decoded)) return $decoded;
+  if (preg_match('/\{[\s\S]*\}/', $text, $m)) {
+    $decoded = json_decode($m[0], true);
+    if (is_array($decoded)) return $decoded;
+  }
+  return null;
+}
+
+function sanitize_document_ai_text($value, int $max = 220): string {
+  return mb_substr(trim(preg_replace('/\s+/u', ' ', (string)($value ?? ''))), 0, $max, 'UTF-8');
+}
+
+function build_evidence_document_ai_suggestions(array $raw, array $members): array {
+  $membersById = [];
+  foreach ($members as $member) $membersById[normalized_member_id($member['id'] ?? '')] = $member;
+  $memberValue = function ($value) use ($membersById) {
+    $id = normalized_member_id((string)($value ?? ''));
+    return $id && isset($membersById[$id]) ? ($membersById[$id]['id'] ?? null) : null;
+  };
+  $memberName = function ($id) use ($membersById) {
+    $key = normalized_member_id((string)($id ?? ''));
+    return $membersById[$key]['name'] ?? null;
+  };
+  $allowedTypes = evidence_document_types();
+  $documentType = in_array($raw['document_type'] ?? '', $allowedTypes, true) ? $raw['document_type'] : 'Acta no clasificada';
+  $people = [];
+  if (is_array($raw['people_involved'] ?? null)) {
+    foreach ($raw['people_involved'] as $item) {
+      $clean = sanitize_document_ai_text($item, 120);
+      if ($clean !== '') $people[] = $clean;
+      if (count($people) >= 12) break;
+    }
+  }
+  $suggestions = [
+    'title' => sanitize_document_ai_text($raw['title'] ?? '', 180),
+    'document_type' => $documentType,
+    'primary_member_id' => $memberValue($raw['primary_member_id'] ?? null),
+    'father_member_id' => $memberValue($raw['father_member_id'] ?? null),
+    'mother_member_id' => $memberValue($raw['mother_member_id'] ?? null),
+    'spouse_member_id' => $memberValue($raw['spouse_member_id'] ?? null),
+    'related_member_id' => $memberValue($raw['related_member_id'] ?? null),
+    'primary_person' => sanitize_document_ai_text($raw['primary_person'] ?? '', 160),
+    'father_name' => sanitize_document_ai_text($raw['father_name'] ?? '', 160),
+    'mother_name' => sanitize_document_ai_text($raw['mother_name'] ?? '', 160),
+    'spouse_name' => sanitize_document_ai_text($raw['spouse_name'] ?? '', 160),
+    'related_heir_name' => sanitize_document_ai_text($raw['related_heir_name'] ?? '', 160),
+    'event_date' => sanitize_document_ai_text($raw['event_date'] ?? '', 80),
+    'event_place' => sanitize_document_ai_text($raw['event_place'] ?? '', 180),
+    'people_involved' => $people,
+    'extracted_text' => mb_substr(trim((string)($raw['extracted_text'] ?? $raw['transcription'] ?? $raw['summary'] ?? '')), 0, 6000, 'UTF-8'),
+    'notes' => sanitize_document_ai_text($raw['notes'] ?? '', 600),
+  ];
+  if ($suggestions['primary_member_id']) $suggestions['primary_person'] = $memberName($suggestions['primary_member_id']) ?: $suggestions['primary_person'];
+  if ($suggestions['father_member_id']) $suggestions['father_name'] = $memberName($suggestions['father_member_id']) ?: $suggestions['father_name'];
+  if ($suggestions['mother_member_id']) $suggestions['mother_name'] = $memberName($suggestions['mother_member_id']) ?: $suggestions['mother_name'];
+  if ($suggestions['spouse_member_id']) $suggestions['spouse_name'] = $memberName($suggestions['spouse_member_id']) ?: $suggestions['spouse_name'];
+  if ($suggestions['title'] === '' && $suggestions['primary_person'] !== '') $suggestions['title'] = $suggestions['document_type'] . ': ' . $suggestions['primary_person'];
+  $warnings = [];
+  if (is_array($raw['warnings'] ?? null)) {
+    foreach ($raw['warnings'] as $item) {
+      $clean = sanitize_document_ai_text($item, 220);
+      if ($clean !== '') $warnings[] = $clean;
+      if (count($warnings) >= 6) break;
+    }
+  }
+  return [
+    'summary' => sanitize_document_ai_text($raw['summary'] ?? '', 800),
+    'confidence' => in_array($raw['confidence'] ?? '', ['alta', 'media', 'baja'], true) ? $raw['confidence'] : 'media',
+    'warnings' => $warnings,
+    'suggestions' => $suggestions,
+  ];
+}
+
+function fallback_evidence_document_interpretation(array $draft, array $members): array {
+  $text = trim((string)($draft['extracted_text'] ?? $draft['notes'] ?? ''));
+  $normalized = normalize_ai_text($text . ' ' . ($draft['title'] ?? '') . ' ' . ($draft['document_type'] ?? ''));
+  $documentType = preg_match('/defuncion|fallec|muerte|deceso/i', $normalized)
+    ? 'Acta de defunción'
+    : (preg_match('/nacimiento|nacio|nacido|birth/i', $normalized)
+      ? 'Acta de nacimiento'
+      : (preg_match('/matrimonio|casad|marriage/i', $normalized)
+        ? 'Acta de matrimonio'
+        : (preg_match('/cedula|identidad|pasaporte/i', $normalized) ? 'Documento de identidad' : (($draft['document_type'] ?? '') ?: 'Acta no clasificada'))));
+  $mentioned = [];
+  foreach ($members as $member) {
+    $name = compact_ai_name($member['name'] ?? '');
+    if ($name !== '' && str_contains($normalized, $name)) $mentioned[] = $member;
+    if (count($mentioned) >= 8) break;
+  }
+  $primary = null;
+  if (!empty($draft['related_member_id'])) {
+    foreach ($members as $member) {
+      if (normalized_member_id($member['id'] ?? '') === normalized_member_id($draft['related_member_id'])) {
+        $primary = $member;
+        break;
+      }
+    }
+  }
+  if (!$primary && count($mentioned)) $primary = $mentioned[0];
+  return [
+    'summary' => $text !== '' ? 'Lectura preliminar basada en la transcripción disponible. Revisa los campos antes de guardar.' : 'No hay texto suficiente para interpretar automáticamente.',
+    'confidence' => 'baja',
+    'warnings' => ['Interpretación preliminar; confirma contra el documento antes de guardar.'],
+    'suggestions' => [
+      'title' => ($draft['title'] ?? '') ?: ($primary ? $documentType . ': ' . ($primary['name'] ?? '') : $documentType),
+      'document_type' => $documentType,
+      'primary_member_id' => $primary['id'] ?? null,
+      'father_member_id' => null,
+      'mother_member_id' => null,
+      'spouse_member_id' => null,
+      'related_member_id' => $primary['id'] ?? ($draft['related_member_id'] ?? null),
+      'primary_person' => $primary['name'] ?? ($draft['primary_person'] ?? ''),
+      'father_name' => '',
+      'mother_name' => '',
+      'spouse_name' => '',
+      'related_heir_name' => $draft['related_heir_name'] ?? '',
+      'event_date' => $draft['event_date'] ?? '',
+      'event_place' => $draft['event_place'] ?? '',
+      'people_involved' => array_map(fn($member) => $member['name'] ?? '', $mentioned),
+      'extracted_text' => $text !== '' ? $text : ($draft['notes'] ?? ''),
+      'notes' => $draft['notes'] ?? '',
+    ],
+  ];
+}
+
+function interpret_evidence_document_with_ai(array $documentDraft): array {
+  $family = fetch_sienna_family_bundle();
+  $members = $family['members'] ?? [];
+  $apiKey = env_value('OPENAI_API_KEY');
+  $model = env_value('OPENAI_MODEL') ?: sienna_ai_default_model();
+  if (!$apiKey || !function_exists('curl_init')) {
+    return array_merge(fallback_evidence_document_interpretation($documentDraft, $members), ['model' => $model, 'mode' => 'fallback']);
+  }
+  $memberCatalog = array_slice(array_map(fn($member) => [
+    'id' => $member['id'] ?? null,
+    'name' => $member['name'] ?? '',
+    'birth' => $member['birth'] ?? null,
+    'death' => $member['death'] ?? null,
+    'parent_ids' => $member['parent_ids'] ?? [],
+    'spouse_member_id' => $member['spouse_member_id'] ?? null,
+  ], $members), 0, 180);
+  $content = [[
+    'type' => 'input_text',
+    'text' => json_encode([
+      'document_draft' => [
+        'title' => $documentDraft['title'] ?? '',
+        'document_type' => $documentDraft['document_type'] ?? '',
+        'primary_member_id' => $documentDraft['primary_member_id'] ?? '',
+        'event_date' => $documentDraft['event_date'] ?? '',
+        'event_place' => $documentDraft['event_place'] ?? '',
+        'related_member_id' => $documentDraft['related_member_id'] ?? '',
+        'extracted_text' => mb_substr((string)($documentDraft['extracted_text'] ?? ''), 0, 9000, 'UTF-8'),
+        'notes' => mb_substr((string)($documentDraft['notes'] ?? ''), 0, 2500, 'UTF-8'),
+        'file_name' => $documentDraft['file_name'] ?? '',
+        'file_type' => $documentDraft['file_type'] ?? '',
+      ],
+      'member_catalog' => $memberCatalog,
+      'allowed_document_types' => evidence_document_types(),
+    ], JSON_UNESCAPED_UNICODE),
+  ]];
+  if (str_starts_with((string)($documentDraft['file_type'] ?? ''), 'image/') && str_starts_with((string)($documentDraft['file_data'] ?? ''), 'data:image/')) {
+    $content[] = [
+      'type' => 'input_image',
+      'image_url' => $documentDraft['file_data'],
+      'detail' => 'low',
+    ];
+  }
+  $payload = [
+    'model' => $model,
+    'max_output_tokens' => 900,
+    'reasoning' => ['effort' => 'low'],
+    'text' => ['verbosity' => 'low'],
+    'input' => [
+      [
+        'role' => 'system',
+        'content' => implode("\n", [
+          'Interpreta documentos probatorios del expediente familiar Sangiovanni.',
+          'No decides herencia, filiación efectiva, validez legal ni confirmación final.',
+          'Solo extraes datos visibles o transcritos y sugieres vínculos contra el catálogo enviado.',
+          'Debes intentar llenar todos los campos del formulario: tipo, título, fecha, lugar, titular, padre, madre, cónyuge, personas involucradas, texto leído y notas.',
+          'El campo extracted_text debe contener la mejor transcripción o lectura estructurada de lo visible, incluyendo incertidumbres si la imagen está borrosa.',
+          'Si no estás seguro de una persona, deja el id en null y conserva el nombre leído.',
+          'Si un campo no se puede leer, déjalo vacío y explica la duda en warnings o notes.',
+          'Devuelve solo JSON con: summary, confidence, warnings, title, document_type, event_date, event_place, primary_member_id, father_member_id, mother_member_id, spouse_member_id, related_member_id, primary_person, father_name, mother_name, spouse_name, related_heir_name, people_involved, extracted_text, notes.',
+        ]),
+      ],
+      ['role' => 'user', 'content' => $content],
+    ],
+  ];
+  $ch = curl_init('https://api.openai.com/v1/responses');
+  curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_POST => true,
+    CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $apiKey, 'Content-Type: application/json'],
+    CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
+    CURLOPT_TIMEOUT => 60,
+  ]);
+  $raw = curl_exec($ch);
+  $status = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+  curl_close($ch);
+  $data = json_decode($raw ?: '{}', true);
+  if ($status < 200 || $status >= 300) {
+    return array_merge(fallback_evidence_document_interpretation($documentDraft, $members), [
+      'model' => $model,
+      'mode' => 'fallback',
+      'warning' => $data['error']['message'] ?? 'No se pudo consultar el modelo configurado.',
+    ]);
+  }
+  $text = $data['output_text'] ?? '';
+  if (!$text && isset($data['output']) && is_array($data['output'])) {
+    $parts = [];
+    foreach ($data['output'] as $item) {
+      foreach (($item['content'] ?? []) as $part) {
+        if (isset($part['text'])) $parts[] = $part['text'];
+      }
+    }
+    $text = trim(implode("\n", $parts));
+  }
+  $parsed = extract_json_object_from_text($text ?: '') ?? [];
+  return array_merge(build_evidence_document_ai_suggestions($parsed, $members), ['model' => $model, 'mode' => 'openai']);
+}
+
 function sync_regular_user_page_access(string $path): void {
   $page = query_one('SELECT id FROM pages WHERE path = :path LIMIT 1', ['path' => $path]);
   if (!$page) {
@@ -4449,6 +4686,18 @@ try {
     $doc['confirms_heir'] = (bool)$doc['confirms_heir'];
     $doc['people_involved'] = $doc['people_involved'] ? json_decode($doc['people_involved'], true) : [];
     json_response(['document' => $doc]);
+  }
+
+  if ($method === 'POST' && $path === '/evidence-documents/interpret-ai') {
+    require_user();
+    $draft = body()['document'] ?? [];
+    if (!is_array($draft)) $draft = [];
+    $hasText = mb_strlen(trim((string)($draft['extracted_text'] ?? $draft['notes'] ?? '')), 'UTF-8') >= 12;
+    $hasImage = str_starts_with((string)($draft['file_type'] ?? ''), 'image/') && str_starts_with((string)($draft['file_data'] ?? ''), 'data:image/');
+    if (!$hasText && !$hasImage) {
+      json_response(['message' => 'Sube una imagen o agrega una transcripción para interpretar el documento.'], 400);
+    }
+    json_response(interpret_evidence_document_with_ai($draft));
   }
 
   if ($method === 'POST' && $path === '/evidence-documents') {

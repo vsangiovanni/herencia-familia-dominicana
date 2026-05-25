@@ -173,6 +173,16 @@ export interface SiennaAiCuriositiesResponse {
   mode: "openai" | "fallback";
 }
 
+export interface EvidenceDocumentAiInterpretation {
+  summary: string;
+  confidence: "alta" | "media" | "baja";
+  warnings: string[];
+  model: string;
+  mode: "openai" | "fallback";
+  warning?: string | null;
+  suggestions: Partial<EvidenceDocument>;
+}
+
 export type SiennaConversationMessage = {
   role: "user" | "assistant";
   content: string;
@@ -509,6 +519,11 @@ export const api = {
     request<{ ok: boolean }>("/api/evidence-documents", {
       method: "POST",
       body: JSON.stringify(data),
+    }),
+  interpretEvidenceDocumentAi: (document: Partial<EvidenceDocument>) =>
+    request<EvidenceDocumentAiInterpretation>("/api/evidence-documents/interpret-ai", {
+      method: "POST",
+      body: JSON.stringify({ document }),
     }),
   deleteEvidenceDocument: (id: string) =>
     request<{ ok: boolean }>(`/api/evidence-documents/${id}`, { method: "DELETE" }),
