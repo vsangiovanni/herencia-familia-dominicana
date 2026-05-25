@@ -27,6 +27,7 @@ import { Calculator, ClipboardCheck, FileText, GitBranch, GitMerge, Landmark, Ma
 import { Link } from 'react-router-dom';
 import { buildWhyIInheritText, formatMoney as formatMoneyExplain, formatPercent as formatPercentExplain } from '@/lib/siennaHeirExplain';
 import { buildInheritancePlanFromApiRows } from '@/lib/siennaCalculation';
+import { useAuth } from '@/context/AuthContext';
 
 type TreeMember = SiennaFamilyMember & { children: TreeMember[] };
 
@@ -375,6 +376,7 @@ const ClassicNode = ({
 };
 
 const ArbolGenealogicoSienna = () => {
+  const { canEdit } = useAuth();
   const queryClient = useQueryClient();
   const { data: workspace, isLoading, isFetching, refetch } = useSiennaWorkspace(true);
   const members = workspace?.members ?? [];
@@ -503,15 +505,15 @@ const ArbolGenealogicoSienna = () => {
     centerTree(nextZoom);
   };
 
-  const total = useMemo(
-    () => heirs.reduce((sum, heir) => sum + Number(heir.inheritance_amount || 0), 0),
-    [heirs]
-  );
   const { data: realtimeCalculationData, isFetching: isFetchingCalculation } = useSiennaCalculation(
     estateAmount,
     lawyerFeePercentage
   );
   const realtimeCalculation = realtimeCalculationData?.calculation;
+  const total = useMemo(
+    () => (realtimeCalculation?.active_heirs ?? []).reduce((sum, row) => sum + Number(row.amount || 0), 0),
+    [realtimeCalculation?.active_heirs]
+  );
   const {
     grossAmount: estateAmountNumber = 0,
     lawyerFeePercentage: lawyerFeePercentageNumber = 0,
@@ -580,7 +582,7 @@ const ArbolGenealogicoSienna = () => {
       return {
         heir,
         share,
-        amount: totalEstate > 0 ? calculationRowsByMemberId.get(share.member.id)?.amount || 0 : Number(heir?.inheritance_amount || 0),
+        amount: Number(calculationRowsByMemberId.get(share.member.id)?.amount || 0),
       };
     }).sort((left, right) => left.share.member.name.localeCompare(right.share.member.name, 'es', { sensitivity: 'base' }));
   }, [distributableEstateAmount, heirsByMemberId, heirsByName, inheritancePlan, realtimeCalculation?.active_heirs]);
@@ -599,6 +601,14 @@ const ArbolGenealogicoSienna = () => {
   }, [inheritancePlan.activeHeirs.length, members]);
 
   const applyEstateCalculation = async () => {
+    if (!canEdit) {
+      toast({
+        title: 'Acceso restringido',
+        description: 'Solo usuarios con permiso can_edit pueden guardar pagos.',
+        variant: 'destructive',
+      });
+      return;
+    }
     const totalEstate = distributableEstateAmount;
     if (!totalEstate || totalEstate <= 0) {
       toast({ title: 'Monto requerido', description: 'Indica el monto total de la herencia para distribuirlo después de abogados.' });
@@ -1114,16 +1124,18 @@ const ArbolGenealogicoSienna = () => {
                   % sobre el bruto. El default global se cambia solo en Settings.
                 </p>
               </div>
-              <Button onClick={applyEstateCalculation} disabled={paymentSaving || isFetchingCalculation} className="bg-legal-gold hover:bg-legal-gold/90 text-white">
-                <Save className="mr-2 h-4 w-4" />
-                {isFetchingCalculation ? 'Calculando...' : 'Calcular y guardar pagos'}
-              </Button>
+              {canEdit && (
+                <Button onClick={applyEstateCalculation} disabled={paymentSaving || isFetchingCalculation} className="bg-legal-gold hover:bg-legal-gold/90 text-white">
+                  <Save className="mr-2 h-4 w-4" />
+                  {isFetchingCalculation ? 'Calculando...' : 'Calcular y guardar pagos'}
+                </Button>
+              )}
             </div>
 
             <div className="grid gap-3 md:grid-cols-3">
               <div className="rounded-md border border-legal-blue/15 bg-white p-3">
                 <p className="text-xs uppercase text-legal-gray">Monto bruto</p>
-                <p className="font-bold text-legal-blue">{formatMoney(estateAmountNumber || total)}</p>
+                <p className="font-bold text-legal-blue">{formatMoney(estateAmountNumber)}</p>
               </div>
               <div className="rounded-md border border-legal-blue/15 bg-white p-3">
                 <p className="text-xs uppercase text-legal-gray">Firma de abogados</p>
@@ -1132,7 +1144,7 @@ const ArbolGenealogicoSienna = () => {
               </div>
               <div className="rounded-md border border-legal-blue/15 bg-white p-3">
                 <p className="text-xs uppercase text-legal-gray">Neto a distribuir</p>
-                <p className="font-bold text-legal-blue">{formatMoney(distributableEstateAmount || total)}</p>
+                <p className="font-bold text-legal-blue">{formatMoney(distributableEstateAmount)}</p>
               </div>
             </div>
 
@@ -1163,8 +1175,7 @@ const ArbolGenealogicoSienna = () => {
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   {inheritancePlan.activeHeirs.map((share) => {
                     const amount =
-                      realtimeCalculation?.active_heirs.find((row) => row.member_id === share.member.id)?.amount ??
-                      Number(heirsByName.get(normalizeName(share.member.name))?.inheritance_amount || 0);
+                      Number(realtimeCalculation?.active_heirs.find((row) => row.member_id === share.member.id)?.amount || 0);
                     return (
                       <div key={share.member.id} className="rounded-md border border-legal-gold/25 bg-legal-gold/5 p-3">
                         <div className="flex items-center gap-2">
@@ -1261,7 +1272,7 @@ const ArbolGenealogicoSienna = () => {
                 El árbol se arma desde los miembros guardados en base de datos. Al agregar una persona y seleccionar su nodo superior, la rama se reacomoda automáticamente.
               </p>
               <p className="text-sm text-legal-gray">
-                <strong>Neto usado en pantalla:</strong> {formatMoney(distributableEstateAmount || total)}. Miembros en árbol: {members.length}.
+                <strong>Neto usado en pantalla:</strong> {formatMoney(distributableEstateAmount)}. Miembros en árbol: {members.length}.
               </p>
             </div>
 

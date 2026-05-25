@@ -911,12 +911,7 @@ const Dashboard = () => {
   const { data: aiCuriositiesData } = useSiennaAiCuriosities();
   const summary = analysisSummary?.summary;
   const realtimeCalculation = realtimeCalculationData?.calculation;
-  const calculatedFinalHeirsTotal =
-    realtimeCalculation?.active_heir_count ??
-    realtimeCalculation?.active_heirs?.length ??
-    summary?.active_heir_count ??
-    confirmedHeirsData?.heirs?.length ??
-    0;
+  const calculatedFinalHeirsTotal = Number(summary?.active_heir_count ?? 0);
   const recognizedRegistryTotal = confirmedHeirsData?.heirs?.length ?? 0;
 
   const firstName = siennaPersonalization.firstName;
@@ -1025,26 +1020,8 @@ const Dashboard = () => {
     return chooseVariant(`${firstName}-${priority.label}-curiosity-${dashboardVisitSeed}`, curiosityFacts);
   }, [curiosityCards, curiosityFacts, dashboardVisitSeed, firstName, priority.label]);
 
-  const fallbackCuriosityCards = useMemo(() => {
-    const facts = buildLegacyCuriosities({
-      members: familyData?.members ?? [],
-      unions: familyData?.unions ?? [],
-      parentLinks: familyData?.parent_links ?? [],
-      seed: dashboardVisitSeed,
-    });
-    const offset = Math.abs(Array.from(dashboardVisitSeed).reduce((total, char) => total + char.charCodeAt(0), 0)) % Math.max(1, facts.length);
-    return [...facts.slice(offset), ...facts.slice(0, offset)].slice(0, 3);
-  }, [dashboardVisitSeed, familyData?.members, familyData?.parent_links, familyData?.unions]);
-
-  const aiCuriosityCards = aiCuriositiesData?.mode === 'openai'
-    ? aiCuriositiesData.curiosities?.filter(Boolean).slice(0, 3) ?? []
-    : [];
-  const displayCuriosityCards = aiCuriosityCards.length
-    ? aiCuriosityCards
-    : curiosityCards.length
-      ? curiosityCards
-      : fallbackCuriosityCards;
-  const curiosityOrigin = aiCuriosityCards.length ? 'nano' : 'fallback';
+  const displayCuriosityCards = aiCuriositiesData?.curiosities?.filter(Boolean).slice(0, 3) ?? [];
+  const curiosityOrigin = aiCuriositiesData?.mode === 'openai' ? 'nano' : 'backend';
   const curiosityCardClassName = curiosityOrigin === 'nano'
     ? 'border-[#2E8B57]/55 bg-[#F3FBF6] dark:border-[#3FA37C]/45 dark:bg-[#10251D]'
     : 'border-[#355C9A]/45 bg-[#F3F7FD] dark:border-[#5F8BD4]/40 dark:bg-[#101B2E]';

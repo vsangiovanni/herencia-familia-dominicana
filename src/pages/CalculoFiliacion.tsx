@@ -149,27 +149,16 @@ const CalculoFiliacion = () => {
   );
 
   const totalsByHeir = useMemo(() => {
-    const totals = new Map<string, { heir: string; memberId?: string; percentage: number; amount: number; routes: number }>();
-
-    distributionLines.forEach((item) => {
-      const current = totals.get(item.heir) || {
-        heir: item.heir,
-        memberId: item.memberId,
-        percentage: 0,
-        amount: 0,
-        routes: 0,
-      };
-
-      current.memberId = current.memberId || item.memberId;
-
-      current.percentage += item.percentage;
-      current.amount += Number(realtimeCalculation?.estate.distributableAmount || estateAmount) * (item.percentage / 100);
-      current.routes += 1;
-      totals.set(item.heir, current);
-    });
-
-  return Array.from(totals.values()).sort((a, b) => a.heir.localeCompare(b.heir, 'es', { sensitivity: 'base' }));
-  }, [distributionLines, estateAmount, realtimeCalculation?.estate.distributableAmount]);
+    return (realtimeCalculation?.active_heirs ?? [])
+      .map((row) => ({
+        heir: row.heir_name,
+        memberId: row.member_id,
+        percentage: Number(row.share_percent || 0),
+        amount: Number(row.amount || 0),
+        routes: row.source_breakdown?.reduce((total, segment) => total + Math.max(1, segment.routes?.length || 0), 0) || 1,
+      }))
+      .sort((a, b) => a.heir.localeCompare(b.heir, 'es', { sensitivity: 'base' }));
+  }, [realtimeCalculation?.active_heirs]);
 
   const totalsByLine = useMemo(() => {
     const totals = new Map<string, number>();
@@ -201,8 +190,8 @@ const CalculoFiliacion = () => {
     setHeirTotalsPage((current) => Math.min(current, heirTotalsTotalPages));
   }, [heirTotalsTotalPages]);
 
-  const totalPercentage = realtimeCalculation?.total_share ?? totalsByHeir.reduce((sum, item) => sum + item.percentage, 0);
-  const totalAmount = realtimeCalculation?.active_heirs.reduce((sum, item) => sum + Number(item.amount), 0) ?? totalsByHeir.reduce((sum, item) => sum + item.amount, 0);
+  const totalPercentage = Number(realtimeCalculation?.total_share ?? 0);
+  const totalAmount = (realtimeCalculation?.active_heirs ?? []).reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const undistributedPercentage = Math.max(0, 100 - totalPercentage);
   const childrenMissingLinks = useMemo(
     () =>

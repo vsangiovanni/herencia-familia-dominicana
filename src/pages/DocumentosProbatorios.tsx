@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Tesseract from 'tesseract.js';
 import { useQueryClient } from '@tanstack/react-query';
@@ -35,7 +35,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from '@/components/ui/use-toast';
 import { readFileAsDataUrl } from '@/lib/readFileAsDataUrl';
-import { Archive, ChevronLeft, ChevronRight, Eye, FileImage, FileSearch, RefreshCcw, Save, Trash2 } from 'lucide-react';
+import { Archive, ChevronLeft, ChevronRight, Eye, FileImage, FilePlus2, FileSearch, RefreshCcw, Save, Trash2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 type DocumentForm = Omit<EvidenceDocument, 'id' | 'created_at' | 'updated_at'>;
@@ -176,7 +176,7 @@ const findSpousePartner = (
 const DocumentosProbatorios = () => {
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
-  const { isAdmin } = useAuth();
+  const { canEdit } = useAuth();
   const { data: workspace, refetch } = useSiennaWorkspace(false);
   const { data: heirsWithPhotos } = useConfirmedHeirs(true);
   const members = workspace?.members ?? [];
@@ -206,6 +206,7 @@ const DocumentosProbatorios = () => {
   const [registryPageSize, setRegistryPageSize] = useState(10);
   const [viewerDocumentId, setViewerDocumentId] = useState<string | null>(null);
   const [appliedPrefillKey, setAppliedPrefillKey] = useState('');
+  const documentFormRef = useRef<HTMLDivElement>(null);
 
   const selectedHeir = useMemo(
     () => heirs.find((heir) => heir.heir_name === form.related_heir_name),
@@ -268,7 +269,7 @@ const DocumentosProbatorios = () => {
     return keys;
   }, [documents, resolveDocumentHeir]);
   const heirsWithoutDocuments = useMemo(
-    () => heirsSortedByName.filter((heir) => !documentedHeirKeys.has(heir.id)),
+    () => heirsSortedByName.filter((heir) => heir.sienna_member_id && !documentedHeirKeys.has(heir.id)),
     [documentedHeirKeys, heirsSortedByName]
   );
   const knownPeople = useMemo(() => membersSortedByName.map((member) => member.name), [membersSortedByName]);
@@ -326,11 +327,11 @@ const DocumentosProbatorios = () => {
       document_type: isHeirSupport ? 'Acta de nacimiento' : current.document_type || 'Acta no clasificada',
       related_member_id: requestedMemberId,
       related_heir_name: linkedHeir?.heir_name || current.related_heir_name || '',
-      confirms_heir: isHeirSupport ? true : current.confirms_heir,
+      confirms_heir: false,
       notes:
         current.notes ||
         (isHeirSupport
-          ? 'Soporte cargado desde Explicación de Herederos para validar el vínculo hereditario.'
+          ? 'Soporte cargado desde Explicación de Herederos para revisión del vínculo hereditario.'
           : current.notes),
     }));
     setAppliedPrefillKey(prefillKey);
@@ -441,6 +442,14 @@ const DocumentosProbatorios = () => {
   };
 
   const saveDocument = async () => {
+    if (!canEdit) {
+      toast({
+        title: 'Acceso restringido',
+        description: 'Solo usuarios con permiso can_edit pueden modificar el expediente.',
+        variant: 'destructive',
+      });
+      return;
+    }
     if (!form.document_type || !form.related_member_id) {
       toast({ title: 'Faltan datos', description: 'Tipo de documento y miembro relacionado son obligatorios.' });
       return;
@@ -521,12 +530,56 @@ const DocumentosProbatorios = () => {
     });
   };
 
-  const deleteDocument = async (id?: string) => {
-    if (!id) return;
-    if (!isAdmin) {
+  const prepareHeirSupport = (heir: ConfirmedHeir) => {
+    if (!canEdit) {
       toast({
         title: 'Acceso restringido',
-        description: 'Solo los administradores pueden eliminar documentos probatorios.',
+        description: 'Solo usuarios con permiso can_edit pueden cargar soporte documental.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const linkedMemberId = heir.sienna_member_id || '';
+    if (!linkedMemberId) {
+      toast({
+        title: 'Falta vínculo al árbol',
+        description: 'Este registro debe vincularse a un miembro del árbol antes de cargar soporte.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    const autoRelatives = linkedMemberId ? getAutoLinkedRelatives(linkedMemberId) : null;
+
+    setForm({
+      ...emptyForm,
+      ...(autoRelatives || {}),
+      title: `Acta de nacimiento: ${heir.heir_name}`,
+      document_type: 'Acta de nacimiento',
+      primary_member_id: autoRelatives?.primary_member_id || linkedMemberId,
+      primary_person: autoRelatives?.primary_person || heir.heir_name,
+      related_member_id: linkedMemberId,
+      related_heir_name: heir.heir_name,
+      confirms_heir: false,
+      notes: 'Soporte precargado desde Registro Documental para revisión del vínculo hereditario.',
+    });
+
+    window.requestAnimationFrame(() => {
+      documentFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    toast({
+      title: 'Miembro cargado',
+      description: `${heir.heir_name} quedó preseleccionado para cargar soporte.`,
+    });
+  };
+
+  const deleteDocument = async (id?: string) => {
+    if (!id) return;
+    if (!canEdit) {
+      toast({
+        title: 'Acceso restringido',
+        description: 'Solo usuarios con permiso can_edit pueden eliminar documentos probatorios.',
         variant: 'destructive',
       });
       return;
@@ -550,6 +603,7 @@ const DocumentosProbatorios = () => {
   };
 
   const handleHeirPhoto = async (heir: ConfirmedHeir, file?: File) => {
+    if (!canEdit) return;
     if (!file) return;
     const photoData = await readFileAsDataUrl(file);
     updateHeirDraft(heir.id, {
@@ -662,7 +716,8 @@ const DocumentosProbatorios = () => {
       />
 
       <div className="max-w-[1500px] mx-auto space-y-6">
-        <Card className="border border-legal-gold/20 shadow-md">
+        {canEdit && (
+        <Card ref={documentFormRef} className="scroll-mt-24 border border-legal-gold/20 shadow-md">
           <CardHeader className="bg-legal-blue/5 border-b">
             <CardTitle className="flex items-center gap-2 text-legal-blue">
               <FileImage className="h-5 w-5" />
@@ -888,6 +943,7 @@ const DocumentosProbatorios = () => {
             </div>
           </CardContent>
         </Card>
+        )}
 
         <Card className="border border-legal-gold/20 shadow-md">
           <CardHeader className="bg-legal-blue/5 border-b">
@@ -962,13 +1018,15 @@ const DocumentosProbatorios = () => {
                               />
                               <div>
                                 <p className="font-medium text-legal-blue">{heir.heir_name}</p>
-                                <Input
-                                  type="file"
-                                  accept="image/*"
-                                  className="mt-2 h-8 max-w-[230px] text-xs"
-                                  disabled={photoSavingIds.has(heir.id)}
-                                  onChange={(event) => handleHeirPhoto(heir, event.target.files?.[0])}
-                                />
+	                                {canEdit && (
+	                                  <Input
+	                                    type="file"
+	                                    accept="image/*"
+	                                    className="mt-2 h-8 max-w-[230px] text-xs"
+	                                    disabled={photoSavingIds.has(heir.id)}
+	                                    onChange={(event) => handleHeirPhoto(heir, event.target.files?.[0])}
+	                                  />
+	                                )}
                                 {photoSavingIds.has(heir.id) && (
                                   <p className="mt-1 text-xs text-legal-gray">Guardando foto...</p>
                                 )}
@@ -991,7 +1049,21 @@ const DocumentosProbatorios = () => {
                           <TableCell>—</TableCell>
                           <TableCell className="text-center">{heir.evidence_count || 0}</TableCell>
                           <TableCell className="min-w-[260px]">—</TableCell>
-                          <TableCell className="text-right">—</TableCell>
+	                          <TableCell className="text-right">
+	                            {canEdit ? (
+	                              <Button
+	                                type="button"
+	                                variant="outline"
+	                                size="sm"
+	                                onClick={() => prepareHeirSupport(heir)}
+	                              >
+	                                <FilePlus2 className="mr-1 h-4 w-4" />
+	                                Cargar soporte
+	                              </Button>
+	                            ) : (
+	                              '—'
+	                            )}
+	                          </TableCell>
                         </TableRow>
                       );
                     }
@@ -1031,7 +1103,7 @@ const DocumentosProbatorios = () => {
                           {primaryMember && linkedHeir?.heir_name !== primaryMember.name && (
                             <p className="text-xs text-legal-gray">Titular: {primaryMember.name}</p>
                           )}
-                          {linkedHeir && (
+                          {canEdit && linkedHeir && (
                             <Input
                               type="file"
                               accept="image/*"
@@ -1076,7 +1148,7 @@ const DocumentosProbatorios = () => {
                           <Eye className="mr-1 h-4 w-4" />
                           Ver
                         </Button>
-                        {isAdmin && (
+                        {canEdit && (
                           <Button
                             variant="ghost"
                             size="sm"

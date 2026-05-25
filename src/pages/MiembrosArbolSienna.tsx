@@ -28,7 +28,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/use-toast';
 import { readFileAsDataUrl } from '@/lib/readFileAsDataUrl';
-import { applySiennaCaseConfig, buildDominicanInheritancePlan, classifyMemberByDominicanLaw, normalizeName } from '@/lib/dominicanInheritance';
+import { applySiennaCaseConfig, normalizeName } from '@/lib/dominicanInheritance';
 import {
   getMemberEffectiveInheritanceReason,
   getMemberEffectiveInheritanceStatus,
@@ -70,13 +70,11 @@ import {
   Loader2,
   Save,
   Search,
-  SlidersHorizontal,
   Trash2,
   UserPlus,
   Users,
 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Progress } from '@/components/ui/progress';
 import { useAuth } from '@/context/AuthContext';
 
 type MemberForm = {
@@ -152,41 +150,6 @@ const resolveSpouseName = (
   return fallbackName;
 };
 
-const determineInheritance = (
-  form: MemberForm,
-  members: SiennaFamilyMember[],
-  genealogy: SiennaGenealogyBundle
-) => {
-  if (form.inheritance_status !== 'requiere_revision') {
-    return {
-      inheritance_status: form.inheritance_status,
-      inheritance_reason: form.inheritance_reason || 'Estado definido manualmente en la administración del árbol.',
-    };
-  }
-
-  const memberId = form.id || '__draft_member__';
-  const draftMember: SiennaFamilyMember = {
-    id: memberId,
-    parent_id: form.parent_id === 'root' ? null : form.parent_id,
-    relationship_to_parent: form.parent_id === 'root' ? null : form.relationship_to_parent,
-    name: form.name.trim() || 'Miembro sin nombre',
-    birth: form.birth || null,
-    death: form.death || null,
-    spouse_member_id: form.spouse_member_id || null,
-    spouse: resolveSpouseName(form.spouse_member_id, members, form.spouse) || null,
-    spouse_birth: form.spouse_birth || null,
-    inheritance_status: form.inheritance_status,
-    inheritance_reason: form.inheritance_reason || null,
-    is_highlighted_ancestor: form.is_highlighted_ancestor,
-    sort_order: Number(form.sort_order || 0),
-  };
-  const draftMembers = members.some((member) => member.id === memberId)
-    ? members.map((member) => (member.id === memberId ? draftMember : member))
-    : [...members, draftMember];
-
-  return classifyMemberByDominicanLaw(draftMember, draftMembers, genealogy);
-};
-
 const toForm = (
   member: SiennaFamilyMember,
   parentLinks: MemberParentLink[] = []
@@ -217,7 +180,7 @@ const toForm = (
 };
 
 const MiembrosArbolSienna = () => {
-  const { isAdmin } = useAuth();
+  const { isAdmin, canEdit } = useAuth();
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const { data: workspace, isLoading, isFetching, refetch } = useSiennaWorkspace(false);
@@ -249,7 +212,6 @@ const MiembrosArbolSienna = () => {
   const [viewerMemberId, setViewerMemberId] = useState<string | null>(null);
   const [viewerDocumentId, setViewerDocumentId] = useState<string | null>(null);
   const [detailMemberId, setDetailMemberId] = useState<string | null>(null);
-  const [caseConfigRevision, setCaseConfigRevision] = useState(0);
   const [deletingMemberId, setDeletingMemberId] = useState<string | null>(null);
   const [membersPage, setMembersPage] = useState(1);
   const [membersPageSize, setMembersPageSize] = useState(10);
@@ -267,6 +229,10 @@ const MiembrosArbolSienna = () => {
 
   const openMemberForEdit = useCallback(
     (member: SiennaFamilyMember) => {
+      if (!canEdit) {
+        setDetailMemberId(member.id);
+        return;
+      }
       setForm(toForm(member, parentLinks));
       setPhotoDraft(emptyPhotoDraft);
       scrollToForm();
@@ -297,7 +263,7 @@ const MiembrosArbolSienna = () => {
         });
       });
     },
-    [heirs, parentLinks, photoCache, scrollToForm]
+    [canEdit, heirs, parentLinks, photoCache, scrollToForm]
   );
 
   const loadMembers = async () => {
@@ -322,7 +288,6 @@ const MiembrosArbolSienna = () => {
   useEffect(() => {
     if (!workspace) return;
     applySiennaCaseConfig(workspace.settings?.sienna_case_config);
-    setCaseConfigRevision((current) => current + 1);
   }, [workspace]);
 
   const ensureDocumentMedia = useCallback(async (document: EvidenceDocument | null | undefined) => {
@@ -359,6 +324,7 @@ const MiembrosArbolSienna = () => {
   };
 
   const handlePhotoPick = async (file?: File) => {
+    if (!canEdit) return;
     if (!file) return;
     try {
       const data = await readFileAsDataUrl(file);
@@ -416,13 +382,9 @@ const MiembrosArbolSienna = () => {
     [parentLinks, unions]
   );
 
-  const evaluation = useMemo(() => determineInheritance(form, members, genealogy), [caseConfigRevision, form, genealogy, members]);
-  const resolvedInheritanceStatus =
-    form.inheritance_status === 'requiere_revision' ? evaluation.inheritance_status : form.inheritance_status;
+  const resolvedInheritanceStatus = form.inheritance_status;
   const manualInheritanceOverride = form.inheritance_status !== 'requiere_revision';
-  const resolvedInheritanceReason = manualInheritanceOverride
-    ? form.inheritance_reason || 'Estado definido manualmente en la administración del árbol.'
-    : evaluation.inheritance_reason;
+  const resolvedInheritanceReason = form.inheritance_reason || null;
 
   const inheritancePlan = useMemo(
     () => buildInheritancePlanFromApiRows(realtimeCalculation?.active_heirs ?? [], members),
@@ -544,28 +506,6 @@ const MiembrosArbolSienna = () => {
     return buildMemberTreeContext(draftMember, draftMembers, inheritancePlan, genealogy);
   }, [draftMembers, form, genealogy, inheritancePlan, resolvedInheritanceReason, resolvedInheritanceStatus]);
 
-  const simulation = useMemo(() => {
-    const current = buildDominicanInheritancePlan(members, genealogy);
-    const projected = buildDominicanInheritancePlan(draftMembers, genealogy);
-    const names = new Set([
-      ...current.activeHeirs.map((share) => share.member.id),
-      ...projected.activeHeirs.map((share) => share.member.id),
-    ]);
-
-    return Array.from(names).map((id) => {
-      const before = current.sharesById.get(id);
-      const after = projected.sharesById.get(id);
-      return {
-        id,
-        name: after?.member.name || before?.member.name || 'Miembro',
-        beforeShare: before?.share || 0,
-        afterShare: after?.share || 0,
-        delta: (after?.share || 0) - (before?.share || 0),
-      };
-    }).sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
-  }, [draftMembers, genealogy, members]);
-  const shouldShowSaveSimulator = Boolean(form.id || form.name.trim());
-
   const filiationUnionOptions = useMemo(() => {
     if (form.parent_id === 'root') return [];
     const parent = membersById.get(form.parent_id);
@@ -581,6 +521,14 @@ const MiembrosArbolSienna = () => {
   }, [form.filiation_union_id, form.parent_id, members, membersById, unions]);
 
   const saveMember = async () => {
+    if (!canEdit) {
+      toast({
+        title: 'Acceso restringido',
+        description: 'Solo usuarios con permiso can_edit pueden modificar el árbol.',
+        variant: 'destructive',
+      });
+      return;
+    }
     if (!form.name.trim()) {
       toast({ title: 'Falta el nombre', description: 'El nombre del miembro es obligatorio.' });
       return;
@@ -643,10 +591,10 @@ const MiembrosArbolSienna = () => {
   };
 
   const deleteMember = async (member: SiennaFamilyMember) => {
-    if (!isAdmin) {
+    if (!canEdit) {
       toast({
         title: 'Accion restringida',
-        description: 'Solo los administradores pueden eliminar miembros del arbol.',
+        description: 'Solo usuarios con permiso can_edit pueden eliminar miembros del arbol.',
         variant: 'destructive',
       });
       return;
@@ -840,6 +788,7 @@ const MiembrosArbolSienna = () => {
           </div>
         </details>
 
+        {canEdit && (
         <Card ref={formSectionRef} className="scroll-mt-24 border border-legal-gold/20">
           <CardHeader className="bg-legal-blue/5 border-b">
             <div className="flex items-center justify-between gap-2">
@@ -1078,7 +1027,7 @@ const MiembrosArbolSienna = () => {
                 </SelectContent>
               </Select>
               <p className="mt-1 text-xs text-legal-gray">
-                En modo autodetectar, el sistema clasifica usando parentesco, linea, defuncion y representacion.
+                En modo revisión, el backend recalcula el estado efectivo usando parentesco, línea, defunción y representación.
               </p>
               <div className="mt-2 flex items-center gap-2">
                 <Checkbox
@@ -1090,9 +1039,7 @@ const MiembrosArbolSienna = () => {
                       updateForm('inheritance_status', 'requiere_revision');
                       return;
                     }
-                    if (form.inheritance_status === 'requiere_revision') {
-                      updateForm('inheritance_status', evaluation.inheritance_status);
-                    }
+                    if (form.inheritance_status === 'requiere_revision') updateForm('inheritance_status', 'posible_heredero');
                   }}
                 />
                 <Label htmlFor="manualInheritanceOverride">Forzar estado manual</Label>
@@ -1109,18 +1056,20 @@ const MiembrosArbolSienna = () => {
             <div className="md:col-span-4">
               <Label>Razón / explicación</Label>
               <Textarea
-                value={manualInheritanceOverride ? form.inheritance_reason || '' : evaluation.inheritance_reason || ''}
+                value={form.inheritance_reason || ''}
                 onChange={(event) => updateForm('inheritance_reason', event.target.value)}
                 rows={3}
                 disabled={!manualInheritanceOverride}
               />
             </div>
             <div className="rounded-md border border-legal-blue/20 bg-legal-blue/5 p-4 md:col-span-2">
-              <p className="text-sm font-semibold text-legal-blue">Evaluación sugerida (reparto)</p>
-              <Badge className="mt-2" variant={evaluation.inheritance_status === 'posible_heredero' ? 'default' : 'secondary'}>
-                {evaluation.inheritance_status.replace(/_/g, ' ')}
+              <p className="text-sm font-semibold text-legal-blue">Estado efectivo</p>
+              <Badge className="mt-2" variant="secondary">
+                Confirmado por backend al guardar
               </Badge>
-              <p className="mt-2 text-sm leading-relaxed text-gray-700">{evaluation.inheritance_reason}</p>
+              <p className="mt-2 text-sm leading-relaxed text-gray-700">
+                El frontend no calcula ni persiste clasificación sucesoral automática. Si se deja en revisión, el backend tendrá la palabra final con las reglas del expediente.
+              </p>
             </div>
             <div className="rounded-md border border-legal-gold/25 bg-legal-gold/5 p-4 md:col-span-2">
               <p className="mb-3 flex items-center gap-2 text-sm font-semibold text-legal-blue">
@@ -1144,50 +1093,6 @@ const MiembrosArbolSienna = () => {
             </div>
           </CardContent>
         </Card>
-
-        {shouldShowSaveSimulator && (
-        <details className="rounded-md border border-legal-gold/20 bg-white">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-legal-blue">
-            <span className="flex items-center gap-2">
-              <SlidersHorizontal className="h-5 w-5" />
-              Simulador antes de guardar
-            </span>
-            <span className="text-xs font-normal text-legal-gray">
-              {form.id ? 'Editando miembro' : 'Nuevo miembro en proceso'}
-            </span>
-          </summary>
-          <div className="space-y-4 border-t border-legal-blue/10 p-4 sm:p-6">
-            <p className="text-sm text-gray-700">
-              Al editar nombre, nodo superior, defunción o parentesco, vea cómo cambian los porcentajes de los herederos
-              activos. Los cambios solo se aplican al guardar el miembro.
-            </p>
-            {simulation.length === 0 ? (
-              <p className="text-sm text-legal-gray">No hay herederos activos en la simulación actual.</p>
-            ) : (
-              <div className="grid gap-3 md:grid-cols-2">
-                {simulation.map((row) => (
-                  <div
-                    key={row.id}
-                    className={`rounded-md border p-3 ${row.delta !== 0 ? 'border-legal-gold/50 bg-legal-gold/5' : 'border-legal-blue/15'}`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="font-medium text-legal-blue">{row.name}</p>
-                      <p className="text-xs text-legal-gray">
-                        {row.delta > 0 ? '+' : ''}
-                        {formatPercent(row.delta)}
-                      </p>
-                    </div>
-                    <div className="mt-2 flex justify-between text-xs text-legal-gray">
-                      <span>Antes: {formatPercent(row.beforeShare)}</span>
-                      <span>Después: {formatPercent(row.afterShare)}</span>
-                    </div>
-                    <Progress className="mt-2 h-2" value={row.afterShare} />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </details>
         )}
 
         <Card className="border border-legal-gold/20">
@@ -1439,13 +1344,15 @@ const MiembrosArbolSienna = () => {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
-                            <Button variant="outline" size="sm" onClick={() => openMemberForEdit(member)}>
-                              <Edit className="h-4 w-4" />
-                            </Button>
+                            {canEdit && (
+                              <Button variant="outline" size="sm" onClick={() => openMemberForEdit(member)}>
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            )}
                             <Button variant="outline" size="sm" onClick={() => setDetailMemberId(member.id)}>
                               Ficha
                             </Button>
-                            {isAdmin && (
+                            {canEdit && (
                               <Button
                                 variant="ghost"
                                 size="sm"

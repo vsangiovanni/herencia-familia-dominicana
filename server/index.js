@@ -3170,6 +3170,14 @@ app.put('/api/confirmed-heirs/:id', requireAuth, requireEditor, async (req, res)
   if (!heir_name || !String(heir_name).trim()) {
     return res.status(400).json({ message: 'El nombre del heredero es requerido' });
   }
+  const memberId = normalizedMemberId(sienna_member_id);
+  if (!memberId) {
+    return res.status(400).json({ message: 'Todo heredero confirmado debe estar vinculado a un miembro del árbol.' });
+  }
+  const memberExists = await query('SELECT id FROM sienna_family_members WHERE id = :id LIMIT 1', { id: memberId });
+  if (!memberExists.length) {
+    return res.status(400).json({ message: 'El miembro vinculado no existe en el árbol.' });
+  }
 
   await query(
     `UPDATE confirmed_heirs
@@ -3188,7 +3196,7 @@ app.put('/api/confirmed-heirs/:id', requireAuth, requireEditor, async (req, res)
      WHERE id = :id`,
     {
       id: req.params.id,
-      siennaMemberId: sienna_member_id || null,
+      siennaMemberId: memberId,
       heirName: String(heir_name).trim(),
       relationshipSummary: relationship_summary || null,
       lineVincenzo: Boolean(line_vincenzo),
@@ -3224,6 +3232,14 @@ app.post('/api/confirmed-heirs', requireAuth, requireEditor, async (req, res) =>
   } = req.body || {};
 
   if (!heir_name) return res.status(400).json({ message: 'El nombre del heredero es requerido' });
+  const memberId = normalizedMemberId(sienna_member_id);
+  if (!memberId) {
+    return res.status(400).json({ message: 'Todo heredero confirmado debe estar vinculado a un miembro del árbol.' });
+  }
+  const memberExists = await query('SELECT id FROM sienna_family_members WHERE id = :id LIMIT 1', { id: memberId });
+  if (!memberExists.length) {
+    return res.status(400).json({ message: 'El miembro vinculado no existe en el árbol.' });
+  }
 
   await query(
     `INSERT INTO confirmed_heirs (
@@ -3248,7 +3264,7 @@ app.post('/api/confirmed-heirs', requireAuth, requireEditor, async (req, res) =>
        updated_by = VALUES(updated_by)`,
     {
       id: randomUUID(),
-      siennaMemberId: sienna_member_id || null,
+      siennaMemberId: memberId,
       heirName: heir_name,
       relationshipSummary: relationship_summary || null,
       lineVincenzo: Boolean(line_vincenzo),
@@ -3541,7 +3557,7 @@ app.post('/api/sienna-family-members', requireAuth, requireEditor, async (req, r
   res.status(201).json({ ok: true, member: savedMember, unions: bundle.unions, parent_links: bundle.parent_links });
 });
 
-app.delete('/api/sienna-family-members/:id', requireAuth, requireAdmin, async (req, res) => {
+app.delete('/api/sienna-family-members/:id', requireAuth, requireEditor, async (req, res) => {
   const memberId = req.params.id;
   await withTransaction(async (tx) => {
     await query('DELETE FROM member_parent_links WHERE child_member_id = :id OR parent_member_id = :id', { id: memberId }, tx);
@@ -3550,7 +3566,7 @@ app.delete('/api/sienna-family-members/:id', requireAuth, requireAdmin, async (r
       { id: memberId },
       tx
     );
-    await query('UPDATE confirmed_heirs SET sienna_member_id = NULL WHERE sienna_member_id = :id', { id: memberId }, tx);
+    await query('DELETE FROM confirmed_heirs WHERE sienna_member_id = :id', { id: memberId }, tx);
     await query(
       `UPDATE evidence_documents
        SET primary_member_id = IF(primary_member_id = :primaryId, NULL, primary_member_id),
@@ -3678,7 +3694,7 @@ app.post('/api/evidence-documents', requireAuth, requireEditor, async (req, res)
   res.status(201).json({ ok: true });
 });
 
-app.delete('/api/evidence-documents/:id', requireAuth, requireAdmin, async (req, res) => {
+app.delete('/api/evidence-documents/:id', requireAuth, requireEditor, async (req, res) => {
   await query('DELETE FROM evidence_documents WHERE id = :id', { id: req.params.id });
   invalidateSiennaApiCache();
   res.json({ ok: true });

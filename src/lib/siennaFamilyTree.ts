@@ -1,7 +1,6 @@
 import { SiennaFamilyMember } from '@/lib/api';
 import {
   activeCollateralRoots,
-  buildDominicanInheritancePlan,
   caseCausanteName,
   getSiennaCaseConfig,
   InheritancePlan,
@@ -231,7 +230,11 @@ export const buildMemberTreeContext = (
   plan?: InheritancePlan,
   genealogy?: SiennaGenealogyBundle
 ): MemberTreeContext => {
-  const inheritancePlan = plan || buildDominicanInheritancePlan(members, genealogy);
+  const inheritancePlan = plan || {
+    activeHeirs: [],
+    sharesById: new Map(),
+    sharesByName: new Map(),
+  };
   const ancestryPath = getAncestryPath(member.id, members);
   const treeRole = resolveTreeRole(member, inheritancePlan);
   const inheritance = resolveInheritanceDisplay(member, inheritancePlan);

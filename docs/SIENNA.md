@@ -7,6 +7,7 @@ Pantallas especializadas del expediente familiar (caso Alessandro y derivados).
 Para retomar el estado actual del asistente conversacional Sienna despues de un reinicio o una conversacion nueva, leer primero:
 
 - [Handoff Sienna AI - 2026-05-24](SIENNA_AI_HANDOFF_2026-05-24.md)
+- [Auditoria Sienna backend-only - 2026-05-25](SIENNA_BACKEND_AUTHORITY_AUDIT_2026-05-25.md)
 
 Ese documento resume la arquitectura actual del asistente, los cambios hechos, pruebas realizadas, deploy a Hostinger, pendientes y breadcrumbs de archivos clave.
 
@@ -17,7 +18,7 @@ Ese documento resume la arquitectura actual del asistente, los cambios hechos, p
 | `/sienna/arbol-genealogico` | `ArbolGenealogicoSienna.tsx` | Árbol clásico, cálculo de montos, doble linaje, pantalla completa y resumen por heredero |
 | `/sienna/miembros-arbol` | `MiembrosArbolSienna.tsx` | CRUD con línea parental, rama sucesoral, conexión al árbol y si hereda |
 | `/sienna/dobles-linajes` | `AnalisisDoblesLinajesSienna.tsx` | Auditoría visual de dobles linajes, rutas, convergencias e inconsistencias |
-| `/sienna/explicacion-herederos` | `ExplicacionHerederosSienna.tsx` | Reunión: por qué heredo, simulador, semáforo, timeline, glosario, PDF |
+| `/sienna/explicacion-herederos` | `ExplicacionHerederosSienna.tsx` | Reunión: por qué heredo, semáforo, timeline, glosario, PDF |
 | `/sienna/asistente` | `AsistenteIA.tsx` | Sienna contigo: orienta, explica y guía hacia pantallas sin modificar datos |
 | `/hallazgos` | `Hallazgos.tsx` | Hallazgos dinámicos de consistencia (sin texto hardcodeado) según data vigente |
 | `/admin/settings` | `AdminSettings.tsx` | Editor guiado de settings globales y configuración del caso (solo admin) |
@@ -30,6 +31,22 @@ Las pantallas Sienna no son fuente de verdad. La fuente única para información
 - No duplicar en frontend lógica sucesoral, validación genealógica, hallazgos, convergencias, clasificación efectiva ni reglas de doble linaje.
 - Si una regla aparece en Node y PHP, debe mantenerse como contrato equivalente de API hasta poder centralizarla más; no crear una tercera versión en React.
 - Local primero. No desplegar a Hostinger, GitHub ni producción sin autorización explícita de Víctor para ese despliegue.
+
+### Auditoria backend-only 2026-05-25
+
+Se hizo una pasada local estricta sobre las pantallas Sienna para eliminar fallbacks y calculos de autoridad desde frontend.
+
+- Dashboard ya no usa `confirmed_heirs.length` como fallback de herederos finales.
+- Miembros del Arbol ya no clasifica automaticamente sucesion desde React al guardar.
+- Explicacion para Herederos ya no tiene simulador local de exclusion/recalculo de cuotas.
+- Calculo por Filiacion usa totales de `GET /api/sienna-calculation`.
+- Dobles Linajes no inventa `source_amounts` si el backend no los devuelve.
+- Arbol Genealogico no cae a montos guardados como sustituto de calculo vivo.
+- Documentos Probatorios exige heredero vinculado a miembro para resolver/cargar soporte.
+
+Documento completo: [Auditoria Sienna backend-only - 2026-05-25](SIENNA_BACKEND_AUTHORITY_AUDIT_2026-05-25.md).
+
+Victor probo localmente y autorizo subir esta ronda a GitHub y Hostinger. El deploy se hizo solo con artefactos de `dist/` por FTP, sin subir `.env`, sin migraciones y sin tocar DB/datos de produccion.
 
 Endpoints canónicos actuales:
 

@@ -40,6 +40,7 @@ import {
 } from '@/lib/siennaMemberIssues';
 import { CheckCircle2, ClipboardList, RefreshCw, Scale, Search } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
+import { useAuth } from '@/context/AuthContext';
 
 const kindBadgeClass: Record<MemberIssueKind, string> = {
   sync_parent_link: 'bg-legal-gold/15 text-legal-blue border-legal-gold/35',
@@ -49,6 +50,7 @@ const kindBadgeClass: Record<MemberIssueKind, string> = {
 
 const Hallazgos = () => {
   const queryClient = useQueryClient();
+  const { canEdit } = useAuth();
   const { data: workspace, isLoading, isFetching, refetch } = useSiennaWorkspace(false);
   const { data: heirsData } = useConfirmedHeirs(true);
   const photoLookup = useMemo(
@@ -169,6 +171,14 @@ const Hallazgos = () => {
   };
 
   const saveRow = async (row: MemberIssueRow) => {
+    if (!canEdit) {
+      toast({
+        title: 'Acceso restringido',
+        description: 'Solo usuarios con permiso can_edit pueden resolver hallazgos.',
+        variant: 'destructive',
+      });
+      return;
+    }
     const member = members.find((item) => item.id === row.memberId);
     const draft = drafts[row.id];
     if (!member || !draft) return;
@@ -261,6 +271,7 @@ const Hallazgos = () => {
           <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-legal-gray">{row.solution}</p>
         </TableCell>
         <TableCell className="min-w-[15rem]">
+          {canEdit ? (
           <details>
             <summary className="cursor-pointer text-sm font-semibold text-legal-blue">
               Resolver
@@ -277,6 +288,9 @@ const Hallazgos = () => {
               />
             </div>
           </details>
+          ) : (
+            <p className="text-sm text-legal-gray">Solo lectura</p>
+          )}
         </TableCell>
         <TableCell>
           <Badge
@@ -450,6 +464,7 @@ const Hallazgos = () => {
                       {row.context && <p className="mb-2 text-xs text-legal-gray">{row.context}</p>}
                       <p className="text-sm text-gray-900">{row.problem}</p>
                       <p className="mt-1 text-xs text-legal-gray">{row.solution}</p>
+                      {canEdit && (
                       <div className="mt-3 border-t border-legal-gold/15 pt-3">
                         <MemberIssueFixPanel
                           row={row}
@@ -461,6 +476,7 @@ const Hallazgos = () => {
                           onSave={() => saveRow(row)}
                         />
                       </div>
+                      )}
                     </div>
                   );
                 })}

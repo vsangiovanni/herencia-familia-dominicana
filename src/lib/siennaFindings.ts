@@ -5,7 +5,7 @@ import {
   MemberParentLink,
   SiennaFamilyMember,
 } from '@/lib/api';
-import { buildDominicanInheritancePlan, normalizeName } from '@/lib/dominicanInheritance';
+import { normalizeName } from '@/lib/dominicanInheritance';
 import { countGenealogyInconsistencies, getDescendantsForRepresentation, getParentLinksForChild, SiennaGenealogyBundle } from '@/lib/siennaGenealogy';
 
 export type FindingCategory = 'genealogia' | 'calculo' | 'expediente';
@@ -148,31 +148,6 @@ export const buildSiennaFindings = ({
     list.push(member);
     membersByName.set(key, list);
   });
-
-  const plan = buildDominicanInheritancePlan(members, genealogy);
-  const distributed = plan.activeHeirs.reduce((sum, share) => sum + share.share, 0);
-  const undistributed = Math.max(0, 100 - distributed);
-
-  if (undistributed > 0.05) {
-    items.push({
-      id: 'calculo-undistributed',
-      category: 'calculo',
-      severity: 'Alta prioridad',
-      title: 'Cuota sucesoral sin asignar',
-      issue: 'El cálculo por filiación no llega al 100% del caudal simulado.',
-      detail: `Solo se distribuye ${distributed.toFixed(2)}%. Quedan ${undistributed.toFixed(2)}% sin heredero vivo registrado en alguna rama (nodos fallecidos sin descendencia documentada).`,
-      suggestion:
-        'Revise ramas cortadas: agregue descendientes faltantes o corrija fechas de defunción y parentescos en el árbol.',
-      fixActions: [
-        {
-          id: 'calculo-undistributed-open',
-          label: 'Ver cálculo por filiación',
-          type: 'navigate',
-          href: '/calculo-filiacion',
-        },
-      ],
-    });
-  }
 
   const genealogyIssues = countGenealogyInconsistencies(genealogy);
   if (genealogyIssues > 0) {

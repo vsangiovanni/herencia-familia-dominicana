@@ -3735,6 +3735,14 @@ try {
     if ($heirName === '') {
       json_response(['message' => 'El nombre del heredero es requerido'], 400);
     }
+    $memberId = normalized_member_id($data['sienna_member_id'] ?? '');
+    if ($memberId === '') {
+      json_response(['message' => 'Todo heredero confirmado debe estar vinculado a un miembro del árbol.'], 400);
+    }
+    $memberExists = query_one('SELECT id FROM sienna_family_members WHERE id = :id LIMIT 1', ['id' => $memberId]);
+    if (!$memberExists) {
+      json_response(['message' => 'El miembro vinculado no existe en el árbol.'], 400);
+    }
     $status = normalize_enum($data['status'] ?? null, ['mencionado', 'confirmado', 'pendiente'], 'mencionado');
     exec_sql(
       'INSERT INTO confirmed_heirs (id, sienna_member_id, heir_name, relationship_summary, line_vincenzo, line_paolo, status, notes, photo_file_name, photo_file_type, photo_data, inheritance_amount, created_by, updated_by)
@@ -3742,7 +3750,7 @@ try {
        ON DUPLICATE KEY UPDATE sienna_member_id = VALUES(sienna_member_id), relationship_summary = VALUES(relationship_summary), line_vincenzo = VALUES(line_vincenzo), line_paolo = VALUES(line_paolo), status = VALUES(status), notes = VALUES(notes), photo_file_name = VALUES(photo_file_name), photo_file_type = VALUES(photo_file_type), photo_data = VALUES(photo_data), inheritance_amount = VALUES(inheritance_amount), updated_by = VALUES(updated_by)',
       [
         'id' => uuid(),
-        'siennaMemberId' => $data['sienna_member_id'] ?? null,
+        'siennaMemberId' => $memberId,
         'name' => $heirName,
         'summary' => $data['relationship_summary'] ?? null,
         'vincenzo' => bool_value($data['line_vincenzo'] ?? false),
@@ -3778,13 +3786,21 @@ try {
     if ($heirName === '') {
       json_response(['message' => 'El nombre del heredero es requerido'], 400);
     }
+    $memberId = normalized_member_id($data['sienna_member_id'] ?? '');
+    if ($memberId === '') {
+      json_response(['message' => 'Todo heredero confirmado debe estar vinculado a un miembro del árbol.'], 400);
+    }
+    $memberExists = query_one('SELECT id FROM sienna_family_members WHERE id = :id LIMIT 1', ['id' => $memberId]);
+    if (!$memberExists) {
+      json_response(['message' => 'El miembro vinculado no existe en el árbol.'], 400);
+    }
     $status = normalize_enum($data['status'] ?? null, ['mencionado', 'confirmado', 'pendiente'], 'mencionado');
     $hasInheritanceAmount = array_key_exists('inheritance_amount', $data);
     exec_sql(
       'UPDATE confirmed_heirs SET sienna_member_id = :siennaMemberId, heir_name = :name, relationship_summary = :summary, line_vincenzo = :vincenzo, line_paolo = :paolo, status = :status, notes = :notes, photo_file_name = :photoFileName, photo_file_type = :photoFileType, photo_data = :photoData, inheritance_amount = CASE WHEN :hasInheritanceAmount = 1 THEN :inheritanceAmount ELSE inheritance_amount END, updated_by = :updatedBy WHERE id = :id',
       [
         'id' => $m[1],
-        'siennaMemberId' => $data['sienna_member_id'] ?? null,
+        'siennaMemberId' => $memberId,
         'name' => $heirName,
         'summary' => $data['relationship_summary'] ?? null,
         'vincenzo' => bool_value($data['line_vincenzo'] ?? false),
@@ -4107,7 +4123,7 @@ try {
       'DELETE FROM family_unions WHERE partner_a_member_id = :partnerAId OR partner_b_member_id = :partnerBId',
       ['partnerAId' => $memberId, 'partnerBId' => $memberId]
     );
-    exec_sql('UPDATE confirmed_heirs SET sienna_member_id = NULL WHERE sienna_member_id = :id', ['id' => $memberId]);
+    exec_sql('DELETE FROM confirmed_heirs WHERE sienna_member_id = :id', ['id' => $memberId]);
     exec_sql(
       'UPDATE evidence_documents
        SET primary_member_id = IF(primary_member_id = :primaryId, NULL, primary_member_id),

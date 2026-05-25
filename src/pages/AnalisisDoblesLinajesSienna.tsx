@@ -56,14 +56,7 @@ const formatDate = (value: string) =>
   new Date(value).toLocaleString('es-DO', { dateStyle: 'medium', timeStyle: 'short' });
 
 const resolveSourceAmounts = (item: DualLineageCase) =>
-  item.source_amounts?.length
-    ? item.source_amounts
-    : item.calculation_routes.map((route) => ({
-        source: route.source,
-        share_percent: route.share,
-        amount: 0,
-        routes: route.routes,
-      }));
+  item.source_amounts?.length ? item.source_amounts : [];
 
 const KpiTile = ({
   label,

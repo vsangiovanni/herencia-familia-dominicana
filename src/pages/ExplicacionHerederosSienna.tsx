@@ -10,7 +10,6 @@ import MemberPhoto from '@/components/sienna/MemberPhoto';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
@@ -33,9 +32,8 @@ import {
   heirPhotoByName,
   routeSteps,
 } from '@/lib/siennaHeirExplain';
-import { buildInheritancePlanFromApiRows, calculateHeirAmount, resolveHeirSimulatedShare } from '@/lib/siennaCalculation';
+import { buildInheritancePlanFromApiRows } from '@/lib/siennaCalculation';
 import { buildSiennaDocumentSupportHref } from '@/lib/siennaSupportLinks';
-import { useAuth } from '@/context/AuthContext';
 import {
   AlertTriangle,
   BookOpen,
@@ -50,7 +48,6 @@ import {
   Route,
   Scale,
   ShieldCheck,
-  SlidersHorizontal,
   Users,
 } from 'lucide-react';
 
@@ -135,7 +132,6 @@ const SupportBadge = ({ brief }: { brief: HeirBrief }) => {
 };
 
 const ExplicacionHerederosSienna = () => {
-  const { isAdmin } = useAuth();
   const queryClient = useQueryClient();
   const { data: workspace, isLoading, isFetching, refetch } = useSiennaWorkspace(true);
   const members = workspace?.members ?? [];
@@ -150,7 +146,6 @@ const ExplicacionHerederosSienna = () => {
   );
   const [estateAmount, setEstateAmount] = useState('');
   const [lawyerFeePercentage, setLawyerFeePercentage] = useState('0');
-  const [excludedHeirs, setExcludedHeirs] = useState<string[]>([]);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [isPresentationMode, setIsPresentationMode] = useState(false);
   const [workspaceInitialized, setWorkspaceInitialized] = useState(false);
@@ -216,17 +211,13 @@ const ExplicacionHerederosSienna = () => {
     return grouped;
   }, [documents]);
 
-  const includedTotal = plan.activeHeirs
-    .filter((share) => !excludedHeirs.includes(share.member.id))
-    .reduce((sum, share) => sum + (apiRowsByMemberId.get(share.member.id)?.share_percent ?? share.share), 0);
-  const distributedTotal = realtimeCalculation?.total_share ?? plan.activeHeirs.reduce((sum, share) => sum + share.share, 0);
-  const isRenormalizedSimulation = excludedHeirs.length > 0;
+  const distributedTotal = Number(realtimeCalculation?.total_share ?? 0);
 
   const briefs = useMemo<HeirBrief[]>(
     () =>
       plan.activeHeirs.map((share) => {
         const apiRow = apiRowsByMemberId.get(share.member.id);
-        const realtimeShare = apiRow?.share_percent ?? share.share;
+        const realtimeShare = Number(apiRow?.share_percent ?? share.share);
         const apiBackedShare: InheritanceShare = {
           ...share,
           share: realtimeShare,
@@ -236,12 +227,6 @@ const ExplicacionHerederosSienna = () => {
           sources: apiRow?.sources ?? share.sources,
           sourceBreakdown: apiRow?.source_breakdown ?? share.sourceBreakdown,
         };
-        const excluded = excludedHeirs.includes(share.member.id);
-        const simulatedShare = resolveHeirSimulatedShare(realtimeShare, {
-          excluded,
-          excludedHeirIds: excludedHeirs,
-          includedTotal,
-        });
         const heirDocs =
           documentsByHeir.get(`member:${share.member.id}`) ||
           documentsByHeir.get(`name:${normalizeName(share.member.name)}`) ||
@@ -249,15 +234,13 @@ const ExplicacionHerederosSienna = () => {
         return {
           share: apiBackedShare,
           documents: heirDocs,
-          simulatedShare,
-          simulatedAmount: isRenormalizedSimulation || !apiRow
-            ? calculateHeirAmount(simulatedShare, netAmount)
-            : apiRow.amount,
+          simulatedShare: realtimeShare,
+          simulatedAmount: Number(apiRow?.amount ?? 0),
           photo: photosByName.get(normalizeName(share.member.name)) || null,
           traffic: evaluateEvidenceSupport(heirDocs, share.member, members),
         };
       }).sort((left, right) => left.share.member.name.localeCompare(right.share.member.name, 'es', { sensitivity: 'base' })),
-    [apiRowsByMemberId, documentsByHeir, excludedHeirs, includedTotal, isRenormalizedSimulation, members, netAmount, photosByName, plan.activeHeirs]
+    [apiRowsByMemberId, documentsByHeir, members, photosByName, plan.activeHeirs]
   );
 
   const trafficSummary = useMemo(
@@ -268,12 +251,6 @@ const ExplicacionHerederosSienna = () => {
     }),
     [briefs]
   );
-
-  const toggleHeir = (id: string) => {
-    setExcludedHeirs((current) =>
-      current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
-    );
-  };
 
   const saveCalculationSettings = async () => {
     setSettingsSaving(true);
@@ -423,13 +400,7 @@ const ExplicacionHerederosSienna = () => {
                   ? new Date(realtimeCalculation.generated_at).toLocaleString('es-DO')
                   : 'pendiente de respuesta de la API'}
             </p>
-            {isRenormalizedSimulation && (
-              <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">
-                Hay herederos excluidos en la simulación: los porcentajes se recalculan repartiendo el 100% del neto solo
-                entre los incluidos. Debe coincidir con el árbol solo cuando no hay exclusiones.
-              </p>
-            )}
-            {!isRenormalizedSimulation && distributedTotal < 99.95 && (
+            {distributedTotal < 99.95 && (
               <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">
                 El cálculo reparte {formatPercent(distributedTotal)} del caudal; el resto queda sin heredero vivo en alguna
                 rama. Los montos usan ese porcentaje real (igual que en el árbol del caso).
@@ -484,9 +455,6 @@ const ExplicacionHerederosSienna = () => {
           <TabsList className="sienna-tabs-scroll h-auto">
             <TabsTrigger value="por-que" className="shrink-0 text-xs sm:text-sm">
               Por qué heredo
-            </TabsTrigger>
-            <TabsTrigger value="simulador" className="shrink-0 text-xs sm:text-sm">
-              Simulador
             </TabsTrigger>
             <TabsTrigger value="documentos" className="shrink-0 text-xs sm:text-sm">
               Semáforo
@@ -603,60 +571,6 @@ const ExplicacionHerederosSienna = () => {
                   </CardContent>
                 </Card>
               ))}
-          </TabsContent>
-
-          <TabsContent value="simulador">
-            <Card className="border border-legal-gold/20">
-              <CardHeader className="border-b bg-legal-blue/5">
-                <CardTitle className="flex items-center gap-2 text-legal-blue">
-                  <SlidersHorizontal className="h-5 w-5" />
-                  Simulador visual de revisión
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4 p-6">
-                <p className="text-sm text-gray-700">
-                  Incluya o excluya herederos para ver cómo cambian los porcentajes y montos antes de guardar cambios en el
-                  árbol. Para modificar el árbol genealógico use{' '}
-                  <Link to="/sienna/miembros-arbol" className="font-medium text-legal-blue underline">
-                    Miembros del Árbol
-                  </Link>
-                  .
-                </p>
-                <div className="grid gap-3 md:grid-cols-2">
-                  {briefs.map((brief) => {
-                    const included = !excludedHeirs.includes(brief.share.member.id);
-                    return (
-                      <div
-                        key={brief.share.member.id}
-                        className={`rounded-md border p-3 ${included ? 'border-legal-gold/40 bg-legal-gold/5' : 'border-legal-blue/15 opacity-70'}`}
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-3">
-                            <Checkbox checked={included} onCheckedChange={() => toggleHeir(brief.share.member.id)} />
-                            <MemberPhoto
-                              name={brief.share.member.name}
-                              memberId={brief.share.member.id}
-                              photoData={brief.photo?.photo_data}
-                              size="sm"
-                              verificationStatus={brief.photo?.status === 'confirmado' ? 'verified' : 'pending'}
-                            />
-                            <div>
-                              <p className="font-medium text-legal-blue">{brief.share.member.name}</p>
-                              <p className="text-xs text-legal-gray">Base legal: {formatPercent(brief.share.share)}</p>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <p className="font-semibold text-legal-blue">{formatPercent(brief.simulatedShare)}</p>
-                            <p className="text-xs text-legal-gray">{formatMoney(brief.simulatedAmount)}</p>
-                          </div>
-                        </div>
-                        <Progress className="mt-3 h-2" value={brief.simulatedShare} />
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
           </TabsContent>
 
           <TabsContent value="documentos">
@@ -783,8 +697,7 @@ const ExplicacionHerederosSienna = () => {
                   </div>
                 </div>
                 <p className="text-sm text-legal-gray">
-                  {briefs.filter((b) => !excludedHeirs.includes(b.share.member.id)).length} herederos incluidos en el
-                  reparto simulado.
+                  {briefs.length} herederos confirmados por el cálculo del backend.
                 </p>
               </CardContent>
             </Card>
