@@ -6,7 +6,7 @@ import BackButton from '@/components/BackButton';
 import DocumentHeader from '@/components/DocumentHeader';
 import MemberPhoto from '@/components/sienna/MemberPhoto';
 import { api, ConfirmedHeir, EvidenceDocument, SiennaFamilyMember } from '@/lib/api';
-import { invalidateSiennaData, useConfirmedHeirs, useSiennaWorkspace } from '@/hooks/useSiennaData';
+import { invalidateSiennaData, useConfirmedHeirs, useSiennaCalculation, useSiennaWorkspace } from '@/hooks/useSiennaData';
 import { buildMemberPhotoLookup } from '@/lib/memberPhotos';
 import { getMemberLinkVerificationStatus } from '@/lib/siennaGenealogy';
 import { sortMembersByName } from '@/lib/siennaFamilyTree';
@@ -179,6 +179,10 @@ const DocumentosProbatorios = () => {
   const [searchParams] = useSearchParams();
   const { data: workspace, refetch } = useSiennaWorkspace(false);
   const { data: heirsWithPhotos } = useConfirmedHeirs(true);
+  const { data: realtimeCalculation } = useSiennaCalculation(
+    workspace?.settings?.estate_amount as number | string | undefined,
+    workspace?.settings?.lawyer_fee_percentage as number | string | undefined
+  );
   const members = workspace?.members ?? [];
   const heirs = heirsWithPhotos?.heirs ?? workspace?.heirs ?? [];
   const genealogy = useMemo(
@@ -211,6 +215,10 @@ const DocumentosProbatorios = () => {
   const membersById = useMemo(
     () => new Map(members.map((member) => [member.id, member])),
     [members]
+  );
+  const calculatedAmountsByMemberId = useMemo(
+    () => new Map((realtimeCalculation?.calculation.active_heirs ?? []).map((row) => [row.member_id, row.amount])),
+    [realtimeCalculation?.calculation.active_heirs]
   );
   const photoLookup = useMemo(() => buildMemberPhotoLookup(heirs), [heirs]);
   const verificationStatusForMember = useCallback(
@@ -528,11 +536,10 @@ const DocumentosProbatorios = () => {
         photo_file_name: draft.photo_file_name ?? heir.photo_file_name ?? null,
         photo_file_type: draft.photo_file_type ?? heir.photo_file_type ?? null,
         photo_data: draft.photo_data ?? heir.photo_data ?? null,
-        inheritance_amount: Number(draft.inheritance_amount ?? heir.inheritance_amount ?? 0),
       });
       invalidateSiennaData(queryClient);
       await loadData();
-      toast({ title: 'Heredero actualizado', description: 'Foto y monto quedaron guardados para el árbol del caso.' });
+      toast({ title: 'Heredero actualizado', description: 'Foto guardada. El monto se mantiene calculado desde la API.' });
     } catch (error) {
       toast({
         title: 'No se pudo actualizar el heredero',
@@ -800,7 +807,7 @@ const DocumentosProbatorios = () => {
               <UserCheck className="h-4 w-4" />
               Presentación de herederos
             </span>
-            <span className="text-xs font-normal text-legal-gray">Fotos y montos manuales bajo demanda</span>
+            <span className="text-xs font-normal text-legal-gray">Fotos editables; montos calculados por API</span>
           </summary>
           <div className="overflow-x-auto border-t border-legal-blue/10 p-4">
             <Table>
@@ -811,15 +818,18 @@ const DocumentosProbatorios = () => {
                   <TableHead>Estado</TableHead>
                   <TableHead>Actas</TableHead>
                   <TableHead>Foto</TableHead>
-                  <TableHead>Monto heredado</TableHead>
+                  <TableHead>Monto calculado</TableHead>
                   <TableHead className="text-right">Guardar</TableHead>
                   <TableHead>Resumen</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {heirsSortedByName.map((heir) => {
-                  const draft = heirDrafts[heir.id] || heir;
+                  const draft = heirDrafts[heir.id] || {};
                   const photo = draft.photo_data || heir.photo_data;
+                  const calculatedAmount = heir.sienna_member_id
+                    ? calculatedAmountsByMemberId.get(heir.sienna_member_id) ?? 0
+                    : 0;
                   return (
                   <TableRow key={heir.id}>
                     <TableCell className="font-medium text-legal-blue min-w-[240px]">
@@ -866,14 +876,8 @@ const DocumentosProbatorios = () => {
                       </div>
                     </TableCell>
                     <TableCell className="min-w-[180px]">
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={String(draft.inheritance_amount ?? heir.inheritance_amount ?? 0)}
-                        onChange={(event) => updateHeirDraft(heir.id, { inheritance_amount: event.target.value })}
-                      />
-                      <p className="mt-1 text-xs text-legal-gray">{formatMoney(draft.inheritance_amount ?? heir.inheritance_amount)}</p>
+                      <p className="font-semibold text-legal-blue">{formatMoney(calculatedAmount)}</p>
+                      <p className="mt-1 text-xs text-legal-gray">Calculado por API</p>
                     </TableCell>
                     <TableCell className="text-right">
                       <Button

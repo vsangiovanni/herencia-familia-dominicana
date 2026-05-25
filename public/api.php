@@ -3779,8 +3779,9 @@ try {
       json_response(['message' => 'El nombre del heredero es requerido'], 400);
     }
     $status = normalize_enum($data['status'] ?? null, ['mencionado', 'confirmado', 'pendiente'], 'mencionado');
+    $hasInheritanceAmount = array_key_exists('inheritance_amount', $data);
     exec_sql(
-      'UPDATE confirmed_heirs SET sienna_member_id = :siennaMemberId, heir_name = :name, relationship_summary = :summary, line_vincenzo = :vincenzo, line_paolo = :paolo, status = :status, notes = :notes, photo_file_name = :photoFileName, photo_file_type = :photoFileType, photo_data = :photoData, inheritance_amount = :inheritanceAmount, updated_by = :updatedBy WHERE id = :id',
+      'UPDATE confirmed_heirs SET sienna_member_id = :siennaMemberId, heir_name = :name, relationship_summary = :summary, line_vincenzo = :vincenzo, line_paolo = :paolo, status = :status, notes = :notes, photo_file_name = :photoFileName, photo_file_type = :photoFileType, photo_data = :photoData, inheritance_amount = CASE WHEN :hasInheritanceAmount = 1 THEN :inheritanceAmount ELSE inheritance_amount END, updated_by = :updatedBy WHERE id = :id',
       [
         'id' => $m[1],
         'siennaMemberId' => $data['sienna_member_id'] ?? null,
@@ -3793,7 +3794,8 @@ try {
         'photoFileName' => $data['photo_file_name'] ?? null,
         'photoFileType' => $data['photo_file_type'] ?? null,
         'photoData' => $data['photo_data'] ?? null,
-        'inheritanceAmount' => (float)($data['inheritance_amount'] ?? 0),
+        'hasInheritanceAmount' => $hasInheritanceAmount ? 1 : 0,
+        'inheritanceAmount' => $hasInheritanceAmount ? (float)($data['inheritance_amount'] ?? 0) : null,
         'updatedBy' => $user['id'],
       ]
     );

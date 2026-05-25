@@ -3163,8 +3163,9 @@ app.put('/api/confirmed-heirs/:id', requireAuth, requireEditor, async (req, res)
     photo_file_name,
     photo_file_type,
     photo_data,
-    inheritance_amount,
   } = req.body || {};
+  const hasInheritanceAmount = Object.prototype.hasOwnProperty.call(req.body || {}, 'inheritance_amount');
+  const inheritanceAmount = hasInheritanceAmount ? Number(req.body.inheritance_amount || 0) : null;
 
   if (!heir_name || !String(heir_name).trim()) {
     return res.status(400).json({ message: 'El nombre del heredero es requerido' });
@@ -3182,7 +3183,7 @@ app.put('/api/confirmed-heirs/:id', requireAuth, requireEditor, async (req, res)
          photo_file_name = :photoFileName,
          photo_file_type = :photoFileType,
          photo_data = :photoData,
-         inheritance_amount = :inheritanceAmount,
+         inheritance_amount = CASE WHEN :hasInheritanceAmount = 1 THEN :inheritanceAmount ELSE inheritance_amount END,
          updated_by = :updatedBy
      WHERE id = :id`,
     {
@@ -3197,7 +3198,8 @@ app.put('/api/confirmed-heirs/:id', requireAuth, requireEditor, async (req, res)
       photoFileName: photo_file_name || null,
       photoFileType: photo_file_type || null,
       photoData: photo_data || null,
-      inheritanceAmount: Number(inheritance_amount || 0),
+      hasInheritanceAmount: hasInheritanceAmount ? 1 : 0,
+      inheritanceAmount,
       updatedBy: req.user.id,
     }
   );

@@ -390,7 +390,6 @@ const MiembrosArbolSienna = () => {
         photo_file_name: photoDraft.fileName,
         photo_file_type: photoDraft.fileType,
         photo_data: photoDraft.data,
-        inheritance_amount: Number(linkedHeir.inheritance_amount || 0),
       });
       return;
     }
@@ -406,7 +405,6 @@ const MiembrosArbolSienna = () => {
       photo_file_name: photoDraft.fileName,
       photo_file_type: photoDraft.fileType,
       photo_data: photoDraft.data,
-      inheritance_amount: 0,
     });
   };
 
