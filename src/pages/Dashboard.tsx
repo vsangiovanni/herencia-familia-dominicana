@@ -1044,6 +1044,13 @@ const Dashboard = () => {
     : curiosityCards.length
       ? curiosityCards
       : fallbackCuriosityCards;
+  const curiosityOrigin = aiCuriosityCards.length ? 'nano' : 'fallback';
+  const curiosityCardClassName = curiosityOrigin === 'nano'
+    ? 'border-[#2E8B57]/55 bg-[#F3FBF6] dark:border-[#3FA37C]/45 dark:bg-[#10251D]'
+    : 'border-[#355C9A]/45 bg-[#F3F7FD] dark:border-[#5F8BD4]/40 dark:bg-[#101B2E]';
+  const curiosityEyebrowClassName = curiosityOrigin === 'nano'
+    ? 'text-[#1F7A4F] dark:text-[#7ED7A6]'
+    : 'text-[#355C9A] dark:text-[#9BB8E8]';
 
   const persona = useMemo(
     () =>
@@ -1157,8 +1164,8 @@ const Dashboard = () => {
                 </div>
               </div>
               <div className="mt-5 grid gap-3 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.9fr)] 2xl:grid-cols-[minmax(0,1.55fr)_minmax(380px,0.9fr)]">
-                <div className="rounded-md border border-legal-gold/25 bg-white/80 p-5 shadow-sm dark:border-[#D4AF37]/25 dark:bg-[#101827]/85">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-[#9B7418] dark:text-[#E6C768]">
+                <div className={cn('rounded-md border p-5 shadow-sm', curiosityCardClassName)}>
+                  <p className={cn('text-xs font-semibold uppercase tracking-wide', curiosityEyebrowClassName)}>
                     Sabías que...
                   </p>
                   <p className="mt-2 text-xl font-semibold leading-relaxed text-legal-blue dark:text-[#F5F7FA] sm:text-2xl">
@@ -1169,7 +1176,10 @@ const Dashboard = () => {
                   {(displayCuriosityCards.length > 1 ? displayCuriosityCards.slice(1) : [persona.curiosity]).map((fact, index) => (
                     <div
                       key={`legacy-curiosity-${index}-${fact}`}
-                      className="rounded-md border border-legal-blue/10 bg-[#FFF6D8]/80 p-4 text-sm font-medium leading-relaxed text-[#1B2430] shadow-sm dark:border-[#D4AF37]/20 dark:bg-[#162338] dark:text-[#F5F7FA]"
+                      className={cn(
+                        'rounded-md border p-4 text-sm font-medium leading-relaxed text-[#1B2430] shadow-sm dark:text-[#F5F7FA]',
+                        curiosityCardClassName
+                      )}
                     >
                       {fact}
                     </div>
