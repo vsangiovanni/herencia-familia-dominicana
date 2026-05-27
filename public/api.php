@@ -809,11 +809,22 @@ function sanitize_storybook_response_narrative(array $storybook): array {
 }
 
 function storybook_closing_dedication_fallback(): string {
-  return implode(' ', [
-    'Este cierre tambien honra a Alessandro de Paola Sangiovanni y a Jocelyn Sangiovanni, porque esta memoria familiar no llego hasta aqui por casualidad.',
-    'En gran parte, este recuerdo compartido y esta reagrupacion familiar pudieron tomar forma por su presencia, su impulso y su manera de mantener viva la union.',
-    'Gracias a ellos, la historia encontro nuevas manos para cuidarla, nuevos ojos para reconocerla y un camino mas claro para seguir reuniendo a la familia alrededor de lo que somos.'
-  ]);
+  return 'Gracias, Alessandro de Paola Sangiovanni y Jocelyn Sangiovanni, por mantener encendida esta memoria familiar y reunirnos alrededor de nuestras raices.';
+}
+
+function normalize_storybook_closing_dedication(string $text): string {
+  $fallback = storybook_closing_dedication_fallback();
+  $text = sanitize_family_memory_narrative($text);
+  $text = trim(preg_replace('/\s+/u', ' ', $text));
+  if ($text === '') return $fallback;
+  if (stripos($text, 'Alessandro de Paola Sangiovanni') === false || stripos($text, 'Jocelyn Sangiovanni') === false) {
+    return $fallback;
+  }
+  if (mb_strlen($text, 'UTF-8') > 190 || preg_match_all('/[.!?]/u', $text) > 1) {
+    return $fallback;
+  }
+  if (!preg_match('/[.!?]$/u', $text)) $text .= '.';
+  return $text;
 }
 
 function generate_storybook_closing_dedication($nonce = null): array {
@@ -826,22 +837,21 @@ function generate_storybook_closing_dedication($nonce = null): array {
 
   $payload = [
     'model' => $model,
-    'max_output_tokens' => 1000,
+    'max_output_tokens' => 160,
     'reasoning' => ['effort' => 'low'],
-    'text' => ['verbosity' => 'medium'],
+    'text' => ['verbosity' => 'low'],
     'input' => [
       [
         'role' => 'system',
         'content' => implode("\n", [
           'Eres una voz familiar narrando el cierre emocional de la memoria Sangiovanni.',
           'Escribe en espanol natural, familiar, elegante y conmovedor.',
-          'Genera una sola dedicatoria final, diferente cada vez, sin markdown ni titulo.',
+          'Genera una sola frase final, sin markdown ni titulo.',
           'Debe mencionar exactamente a Alessandro de Paola Sangiovanni y a Jocelyn Sangiovanni.',
-          'Debe expresar que este recuerdo familiar y esta reagrupacion se deben en gran parte a ellos.',
-          'Dales peso emocional: presentalos como piezas claves para que la memoria, el encuentro y la union familiar sigan vivos.',
+          'Debe expresar gratitud profunda, emocion y union familiar.',
           'Prohibido mencionar o insinuar herencia, herederos, sucesion, reparto, bienes, patrimonio, derechos legales, reclamos o cualquier tema juridico/economico.',
           'No uses la palabra "legado". Usa memoria familiar, recuerdo familiar, historia familiar, raices o union familiar.',
-          'Escribe 3 o 4 frases, entre 90 y 130 palabras, y termina con punto.',
+          'Maximo 24 palabras. Una sola frase. Debe ser impactante, breve y de corazon.',
         ]),
       ],
       [
@@ -871,13 +881,8 @@ function generate_storybook_closing_dedication($nonce = null): array {
     return ['text' => $fallback, 'model' => $model, 'mode' => 'fallback-error'];
   }
 
-  $text = sanitize_family_memory_narrative(response_output_text($data));
+  $text = normalize_storybook_closing_dedication(response_output_text($data));
   if (trim($text) === '') return ['text' => $fallback, 'model' => $model, 'mode' => 'fallback-empty'];
-  if (stripos($text, 'Alessandro de Paola Sangiovanni') === false || stripos($text, 'Jocelyn Sangiovanni') === false) {
-    $text = 'A Alessandro de Paola Sangiovanni y a Jocelyn Sangiovanni, ' . preg_replace('/^a\s+/iu', '', $text);
-  }
-  $text = sanitize_family_memory_narrative($text);
-  if (!preg_match('/[.!?]$/u', $text)) $text .= '.';
   return ['text' => $text, 'model' => $model, 'mode' => 'openai'];
 }
 

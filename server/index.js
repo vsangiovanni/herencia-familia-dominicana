@@ -4354,11 +4354,16 @@ async function generateStorybookSlideNarrative(packet) {
 async function generateStorybookClosingDedication({ nonce }) {
   const apiKey = process.env.OPENAI_API_KEY;
   const model = STORYBOOK_AI_MODEL;
-  const fallbackText = [
-    'Este cierre tambien honra a Alessandro de Paola Sangiovanni y a Jocelyn Sangiovanni, porque esta memoria familiar no llego hasta aqui por casualidad.',
-    'En gran parte, este recuerdo compartido y esta reagrupacion familiar pudieron tomar forma por su presencia, su impulso y su manera de mantener viva la union.',
-    'Gracias a ellos, la historia encontro nuevas manos para cuidarla, nuevos ojos para reconocerla y un camino mas claro para seguir reuniendo a la familia alrededor de lo que somos.'
-  ].join(' ');
+  const fallbackText = 'Gracias, Alessandro de Paola Sangiovanni y Jocelyn Sangiovanni, por mantener encendida esta memoria familiar y reunirnos alrededor de nuestras raices.';
+  const normalizeDedication = (value) => {
+    let text = sanitizeFamilyMemoryNarrative(String(value || '')).replace(/\s+/g, ' ').trim();
+    if (!text) return fallbackText;
+    if (!text.includes('Alessandro de Paola Sangiovanni') || !text.includes('Jocelyn Sangiovanni')) return fallbackText;
+    const sentenceCount = (text.match(/[.!?]/g) || []).length;
+    if (text.length > 190 || sentenceCount > 1) return fallbackText;
+    if (!/[.!?]$/.test(text)) text += '.';
+    return text;
+  };
 
   if (!apiKey) {
     return { text: fallbackText, model, mode: 'fallback-no-key' };
@@ -4372,25 +4377,23 @@ async function generateStorybookClosingDedication({ nonce }) {
     },
     body: JSON.stringify({
       model,
-      max_output_tokens: 1000,
+      max_output_tokens: 160,
       reasoning: { effort: 'low' },
-      text: { verbosity: 'medium' },
+      text: { verbosity: 'low' },
       input: [
         {
           role: 'system',
           content: [
             'Eres una voz familiar narrando el cierre emocional de la memoria Sangiovanni.',
             'Escribe en espanol natural, familiar, elegante y conmovedor.',
-            'Genera una sola dedicatoria final, diferente cada vez, sin markdown ni titulo.',
+            'Genera una sola frase final, sin markdown ni titulo.',
             'Debe mencionar exactamente a Alessandro de Paola Sangiovanni y a Jocelyn Sangiovanni.',
-            'Debe expresar que este recuerdo familiar y esta reagrupacion se deben en gran parte a ellos.',
-            'Dales peso emocional: presentalos como piezas claves para que la memoria, el encuentro y la union familiar sigan vivos.',
-            'Debe sonar motivadora, agradecida y de corazon, como cierre de una experiencia familiar que honra a toda la familia.',
+            'Debe expresar gratitud profunda, emocion y union familiar.',
             'Prohibido mencionar o insinuar herencia, herederos, sucesion, reparto, bienes, patrimonio, derechos legales, reclamos o cualquier tema juridico/economico.',
             'No uses la palabra "legado". Usa memoria familiar, recuerdo familiar, historia familiar, raices o union familiar.',
             'Evita palabras frias o raras como "salvedad"; debe sentirse humano, claro y emotivo.',
             'No inventes hechos, cargos, fechas ni parentescos adicionales.',
-            'Escribe 3 o 4 frases, entre 90 y 130 palabras, y termina con punto.',
+            'Maximo 24 palabras. Una sola frase. Debe ser impactante, breve y de corazon.',
           ].join('\n'),
         },
         {
@@ -4414,15 +4417,9 @@ async function generateStorybookClosingDedication({ nonce }) {
     || payload.output?.flatMap((item) => item.content || []).map((part) => part.text || '').join('\n')
     || '')
     .trim();
-  text = sanitizeFamilyMemoryNarrative(text);
+  text = normalizeDedication(text);
 
   if (!text) return { text: fallbackText, model, mode: 'fallback-empty' };
-
-  if (!text.includes('Alessandro de Paola Sangiovanni') || !text.includes('Jocelyn Sangiovanni')) {
-    text = 'A Alessandro de Paola Sangiovanni y a Jocelyn Sangiovanni, ' + text.replace(/^a\s+/i, '');
-  }
-  text = sanitizeFamilyMemoryNarrative(text);
-  if (!/[.!?]$/.test(text)) text += '.';
 
   return { text, model, mode: 'openai' };
 }

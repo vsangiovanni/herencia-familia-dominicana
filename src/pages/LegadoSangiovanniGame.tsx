@@ -313,16 +313,17 @@ const LegacyCredits = ({
       <AnimatePresence>
         {showDedication ? (
           <motion.div
-            className={'absolute left-1/2 top-[24vh] z-[38] w-[min(52rem,90vw)] -translate-x-1/2 rounded-[0.45rem] border px-4 py-5 text-center shadow-[0_24px_80px_rgba(0,0,0,0.52)] backdrop-blur-md md:top-[22vh] md:px-10 md:py-8 ' + dedicationFrameClass}
-            initial={{ opacity: 0, y: 28, scale: 0.96, filter: 'blur(8px)' }}
-            animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
+            className={'absolute left-1/2 top-1/2 z-[38] w-[min(34rem,86vw)] rounded-[0.45rem] border px-4 py-4 text-center shadow-[0_24px_80px_rgba(0,0,0,0.52)] backdrop-blur-md md:top-[22vh] md:w-[min(48rem,82vw)] md:px-10 md:py-7 ' + dedicationFrameClass}
+            style={{ x: '-50%', y: '-50%' }}
+            initial={{ opacity: 0, scale: 0.96, filter: 'blur(8px)' }}
+            animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
             exit={{ opacity: 0, y: -18, scale: 0.98 }}
             transition={{ duration: 1.15, ease: 'easeOut' }}
           >
             <p className={'mb-3 text-[0.65rem] font-black uppercase tracking-[0.32em] md:text-xs ' + (isNanoDedication ? 'text-emerald-100' : 'text-[#f8e5bd]/78')}>
               Mencion especial
             </p>
-            <p className="font-serif text-[1.28rem] font-black leading-tight text-[#fff7e6] drop-shadow-[0_4px_22px_rgba(0,0,0,0.72)] md:text-4xl">
+            <p className="mx-auto max-w-[30rem] font-serif text-[1.06rem] font-black leading-snug text-[#fff7e6] drop-shadow-[0_4px_22px_rgba(0,0,0,0.72)] md:max-w-[42rem] md:text-3xl">
               {dedication?.text}
             </p>
           </motion.div>
