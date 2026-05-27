@@ -1,7 +1,7 @@
 {
-  "name": "Legado Sangiovanni",
+  "name": "Memoria Familiar Sangiovanni",
   "short_name": "Sangiovanni",
-  "description": "Expediente familiar, genealogia y determinacion sucesoral del legado Sangiovanni.",
+  "description": "Recorrido familiar Sangiovanni con raices, documentos, fotografias y memoria compartida entre generaciones.",
   "id": "/sienna",
   "start_url": "/sienna",
   "scope": "/",

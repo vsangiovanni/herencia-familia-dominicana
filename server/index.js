@@ -3926,7 +3926,7 @@ const storybookMemberImportance = (member) => {
   const id = String(member?.id || '');
   const normalizedName = storybookNormalize(member?.name || '');
   if (id === 'alessandro' || normalizedName === 'alessandro-de-paola-sangiovanni') {
-    return 'Su nombre ocupa un lugar central en este legado: alrededor de Alessandro de Paola Sangiovanni la familia vuelve a mirar sus ramas, sus memorias y el camino que la trajo hasta aqui.';
+    return 'Su nombre ocupa un lugar central en esta memoria familiar: alrededor de Alessandro de Paola Sangiovanni la familia vuelve a mirar sus ramas, sus recuerdos y el camino que la trajo hasta aqui.';
   }
   if (id === 'jocelyn' || normalizedName === 'jocelyn-del-jesus-sangiovanni-baez') {
     return 'Jocelyn no aparece solo como un nombre mas: su presencia recuerda la fuerza de la rama de Jose Vicente Sangiovanni Gesualdo dentro de la linea de Vincenzo/Vicente.';
@@ -4069,7 +4069,7 @@ const storybookEraIntro = (yearStart, yearEnd, group) => {
     return 'Durante los anos sesenta, la historia familiar se vuelve mas amplia y cercana. Nuevos hijos, nuevos hogares y nuevas voces empiezan a formar esa red de primos, tios y abuelos que despues todos llamarian familia. ';
   }
   if (yearStart < 1980) {
-    return 'En los anos setenta, el legado ya no vive solo en los recuerdos de los mayores. Empieza a caminar en una generacion que recibe nombres, costumbres y relatos para llevarlos hacia adelante. ';
+    return 'En los anos setenta, la memoria familiar ya no vive solo en los recuerdos de los mayores. Empieza a caminar en una generacion que recibe nombres, costumbres y relatos para llevarlos hacia adelante. ';
   }
   if (yearStart === yearEnd) return 'En ' + yearStart + ', otra vida llega a esta historia que sigue creciendo. ';
   return 'Entre ' + yearStart + ' y ' + yearEnd + ', la familia sigue abriendo caminos y dejando nuevas huellas para quienes vendrian despues. ';
@@ -4099,8 +4099,36 @@ const splitStorybookGroup = (group, maxSize = 6) => {
 
 const STORYBOOK_DECEASED_MEMBER_IDS = new Set(['domenico', 'maria-rosa-grisolia']);
 const STORYBOOK_AI_NARRATIVE_CACHE = new Map();
-const STORYBOOK_AI_NARRATIVE_PROMPT_VERSION = '2026-05-27-v3';
+const STORYBOOK_AI_NARRATIVE_PROMPT_VERSION = '2026-05-27-v4-memoria-familiar';
 const STORYBOOK_AI_MODEL = process.env.STORYBOOK_OPENAI_MODEL || 'gpt-5-nano';
+
+const sanitizeFamilyMemoryNarrative = (value) =>
+  String(value || '')
+    .replace(/\blegado\b/gi, 'memoria familiar')
+    .replace(/\bherencias?\b/gi, 'memoria familiar')
+    .replace(/\bherederos?\b/gi, 'personas mencionadas')
+    .replace(/\bsucesiones?\b/gi, 'historia familiar')
+    .replace(/\brepartos?\b/gi, 'encuentros')
+    .replace(/\bpatrimonios?\b/gi, 'recuerdos familiares')
+    .replace(/\bbienes\b/gi, 'recuerdos')
+    .replace(/\bderechos legales\b/gi, 'vinculos familiares')
+    .replace(/\bjur[ií]dic[ao]s?\b/gi, 'familiares')
+    .replace(/\blegales?\b/gi, 'familiares');
+
+const sanitizeStorybookResponseNarrative = (storybook) => ({
+  ...storybook,
+  slides: (storybook.slides || []).map((slide) => ({
+    ...slide,
+    title: sanitizeFamilyMemoryNarrative(slide.title),
+    text: sanitizeFamilyMemoryNarrative(slide.text),
+    location: sanitizeFamilyMemoryNarrative(slide.location),
+    creditMembers: slide.creditMembers?.map((member) => ({
+      ...member,
+      treePosition: sanitizeFamilyMemoryNarrative(member.treePosition),
+      importance: member.importance ? sanitizeFamilyMemoryNarrative(member.importance) : member.importance,
+    })),
+  })),
+});
 
 const buildStorybookMemberPhotos = (members, photoLookup) =>
   members
@@ -4164,7 +4192,7 @@ const buildStorybookCreditMembers = (members, parentLinks, photoLookup) => {
       const generation = generationLookup.get(String(member.id)) || null;
       const importance = storybookMemberImportance(member);
       const creditRole = String(member.id) === 'alessandro'
-        ? 'Figura central del legado'
+        ? 'Figura central de la memoria familiar'
         : String(member.id) === 'jocelyn'
           ? 'Rama importante - Jose Vicente'
           : null;
@@ -4245,7 +4273,7 @@ const buildStorybookSlideNarrativePacket = (slide, { family, heirs, documents, p
     documentos_relacionados: relevantDocuments,
     totales_del_expediente: {
       miembros: family.members.length,
-      herederos_o_mencionados: heirs.length,
+      personas_mencionadas: heirs.length,
       uniones: family.unions.length,
       documentos: documents.length,
     },
@@ -4280,13 +4308,16 @@ async function generateStorybookSlideNarrative(packet) {
         {
           role: 'system',
           content: [
-            'Eres narrador familiar del Legado Sangiovanni.',
+            'Eres narrador de una memoria familiar Sangiovanni.',
             'Escribe en espanol, con tono historico, humano, elegante y cinematografico.',
             'Usa solamente los datos del paquete. No inventes fechas, lugares, parentescos, migraciones ni fallecimientos.',
             'Si falta un dato, no lo menciones como ausencia tecnica. Integra a la persona por su hogar, rama o vinculo real.',
             'Evita sonar a informe. No uses frases como "los registros indican", "los registros ubican", "documentado", "evidencia", "expediente", "base de datos", "sin fecha exacta" o "no hay datos".',
+            'Prohibido mencionar o insinuar herencia, herederos, sucesion, reparto, bienes, patrimonio, derechos legales, reclamos o cualquier tema juridico/economico.',
+            'No uses la palabra "legado" como sustituto de herencia. Prefiere "memoria familiar", "recuerdo familiar", "historia familiar", "raices" o "linaje" cuando encaje naturalmente.',
             'Cuenta la escena como una voz familiar: cercana, orgullosa, natural y motivadora, como alguien narrando a sus descendientes de donde vienen.',
             'Menciona todos los miembros del slide de forma natural, sin convertir el texto en tabla.',
+            'Si el slide habla de reconstruccion presente, conserva la idea de que Victor impulsa la investigacion, Bernardo aporta esfuerzo y apoyo, y Gina participa como apoyo familiar importante.',
             'Escribe 2 a 4 frases completas, entre 90 y 150 palabras, y termina siempre con punto.',
             'Mantén coherencia con el texto actual si su direccion narrativa es buena.',
             'Devuelve solamente el texto narrativo final, sin markdown, sin titulo y sin explicaciones.',
@@ -4305,10 +4336,11 @@ async function generateStorybookSlideNarrative(packet) {
     throw new Error(payload?.error?.message || 'No se pudo generar narrativa con Nano.');
   }
 
-  const text = (payload.output_text
+  let text = (payload.output_text
     || payload.output?.flatMap((item) => item.content || []).map((part) => part.text || '').join('\n')
     || '')
     .trim();
+  text = sanitizeFamilyMemoryNarrative(text);
 
   if (!text) throw new Error('Nano no devolvio narrativa.');
   const minimumUsefulLength = Math.min(180, Math.max(90, Math.round(String(packet.slide.texto_actual || '').length * 0.32)));
@@ -4317,6 +4349,82 @@ async function generateStorybookSlideNarrative(packet) {
   }
   STORYBOOK_AI_NARRATIVE_CACHE.set(cacheKey, text);
   return { text, model, mode: 'openai', cacheKey };
+}
+
+async function generateStorybookClosingDedication({ nonce }) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  const model = STORYBOOK_AI_MODEL;
+  const fallbackText = [
+    'Este cierre tambien honra a Alessandro de Paola Sangiovanni y a Jocelyn Sangiovanni, porque esta memoria familiar no llego hasta aqui por casualidad.',
+    'En gran parte, este recuerdo compartido y esta reagrupacion familiar pudieron tomar forma por su presencia, su impulso y su manera de mantener viva la union.',
+    'Gracias a ellos, la historia encontro nuevas manos para cuidarla, nuevos ojos para reconocerla y un camino mas claro para seguir reuniendo a la familia alrededor de lo que somos.'
+  ].join(' ');
+
+  if (!apiKey) {
+    return { text: fallbackText, model, mode: 'fallback-no-key' };
+  }
+
+  const response = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + apiKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      max_output_tokens: 1000,
+      reasoning: { effort: 'low' },
+      text: { verbosity: 'medium' },
+      input: [
+        {
+          role: 'system',
+          content: [
+            'Eres una voz familiar narrando el cierre emocional de la memoria Sangiovanni.',
+            'Escribe en espanol natural, familiar, elegante y conmovedor.',
+            'Genera una sola dedicatoria final, diferente cada vez, sin markdown ni titulo.',
+            'Debe mencionar exactamente a Alessandro de Paola Sangiovanni y a Jocelyn Sangiovanni.',
+            'Debe expresar que este recuerdo familiar y esta reagrupacion se deben en gran parte a ellos.',
+            'Dales peso emocional: presentalos como piezas claves para que la memoria, el encuentro y la union familiar sigan vivos.',
+            'Debe sonar motivadora, agradecida y de corazon, como cierre de una experiencia familiar que honra a toda la familia.',
+            'Prohibido mencionar o insinuar herencia, herederos, sucesion, reparto, bienes, patrimonio, derechos legales, reclamos o cualquier tema juridico/economico.',
+            'No uses la palabra "legado". Usa memoria familiar, recuerdo familiar, historia familiar, raices o union familiar.',
+            'Evita palabras frias o raras como "salvedad"; debe sentirse humano, claro y emotivo.',
+            'No inventes hechos, cargos, fechas ni parentescos adicionales.',
+            'Escribe 3 o 4 frases, entre 90 y 130 palabras, y termina con punto.',
+          ].join('\n'),
+        },
+        {
+          role: 'user',
+          content: JSON.stringify({
+            objetivo: 'Dedicatoria final posterior a los creditos de la memoria familiar Sangiovanni.',
+            personas: ['Alessandro de Paola Sangiovanni', 'Jocelyn Sangiovanni'],
+            nonce: nonce || new Date().toISOString(),
+          }),
+        },
+      ],
+    }),
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload?.error?.message || 'No se pudo generar dedicatoria con Nano.');
+  }
+
+  let text = (payload.output_text
+    || payload.output?.flatMap((item) => item.content || []).map((part) => part.text || '').join('\n')
+    || '')
+    .trim();
+  text = sanitizeFamilyMemoryNarrative(text);
+
+  if (!text) return { text: fallbackText, model, mode: 'fallback-empty' };
+
+  if (!text.includes('Alessandro de Paola Sangiovanni') || !text.includes('Jocelyn Sangiovanni')) {
+    text = 'A Alessandro de Paola Sangiovanni y a Jocelyn Sangiovanni, ' + text.replace(/^a\s+/i, '');
+  }
+  text = sanitizeFamilyMemoryNarrative(text);
+  if (!/[.!?]$/.test(text)) text += '.';
+
+  return { text, model, mode: 'openai' };
 }
 
 async function applyAiNarrativeToStorybook(storybook, { family, heirs, documents }) {
@@ -4388,6 +4496,7 @@ function buildSiennaStorybookSlides({ family, heirs, documents }) {
     return String(a.name).localeCompare(String(b.name), 'es');
   });
   const memberById = new Map(members.map((member) => [String(member.id), member]));
+  const memberByNormalizedName = new Map(members.map((member) => [storybookNormalize(member.name), member]));
   if (!memberById.has('maria-rosa-grisolia')) {
     memberById.set('maria-rosa-grisolia', {
       id: 'maria-rosa-grisolia',
@@ -4593,11 +4702,38 @@ function buildSiennaStorybookSlides({ family, heirs, documents }) {
     });
   }
 
+  const modernPreservers = [
+    memberById.get('victor-manuel-martin') || memberByNormalizedName.get(storybookNormalize('Víctor Manuel Martín Sangiovanni Rodríguez')),
+    memberByNormalizedName.get(storybookNormalize('Bernardo Martín Lizardo Sangiovanni')),
+    memberByNormalizedName.get(storybookNormalize('Gina Mora Sangiovanni')),
+  ].filter(Boolean);
+
+  if (modernPreservers.length) {
+    const text = 'Generaciones despues, algunos descendientes decidieron reconstruir la historia que el tiempo casi habia olvidado. Victor Manuel Martin Sangiovanni Rodriguez impulso la investigacion y la recuperacion historica; Bernardo Martin Lizardo Sangiovanni aporto esfuerzo y apoyo en el proceso; y Gina Mora Sangiovanni tambien formo parte importante de ese trabajo compartido y del apoyo familiar. Esta memoria no sobrevivio sola: volvio a tomar forma porque hubo manos, emociones y voluntad para unir las piezas de la historia Sangiovanni.';
+    slides.push({
+      id: 'puente-presente',
+      title: 'El puente del presente',
+      text,
+      location: 'Memoria familiar actual',
+      visual: 'familyTree',
+      durationMs: storybookDuration(text, 17500),
+      backgroundImage: STORYBOOK_BACKGROUNDS.memoryArchive2,
+      archiveImage: undefined,
+      archiveCaption: undefined,
+      tone: 'memory',
+      members: modernPreservers.map((member) => member.id),
+      memberPhotos: buildStorybookMemberPhotos(modernPreservers, photoLookup),
+      year: 'Presente',
+      eventKind: 'reconstruccion-presente',
+      assetPrompt: 'Escena cinematografica y emocional de descendientes modernos reconstruyendo una memoria familiar con documentos, fotos y recuerdos compartidos, puente entre pasado y presente.',
+    });
+  }
+
   slides.push({
     id: 'legacy',
-    title: 'Un libro familiar en movimiento',
-    text: 'La historia queda abierta como un libro vivo. Detras de cada nombre hay una rama, una casa, una partida, una llegada o una memoria que todavia conversa con las generaciones presentes. Mirar este recorrido es recordar de donde venimos y reconocer a quienes, con sus decisiones y sacrificios, hicieron posible que el linaje siguiera creciendo. En conjunto, ' + members.length + ' miembros, ' + heirs.length + ' herederos o personas mencionadas, ' + family.unions.length + ' uniones y ' + documents.length + ' documentos sostienen este legado familiar.',
-    location: 'Legado Sangiovanni',
+    title: 'Un recuerdo familiar en movimiento',
+    text: 'La historia queda abierta como un libro vivo. Detras de cada nombre hay una rama, una casa, una partida, una llegada o una memoria que todavia conversa con las generaciones presentes. Mirar este recorrido es recordar de donde venimos y reconocer a quienes, con sus decisiones y sacrificios, hicieron posible que el linaje siguiera creciendo. En conjunto, ' + members.length + ' miembros, ' + heirs.length + ' personas mencionadas, ' + family.unions.length + ' uniones y ' + documents.length + ' documentos sostienen esta memoria familiar.',
+    location: 'Memoria Sangiovanni',
     visual: 'legacy',
     durationMs: 15500,
     backgroundImage: STORYBOOK_BACKGROUNDS.legacy,
@@ -4634,10 +4770,32 @@ app.get('/api/sienna-storybook', requireAuth, async (req, res) => {
     const heirs = await loadConfirmedHeirs(false);
     const documents = await loadEvidenceDocuments(false);
     const storybook = buildSiennaStorybookSlides({ family, heirs, documents });
-    if (!aiNarrative) return storybook;
-    return applyAiNarrativeToStorybook(storybook, { family, heirs, documents });
+    if (!aiNarrative) return sanitizeStorybookResponseNarrative(storybook);
+    return sanitizeStorybookResponseNarrative(await applyAiNarrativeToStorybook(storybook, { family, heirs, documents }));
   });
   res.json(response);
+});
+
+app.get('/api/sienna-storybook-dedication', requireAuth, async (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  try {
+    const dedication = await generateStorybookClosingDedication({ nonce: req.query.nonce });
+    res.json({
+      ...dedication,
+      generated_at: new Date().toISOString(),
+    });
+  } catch {
+    res.json({
+      text: [
+        'Este cierre tambien honra a Alessandro de Paola Sangiovanni y a Jocelyn Sangiovanni, porque esta memoria familiar no llego hasta aqui por casualidad.',
+        'En gran parte, este recuerdo compartido y esta reagrupacion familiar pudieron tomar forma por su presencia, su impulso y su manera de mantener viva la union.',
+        'Gracias a ellos, la historia encontro nuevas manos para cuidarla, nuevos ojos para reconocerla y un camino mas claro para seguir reuniendo a la familia alrededor de lo que somos.'
+      ].join(' '),
+      mode: 'fallback-error',
+      model: STORYBOOK_AI_MODEL,
+      generated_at: new Date().toISOString(),
+    });
+  }
 });
 
 app.get('/api/sienna-calculation', requireAuth, async (req, res) => {

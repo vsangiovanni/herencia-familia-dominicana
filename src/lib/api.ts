@@ -355,6 +355,13 @@ export interface SiennaStorybookResponse {
   };
 }
 
+export interface SiennaStorybookDedicationResponse {
+  text: string;
+  mode: string;
+  model: string;
+  generated_at: string;
+}
+
 export type FamilyUnionType = "matrimonio" | "union_libre" | "otra";
 export type GenealogyConfidence = "alta" | "media" | "baja";
 export type ParentRole = "padre" | "madre" | "progenitor";
@@ -610,6 +617,12 @@ export const api = {
     if (options?.aiNarrative) params.set("aiNarrative", "1");
     const query = params.toString();
     return request<SiennaStorybookResponse>("/api/sienna-storybook" + (query ? "?" + query : ""));
+  },
+  getSiennaStorybookDedication: (options?: { nonce?: string | number }) => {
+    const params = new URLSearchParams();
+    if (options?.nonce !== undefined) params.set("nonce", String(options.nonce));
+    const query = params.toString();
+    return request<SiennaStorybookDedicationResponse>("/api/sienna-storybook-dedication" + (query ? "?" + query : ""));
   },
   getSiennaCalculation: (options?: { estateAmount?: number | string; lawyerFeePercentage?: number | string }) => {
     const params = new URLSearchParams();

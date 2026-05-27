@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronLeft, ChevronRight, Home, Map, Pause, Play, Volume2, VolumeX, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useSiennaStorybook } from '@/hooks/useSiennaData';
+import { useSiennaStorybook, useSiennaStorybookDedication } from '@/hooks/useSiennaData';
 import NarrativeText from '@/story/legado/NarrativeText';
 import type { LegadoStoryScene } from '@/story/legado/storyScenes';
 import { legadoStoryScenes } from '@/story/legado/storyScenes';
@@ -57,8 +57,8 @@ const MemberPhotoCollage = ({ photos }: { photos: NonNullable<LegadoStoryScene['
   const isDense = photos.length > 6;
   const visiblePhotos = photos.slice(0, isDense ? 16 : 12);
   const mobileLayoutClass = isDense
-    ? 'right-[3vw] top-[13vh] grid max-h-[76vh] max-w-[9.4rem] grid-cols-2 items-start gap-x-1.5 gap-y-1.5 overflow-visible'
-    : 'right-[5vw] top-[33vh] flex max-h-[54vh] max-w-[5.6rem] flex-col flex-nowrap items-center gap-1.5 overflow-hidden';
+    ? 'right-[3vw] top-[18vh] grid max-h-[70vh] max-w-[9.4rem] grid-cols-2 items-start gap-x-1.5 gap-y-1.5 overflow-visible'
+    : 'right-[5vw] top-[38vh] flex max-h-[48vh] max-w-[5.6rem] flex-col flex-nowrap items-center gap-1.5 overflow-hidden';
   const photoSizeClass = isDense
     ? 'h-11 w-11 md:h-20 md:w-20 xl:h-24 xl:w-24'
     : 'h-12 w-12 md:h-20 md:w-20 xl:h-24 xl:w-24';
@@ -162,75 +162,160 @@ const formatCreditYears = (member: NonNullable<LegadoStoryScene['creditMembers']
 const getCreditDockSeconds = (creditIndex: number, durationSeconds: number) =>
   Math.min(creditIndex * 0.95, durationSeconds - 4);
 
-const getMemberInitials = (name: string) =>
-  name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join('');
+const getCreditRollDurationSeconds = (memberCount: number) =>
+  Math.max(46, Math.min(92, memberCount * 1.15));
 
-const LegacyCredits = ({ members }: { members: NonNullable<LegadoStoryScene['creditMembers']> }) => {
-  const durationSeconds = Math.max(46, Math.min(92, members.length * 1.15));
+const getPhotoSparkleStyle = (index: number, total: number): React.CSSProperties => {
+  const xBase = 8 + ((index * 37 + total * 11) % 82);
+  const yBase = 12 + ((index * 53 + total * 7) % 70);
+  const size = 44 + ((index * 17) % 28);
+
+  return {
+    left: Math.max(6, Math.min(90, xBase)) + '%',
+    top: Math.max(8, Math.min(82, yBase)) + '%',
+    width: size,
+    height: size,
+  };
+};
+
+const LegacyPhotoConstellation = ({ members }: { members: NonNullable<LegadoStoryScene['creditMembers']> }) => {
+  const photoMembers = members.filter((member) => member.photoData);
+  if (!photoMembers.length) return null;
+
+  const cycleSeconds = Math.max(18, Math.min(52, photoMembers.length * 1.35));
+
+  return (
+    <div className="absolute inset-x-[4vw] bottom-[4vh] top-[50vh] z-[36] overflow-hidden md:inset-x-[8vw] md:top-[49vh]">
+      <p className="absolute left-1/2 top-0 z-10 -translate-x-1/2 text-center text-[0.62rem] font-black uppercase tracking-[0.28em] text-[#f8e5bd]/78 md:text-xs">
+        Rostros de la familia
+      </p>
+      {photoMembers.map((member, index) => (
+        <motion.div
+          key={'legacy-photo-spark-' + member.memberId + '-' + index}
+          className="absolute grid place-items-center"
+          style={getPhotoSparkleStyle(index, photoMembers.length)}
+          initial={{ opacity: 0, scale: 0.3, filter: 'blur(12px)' }}
+          animate={{
+            opacity: [0, 0, 0.96, 0.16, 0.88, 0],
+            scale: [0.35, 0.72, 1.16, 0.92, 1.03, 0.58],
+            filter: ['blur(14px)', 'blur(7px)', 'blur(0px)', 'blur(1.5px)', 'blur(0px)', 'blur(10px)'],
+          }}
+          transition={{
+            duration: cycleSeconds,
+            delay: index * 1.28,
+            times: [0, 0.02, 0.045, 0.068, 0.092, 0.13],
+            repeat: Infinity,
+            ease: 'easeInOut',
+          }}
+        >
+          <div className="absolute inset-[-32%] rounded-full bg-[#f8e5bd]/18 blur-xl" />
+          <div className="relative h-full w-full overflow-hidden rounded-full border-2 border-[#f8e5bd]/82 bg-[#f7ead0] shadow-[0_0_36px_rgba(248,229,189,0.48),0_14px_34px_rgba(0,0,0,0.48)]">
+            <img
+              src={member.photoData || ''}
+              alt={member.name}
+              className="h-full w-full object-cover sepia-[0.16] contrast-[1.05] saturate-[0.9]"
+              draggable={false}
+            />
+          </div>
+        </motion.div>
+      ))}
+    </div>
+  );
+};
+
+const LegacyCredits = ({
+  members,
+  dedication,
+  showDedication,
+}: {
+  members: NonNullable<LegadoStoryScene['creditMembers']>;
+  dedication?: { text: string; mode: string } | null;
+  showDedication: boolean;
+}) => {
+  const durationSeconds = getCreditRollDurationSeconds(members.length);
+  const isNanoDedication = dedication?.mode === 'openai';
+  const dedicationFrameClass = isNanoDedication
+    ? 'border-emerald-200/70 bg-emerald-950/82 ring-2 ring-emerald-300/35'
+    : 'border-[#f8e5bd]/38 bg-[#080706]/82';
 
   return (
     <motion.div
-      className="pointer-events-none absolute bottom-0 left-[7vw] right-[5vw] top-[20vh] z-[35] overflow-hidden text-left md:left-[9vw] md:right-[7vw] md:top-[18vh]"
+      className="pointer-events-none absolute inset-0 z-[35] overflow-hidden text-center"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 1.4, ease: 'easeOut' }}
     >
-      <div
-        className="legacy-credit-roll flex max-w-5xl flex-col items-stretch gap-3 pb-[48vh]"
-        style={{ '--credit-duration': durationSeconds + 's' } as React.CSSProperties}
-      >
-        <p className="mb-5 font-serif text-2xl font-black uppercase tracking-normal text-[#fff7e6] drop-shadow-[0_4px_22px_rgba(0,0,0,0.8)] md:text-5xl">
-          Creditos del linaje
-        </p>
-        {members.map((member, index) => {
-          const isImportant = member.memberId === 'alessandro' || member.memberId === 'jocelyn';
-          return (
-          <div key={member.memberId + '-' + index} className={`flex w-full items-center gap-3 border-b pb-2 md:gap-5 ${isImportant ? 'border-[#f8e5bd]/42 bg-[#f8e5bd]/10 px-2 py-2 shadow-[0_0_34px_rgba(248,229,189,0.14)]' : 'border-[#f8e5bd]/10'}`}>
-            {member.photoData ? (
-              <motion.div
-                className={`h-12 w-12 shrink-0 overflow-hidden rounded-full border-2 bg-[#f7ead0] shadow-[0_10px_26px_rgba(0,0,0,0.42)] md:h-16 md:w-16 ${isImportant ? 'border-[#fff7e6] ring-2 ring-[#f8e5bd]/80' : 'border-[#f8e5bd]/78'}`}
-                initial={{ opacity: 0, x: -96, scale: 0.8, filter: 'blur(4px)' }}
-                animate={{ opacity: 1, x: 0, scale: 1, filter: 'blur(0px)' }}
-                transition={{ duration: 1.05, delay: getCreditDockSeconds(index, durationSeconds), ease: 'easeOut' }}
-              >
-                <img
-                  src={member.photoData}
-                  alt={member.name}
-                  className="h-full w-full object-cover sepia-[0.2] contrast-[1.05] saturate-[0.88]"
-                  draggable={false}
-                />
-              </motion.div>
-            ) : (
-              <motion.div
-                className="grid h-12 w-12 shrink-0 place-items-center rounded-full border border-[#f8e5bd]/26 bg-[#080706]/48 text-xs font-black uppercase text-[#f8e5bd]/76 shadow-[0_10px_26px_rgba(0,0,0,0.28)] md:h-16 md:w-16 md:text-sm"
-                initial={{ opacity: 0, x: -72, scale: 0.86 }}
-                animate={{ opacity: 1, x: 0, scale: 1 }}
-                transition={{ duration: 0.9, delay: getCreditDockSeconds(index, durationSeconds), ease: 'easeOut' }}
-                aria-hidden="true"
-              >
-                {getMemberInitials(member.name)}
-              </motion.div>
-            )}
-            <div className="min-w-0">
-              <p className={`font-serif text-lg font-black leading-tight drop-shadow-[0_3px_16px_rgba(0,0,0,0.78)] md:text-3xl ${isImportant ? 'text-[#f8e5bd]' : 'text-[#fff7e6]'}`}>
-                {member.name}
-              </p>
-              <p className="mt-1 text-[0.62rem] font-black uppercase tracking-[0.22em] text-[#f8e5bd]/78 md:text-xs">
-                {formatCreditYears(member)} · {member.treePosition || 'Linaje familiar'}
-              </p>
-            </div>
-          </div>
-          );
-        })}
-        <p className="mt-8 font-serif text-xl font-black text-[#fff7e6]/92 md:text-3xl">
-          Una historia viva, guardada por la familia.
-        </p>
+      <div className="absolute inset-x-0 bottom-0 top-[22vh] overflow-hidden md:top-[20vh]">
+        <div
+          className="legacy-credit-roll mx-auto flex w-[min(58rem,88vw)] flex-col items-center gap-2.5 pb-[48vh] transition-opacity duration-700 md:gap-3"
+          style={{
+            '--credit-duration': durationSeconds + 's',
+            opacity: showDedication ? 0 : 1,
+          } as React.CSSProperties}
+        >
+          <p className="mb-5 font-serif text-2xl font-black uppercase tracking-normal text-[#fff7e6] drop-shadow-[0_4px_22px_rgba(0,0,0,0.8)] md:text-5xl">
+            Creditos del linaje
+          </p>
+          {members.map((member, index) => {
+            const isImportant = member.memberId === 'alessandro' || member.memberId === 'jocelyn';
+            return (
+            <motion.div
+              key={member.memberId + '-' + index}
+              className={`flex w-full max-w-4xl items-center justify-center gap-3 border-b pb-2 text-center md:gap-5 ${isImportant ? 'border-[#f8e5bd]/42 bg-[#f8e5bd]/10 px-2 py-2 shadow-[0_0_34px_rgba(248,229,189,0.14)]' : 'border-[#f8e5bd]/10'}`}
+              initial={{ opacity: 0, y: 12, filter: 'blur(3px)' }}
+              animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+              transition={{ duration: 0.9, delay: getCreditDockSeconds(index, durationSeconds), ease: 'easeOut' }}
+            >
+              {member.photoData ? (
+                <motion.div
+                  className={`h-11 w-11 shrink-0 overflow-hidden rounded-full border-2 bg-[#f7ead0] shadow-[0_10px_26px_rgba(0,0,0,0.42)] md:h-16 md:w-16 ${isImportant ? 'border-[#fff7e6] ring-2 ring-[#f8e5bd]/80' : 'border-[#f8e5bd]/78'}`}
+                  initial={{ opacity: 0, x: -44, scale: 0.82, filter: 'blur(4px)' }}
+                  animate={{ opacity: 1, x: 0, scale: 1, filter: 'blur(0px)' }}
+                  transition={{ duration: 0.85, delay: getCreditDockSeconds(index, durationSeconds), ease: 'easeOut' }}
+                >
+                  <img
+                    src={member.photoData}
+                    alt={member.name}
+                    className="h-full w-full object-cover sepia-[0.12] contrast-[1.05] saturate-[0.92]"
+                    draggable={false}
+                  />
+                </motion.div>
+              ) : null}
+              <div className="min-w-0 text-center">
+                <p className={`font-serif text-lg font-black leading-tight drop-shadow-[0_3px_16px_rgba(0,0,0,0.78)] md:text-3xl ${isImportant ? 'text-[#f8e5bd]' : 'text-[#fff7e6]'}`}>
+                  {member.name}
+                </p>
+                <p className="mt-1 text-[0.62rem] font-black uppercase tracking-[0.22em] text-[#f8e5bd]/78 md:text-xs">
+                  {formatCreditYears(member)} · {member.treePosition || 'Linaje familiar'}
+                </p>
+              </div>
+            </motion.div>
+            );
+          })}
+          <p className="mt-8 font-serif text-xl font-black text-[#fff7e6]/92 md:text-3xl">
+            Una historia viva, guardada por la familia.
+          </p>
+        </div>
       </div>
+      <AnimatePresence>
+        {showDedication ? (
+          <motion.div
+            className={'absolute left-1/2 top-[24vh] z-[38] w-[min(52rem,90vw)] -translate-x-1/2 rounded-[0.45rem] border px-4 py-5 text-center shadow-[0_24px_80px_rgba(0,0,0,0.52)] backdrop-blur-md md:top-[22vh] md:px-10 md:py-8 ' + dedicationFrameClass}
+            initial={{ opacity: 0, y: 28, scale: 0.96, filter: 'blur(8px)' }}
+            animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
+            exit={{ opacity: 0, y: -18, scale: 0.98 }}
+            transition={{ duration: 1.15, ease: 'easeOut' }}
+          >
+            <p className={'mb-3 text-[0.65rem] font-black uppercase tracking-[0.32em] md:text-xs ' + (isNanoDedication ? 'text-emerald-100' : 'text-[#f8e5bd]/78')}>
+              Mencion especial
+            </p>
+            <p className="font-serif text-[1.28rem] font-black leading-tight text-[#fff7e6] drop-shadow-[0_4px_22px_rgba(0,0,0,0.72)] md:text-4xl">
+              {dedication?.text}
+            </p>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+      {showDedication && dedication?.text ? <LegacyPhotoConstellation members={members} /> : null}
     </motion.div>
   );
 };
@@ -242,19 +327,27 @@ const LegadoSangiovanniGame = () => {
   const [musicEnabled, setMusicEnabled] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
   const [showLegacyCredits, setShowLegacyCredits] = useState(false);
+  const [showLegacyDedication, setShowLegacyDedication] = useState(false);
+  const [dedicationNonce, setDedicationNonce] = useState<string | number>();
   const primaryMusicRef = useRef<HTMLAudioElement | null>(null);
   const secondaryMusicRef = useRef<HTMLAudioElement | null>(null);
   const activeMusicRef = useRef<0 | 1>(0);
   const musicFadeFrameRef = useRef<number | null>(null);
   const musicFadeRunningRef = useRef(false);
-  const aiNarrative = useMemo(() => new URLSearchParams(window.location.search).get('ai') === '1', []);
+  const aiNarrative = useMemo(() => new URLSearchParams(window.location.search).get('ai') !== '0', []);
   const forceCredits = useMemo(() => new URLSearchParams(window.location.search).get('credits') === '1', []);
-  const { data: storybook } = useSiennaStorybook(true, aiNarrative);
+  const fastCredits = useMemo(() => new URLSearchParams(window.location.search).get('fast') === '1', []);
+  const { data: storybook, isFetching: storybookFetching } = useSiennaStorybook(true, aiNarrative);
 
   const scenes = storybook?.slides?.length ? storybook.slides : legadoStoryScenes;
   const scene = scenes[sceneIndex] || scenes[0];
-  const isNanoNarrative = scene?.narrativeMode === 'openai' || scene?.narrativeMode === 'cache';
   const hasLegacyCredits = scene.visual === 'legacy' && Boolean(scene.creditMembers?.length);
+  const { data: legacyDedication, isFetching: dedicationFetching } = useSiennaStorybookDedication(
+    dedicationNonce,
+    hasLegacyCredits && Boolean(dedicationNonce)
+  );
+  const showNanoDedication = showLegacyDedication && Boolean(legacyDedication?.text);
+  const hasNanoActive = storybookFetching || dedicationFetching;
   const scenePlaybackMs = useMemo(() => getScenePlaybackMs(scene), [scene]);
   const isFinished = sceneIndex === scenes.length - 1;
   const totalProgress = useMemo(
@@ -292,8 +385,11 @@ const LegadoSangiovanniGame = () => {
 
   useEffect(() => {
     setShowLegacyCredits(false);
+    setShowLegacyDedication(false);
+    setDedicationNonce(undefined);
     if (!hasLegacyCredits) return;
-    if (forceCredits) {
+    setDedicationNonce(scene.id + '-' + Date.now());
+    if (forceCredits || fastCredits) {
       setShowLegacyCredits(true);
       return;
     }
@@ -303,7 +399,18 @@ const LegadoSangiovanniGame = () => {
     }, getTypedNarrativeMs(scene) + 2800);
 
     return () => window.clearTimeout(timer);
-  }, [scene, hasLegacyCredits, forceCredits]);
+  }, [scene, hasLegacyCredits, forceCredits, fastCredits]);
+
+  useEffect(() => {
+    setShowLegacyDedication(false);
+    if (!showLegacyCredits || !hasLegacyCredits || !scene.creditMembers?.length) return;
+
+    const timer = window.setTimeout(() => {
+      setShowLegacyDedication(true);
+    }, fastCredits ? 2600 : Math.max(8000, getCreditRollDurationSeconds(scene.creditMembers.length) * 1000 - 6500));
+
+    return () => window.clearTimeout(timer);
+  }, [showLegacyCredits, hasLegacyCredits, scene.id, scene.creditMembers?.length, fastCredits]);
 
   useEffect(() => {
     const audios = [primaryMusicRef.current, secondaryMusicRef.current] as const;
@@ -451,12 +558,18 @@ const LegadoSangiovanniGame = () => {
         }
 
         @keyframes legacy-credit-roll {
-          from { transform: translateY(58vh); }
+          from { transform: translateY(var(--credit-start-y, 58vh)); }
           to { transform: translateY(-100%); }
         }
 
         .legacy-credit-roll {
           animation: legacy-credit-roll var(--credit-duration) linear forwards;
+        }
+
+        @media (min-width: 768px) {
+          .legacy-credit-roll {
+            --credit-start-y: 50vh;
+          }
         }
 
       `}</style>
@@ -489,7 +602,7 @@ const LegadoSangiovanniGame = () => {
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_62%_42%,rgba(255,244,218,0.08)_0%,rgba(8,7,6,0.28)_38%,rgba(8,7,6,0.82)_100%)]" />
             <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(8,7,6,0.82),rgba(8,7,6,0.32)_42%,rgba(8,7,6,0.56))]" />
             <div className="absolute inset-0 bg-[#9a6d3f]/20 mix-blend-color" />
-            {!showLegacyCredits && scene.memberPhotos?.length ? (
+            {!showLegacyCredits && scene.visual !== 'legacy' && scene.memberPhotos?.length ? (
               <MemberPhotoCollage photos={scene.memberPhotos} />
             ) : scene.archiveImage && (
               <motion.img
@@ -506,7 +619,11 @@ const LegadoSangiovanniGame = () => {
             <NarrativeText scene={scene} hideBody={showLegacyCredits} wide={!scene.memberPhotos?.length} />
             <AnimatePresence>
               {showLegacyCredits && scene.creditMembers?.length ? (
-                <LegacyCredits members={scene.creditMembers} />
+                <LegacyCredits
+                  members={scene.creditMembers}
+                  dedication={legacyDedication || null}
+                  showDedication={showNanoDedication}
+                />
               ) : null}
             </AnimatePresence>
           </motion.section>
@@ -524,11 +641,6 @@ const LegadoSangiovanniGame = () => {
         </div>
 
         <div className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] z-50 flex items-center gap-2 opacity-95 transition-opacity hover:opacity-100 focus-within:opacity-100">
-          {isNanoNarrative ? (
-            <div className="hidden rounded-full border border-[#111827] bg-[#f7f3ea]/88 px-3 py-2 text-[0.62rem] font-black uppercase tracking-[0.18em] text-[#111827] shadow-[0_14px_40px_rgba(0,0,0,0.24)] backdrop-blur sm:block">
-              Nano
-            </div>
-          ) : null}
           <button
             type="button"
             onClick={() => navigate('/dashboard')}
@@ -550,9 +662,19 @@ const LegadoSangiovanniGame = () => {
           <button
             type="button"
             onClick={() => setPlaying((value) => !value)}
-            className={`grid h-10 w-10 place-items-center rounded-full border-2 shadow-[0_14px_40px_rgba(0,0,0,0.32)] backdrop-blur transition ${isNanoNarrative ? 'border-emerald-100 bg-emerald-500 text-white ring-4 ring-emerald-300/85 shadow-emerald-900/35' : 'border-[#111827] bg-[#f7f3ea]/90 text-[#111827]'}`}
+            className="grid h-10 w-10 place-items-center rounded-full border-2 shadow-[0_14px_40px_rgba(0,0,0,0.32)] backdrop-blur transition"
+            style={hasNanoActive ? {
+              backgroundColor: '#10b981',
+              borderColor: '#d1fae5',
+              color: '#ffffff',
+              boxShadow: '0 0 0 4px rgba(110, 231, 183, 0.82), 0 14px 40px rgba(6, 78, 59, 0.44)',
+            } : {
+              backgroundColor: 'rgba(247, 243, 234, 0.9)',
+              borderColor: '#111827',
+              color: '#111827',
+            }}
             aria-label={playing ? 'Pausar' : 'Reproducir'}
-            title={isNanoNarrative ? 'Narrativa generada por Nano' : playing ? 'Pausar' : 'Reproducir'}
+            title={playing ? 'Pausar' : 'Reproducir'}
           >
             {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
           </button>

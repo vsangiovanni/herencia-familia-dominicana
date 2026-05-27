@@ -773,6 +773,114 @@ function normalize_storybook_ai_text($value): string {
   return mb_substr($text, 0, 900, 'UTF-8');
 }
 
+function sanitize_family_memory_narrative($value): string {
+  $text = (string)($value ?? '');
+  $patterns = [
+    '/\blegado\b/iu' => 'memoria familiar',
+    '/\bherencias?\b/iu' => 'memoria familiar',
+    '/\bherederos?\b/iu' => 'personas mencionadas',
+    '/\bsucesiones?\b/iu' => 'historia familiar',
+    '/\brepartos?\b/iu' => 'encuentros',
+    '/\bpatrimonios?\b/iu' => 'recuerdos familiares',
+    '/\bbienes\b/iu' => 'recuerdos',
+    '/\bderechos legales\b/iu' => 'vinculos familiares',
+    '/\bjur[ií]dic[ao]s?\b/iu' => 'familiares',
+    '/\blegales?\b/iu' => 'familiares',
+  ];
+  return preg_replace(array_keys($patterns), array_values($patterns), $text);
+}
+
+function sanitize_storybook_response_narrative(array $storybook): array {
+  foreach (($storybook['slides'] ?? []) as &$slide) {
+    foreach (['title', 'text', 'location'] as $key) {
+      if (isset($slide[$key])) $slide[$key] = sanitize_family_memory_narrative($slide[$key]);
+    }
+    if (!empty($slide['creditMembers']) && is_array($slide['creditMembers'])) {
+      foreach ($slide['creditMembers'] as &$member) {
+        if (isset($member['treePosition'])) $member['treePosition'] = sanitize_family_memory_narrative($member['treePosition']);
+        if (isset($member['importance'])) $member['importance'] = sanitize_family_memory_narrative($member['importance']);
+      }
+      unset($member);
+    }
+  }
+  unset($slide);
+  $storybook['scenes'] = $storybook['slides'] ?? [];
+  return $storybook;
+}
+
+function storybook_closing_dedication_fallback(): string {
+  return implode(' ', [
+    'Este cierre tambien honra a Alessandro de Paola Sangiovanni y a Jocelyn Sangiovanni, porque esta memoria familiar no llego hasta aqui por casualidad.',
+    'En gran parte, este recuerdo compartido y esta reagrupacion familiar pudieron tomar forma por su presencia, su impulso y su manera de mantener viva la union.',
+    'Gracias a ellos, la historia encontro nuevas manos para cuidarla, nuevos ojos para reconocerla y un camino mas claro para seguir reuniendo a la familia alrededor de lo que somos.'
+  ]);
+}
+
+function generate_storybook_closing_dedication($nonce = null): array {
+  $apiKey = env_value('OPENAI_API_KEY');
+  $model = env_value('OPENAI_MODEL') ?: sienna_ai_default_model();
+  $fallback = storybook_closing_dedication_fallback();
+  if (!$apiKey || !function_exists('curl_init')) {
+    return ['text' => $fallback, 'model' => $model, 'mode' => 'fallback-no-key'];
+  }
+
+  $payload = [
+    'model' => $model,
+    'max_output_tokens' => 1000,
+    'reasoning' => ['effort' => 'low'],
+    'text' => ['verbosity' => 'medium'],
+    'input' => [
+      [
+        'role' => 'system',
+        'content' => implode("\n", [
+          'Eres una voz familiar narrando el cierre emocional de la memoria Sangiovanni.',
+          'Escribe en espanol natural, familiar, elegante y conmovedor.',
+          'Genera una sola dedicatoria final, diferente cada vez, sin markdown ni titulo.',
+          'Debe mencionar exactamente a Alessandro de Paola Sangiovanni y a Jocelyn Sangiovanni.',
+          'Debe expresar que este recuerdo familiar y esta reagrupacion se deben en gran parte a ellos.',
+          'Dales peso emocional: presentalos como piezas claves para que la memoria, el encuentro y la union familiar sigan vivos.',
+          'Prohibido mencionar o insinuar herencia, herederos, sucesion, reparto, bienes, patrimonio, derechos legales, reclamos o cualquier tema juridico/economico.',
+          'No uses la palabra "legado". Usa memoria familiar, recuerdo familiar, historia familiar, raices o union familiar.',
+          'Escribe 3 o 4 frases, entre 90 y 130 palabras, y termina con punto.',
+        ]),
+      ],
+      [
+        'role' => 'user',
+        'content' => json_encode([
+          'objetivo' => 'Dedicatoria final posterior a los creditos de la memoria familiar Sangiovanni.',
+          'personas' => ['Alessandro de Paola Sangiovanni', 'Jocelyn Sangiovanni'],
+          'nonce' => $nonce ?: gmdate('c'),
+        ], JSON_UNESCAPED_UNICODE),
+      ],
+    ],
+  ];
+
+  $ch = curl_init('https://api.openai.com/v1/responses');
+  curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_POST => true,
+    CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $apiKey, 'Content-Type: application/json'],
+    CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
+    CURLOPT_TIMEOUT => 45,
+  ]);
+  $raw = curl_exec($ch);
+  $status = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+  curl_close($ch);
+  $data = json_decode($raw ?: '{}', true);
+  if ($status < 200 || $status >= 300 || !is_array($data)) {
+    return ['text' => $fallback, 'model' => $model, 'mode' => 'fallback-error'];
+  }
+
+  $text = sanitize_family_memory_narrative(response_output_text($data));
+  if (trim($text) === '') return ['text' => $fallback, 'model' => $model, 'mode' => 'fallback-empty'];
+  if (stripos($text, 'Alessandro de Paola Sangiovanni') === false || stripos($text, 'Jocelyn Sangiovanni') === false) {
+    $text = 'A Alessandro de Paola Sangiovanni y a Jocelyn Sangiovanni, ' . preg_replace('/^a\s+/iu', '', $text);
+  }
+  $text = sanitize_family_memory_narrative($text);
+  if (!preg_match('/[.!?]$/u', $text)) $text .= '.';
+  return ['text' => $text, 'model' => $model, 'mode' => 'openai'];
+}
+
 function apply_ai_narrative_to_storybook(array $storybook): array {
   $apiKey = env_value('OPENAI_API_KEY');
   $model = env_value('OPENAI_MODEL') ?: sienna_ai_default_model();
@@ -802,10 +910,12 @@ function apply_ai_narrative_to_storybook(array $storybook): array {
       [
         'role' => 'system',
         'content' => implode("\n", [
-          'Eres narrador familiar del Legado Sangiovanni.',
+          'Eres narrador de una memoria familiar Sangiovanni.',
           'Reescribe cada slide en espanol con tono historico, humano, elegante, cinematografico y natural.',
           'Usa solamente los datos de cada slide. No inventes fechas, lugares, parentescos, negocios ni fallecimientos.',
           'Evita sonar a informe. No uses frases como "los registros indican", "documentado", "expediente", "base de datos", "sin fecha exacta" o "no hay datos".',
+          'Prohibido mencionar o insinuar herencia, herederos, sucesion, reparto, bienes, patrimonio, derechos legales, reclamos o cualquier tema juridico/economico.',
+          'No uses la palabra "legado". Usa memoria familiar, recuerdo familiar, historia familiar, raices o union familiar.',
           'Cuenta como una voz familiar orgullosa y motivadora, como alguien narrando a sus descendientes de donde vienen.',
           'Mantén los nombres importantes y el sentido historico del texto actual.',
           'Cada texto debe tener 2 a 4 frases, entre 70 y 135 palabras, y terminar con punto.',
@@ -841,7 +951,7 @@ function apply_ai_narrative_to_storybook(array $storybook): array {
   $generatedSlides = [];
   foreach (($parsed['slides'] ?? []) as $item) {
     $id = (string)($item['id'] ?? '');
-    $text = normalize_storybook_ai_text($item['text'] ?? '');
+    $text = sanitize_family_memory_narrative(normalize_storybook_ai_text($item['text'] ?? ''));
     if ($id !== '' && mb_strlen($text, 'UTF-8') >= 70 && preg_match('/[.!?]$/u', $text)) {
       $generatedSlides[$id] = $text;
     }
@@ -4872,8 +4982,16 @@ try {
       'prompt' => '2026-05-27-php-v1',
     ], function () use ($aiNarrative) {
       $storybook = build_sienna_storybook();
-      return $aiNarrative ? apply_ai_narrative_to_storybook($storybook) : $storybook;
+      return sanitize_storybook_response_narrative($aiNarrative ? apply_ai_narrative_to_storybook($storybook) : $storybook);
     }, $aiNarrative ? 600 : 20));
+  }
+
+  if ($method === 'GET' && $path === '/sienna-storybook-dedication') {
+    require_user();
+    header('Cache-Control: no-store, no-cache, must-revalidate, proxy-revalidate');
+    $dedication = generate_storybook_closing_dedication($_GET['nonce'] ?? null);
+    $dedication['generated_at'] = gmdate('c');
+    json_response($dedication);
   }
 
   if ($method === 'GET' && $path === '/sienna-calculation') {
