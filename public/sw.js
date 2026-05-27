@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'legado-sangiovanni-v2';
+const CACHE_VERSION = 'legado-sangiovanni-v3';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 
 const STATIC_ASSETS = [
@@ -82,7 +82,7 @@ self.addEventListener('fetch', (event) => {
         })
         .catch(() => cached);
 
-      return cached || networkFetch;
+      return networkFetch || cached;
     })
   );
 });

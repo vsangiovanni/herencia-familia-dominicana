@@ -387,7 +387,7 @@ const LegadoSangiovanniGame = () => {
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_62%_42%,rgba(255,244,218,0.08)_0%,rgba(8,7,6,0.28)_38%,rgba(8,7,6,0.82)_100%)]" />
             <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(8,7,6,0.82),rgba(8,7,6,0.32)_42%,rgba(8,7,6,0.56))]" />
             <div className="absolute inset-0 bg-[#9a6d3f]/20 mix-blend-color" />
-            {scene.memberPhotos?.length ? (
+            {!showLegacyCredits && scene.memberPhotos?.length ? (
               <MemberPhotoCollage photos={scene.memberPhotos} />
             ) : scene.archiveImage && (
               <motion.img
