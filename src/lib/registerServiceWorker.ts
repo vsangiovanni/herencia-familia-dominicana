@@ -5,12 +5,11 @@ export function registerServiceWorker() {
 
   window.addEventListener('load', () => {
     navigator.serviceWorker
-      .register('/sw.js')
-      .then((registration) => {
-        registration.update().catch(() => undefined);
-      })
+      .getRegistrations()
+      .then((registrations) => Promise.all(registrations.map((registration) => registration.unregister())))
+      .then(() => ('caches' in window ? caches.keys().then((keys) => Promise.all(keys.map((key) => caches.delete(key)))) : undefined))
       .catch((error) => {
-        console.warn('No se pudo registrar el service worker de Legado Sangiovanni.', error);
+        console.warn('No se pudo limpiar el service worker de Memoria Sangiovanni.', error);
       });
   });
 }
