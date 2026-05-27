@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'legado-sangiovanni-v4';
+const CACHE_VERSION = 'legado-sangiovanni-v6';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 
 const STATIC_ASSETS = [

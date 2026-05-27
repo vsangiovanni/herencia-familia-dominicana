@@ -6,6 +6,9 @@ export function registerServiceWorker() {
   window.addEventListener('load', () => {
     navigator.serviceWorker
       .register('/sw.js')
+      .then((registration) => {
+        registration.update().catch(() => undefined);
+      })
       .catch((error) => {
         console.warn('No se pudo registrar el service worker de Legado Sangiovanni.', error);
       });
