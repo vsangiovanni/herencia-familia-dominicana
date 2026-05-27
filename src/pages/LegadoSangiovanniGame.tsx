@@ -23,7 +23,12 @@ const getAfterTypewriterHoldMs = (length: number) => {
   return 4500;
 };
 
-const STORYTELLER_MUSIC_SRC = '/game/legado/audio/across-two-shores.mp3';
+const STORYTELLER_MUSIC_TRACKS = [
+  '/game/legado/audio/across-two-shores.mp3',
+  '/game/legado/audio/across-the-atlantic.mp3',
+] as const;
+const STORYTELLER_MUSIC_VOLUME = 0.72;
+const STORYTELLER_CROSSFADE_SECONDS = 8;
 
 const splitNarrativeLines = (text: string) =>
   text
@@ -237,7 +242,11 @@ const LegadoSangiovanniGame = () => {
   const [musicEnabled, setMusicEnabled] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
   const [showLegacyCredits, setShowLegacyCredits] = useState(false);
-  const musicRef = useRef<HTMLAudioElement | null>(null);
+  const primaryMusicRef = useRef<HTMLAudioElement | null>(null);
+  const secondaryMusicRef = useRef<HTMLAudioElement | null>(null);
+  const activeMusicRef = useRef<0 | 1>(0);
+  const musicFadeFrameRef = useRef<number | null>(null);
+  const musicFadeRunningRef = useRef(false);
   const aiNarrative = useMemo(() => new URLSearchParams(window.location.search).get('ai') === '1', []);
   const forceCredits = useMemo(() => new URLSearchParams(window.location.search).get('credits') === '1', []);
   const { data: storybook } = useSiennaStorybook(true, aiNarrative);
@@ -297,23 +306,96 @@ const LegadoSangiovanniGame = () => {
   }, [scene, hasLegacyCredits, forceCredits]);
 
   useEffect(() => {
-    const audio = musicRef.current;
-    if (!audio) return;
+    const audios = [primaryMusicRef.current, secondaryMusicRef.current] as const;
+    const cancelFade = () => {
+      if (musicFadeFrameRef.current) window.cancelAnimationFrame(musicFadeFrameRef.current);
+      musicFadeFrameRef.current = null;
+      musicFadeRunningRef.current = false;
+    };
 
-    audio.volume = 0.72;
-    audio.loop = true;
+    const crossfadeToNextTrack = () => {
+      if (musicFadeRunningRef.current) return;
+      const currentIndex = activeMusicRef.current;
+      const nextIndex = currentIndex === 0 ? 1 : 0;
+      const current = audios[currentIndex];
+      const next = audios[nextIndex];
+      if (!current || !next) return;
+
+      musicFadeRunningRef.current = true;
+      next.currentTime = 0;
+      next.volume = 0;
+      void next.play().catch(() => {
+        musicFadeRunningRef.current = false;
+        setMusicEnabled(false);
+      });
+
+      const startedAt = performance.now();
+      const fadeMs = STORYTELLER_CROSSFADE_SECONDS * 1000;
+      const step = (now: number) => {
+        const progress = Math.min(1, (now - startedAt) / fadeMs);
+        current.volume = STORYTELLER_MUSIC_VOLUME * (1 - progress);
+        next.volume = STORYTELLER_MUSIC_VOLUME * progress;
+
+        if (progress < 1) {
+          musicFadeFrameRef.current = window.requestAnimationFrame(step);
+          return;
+        }
+
+        current.pause();
+        current.currentTime = 0;
+        current.volume = STORYTELLER_MUSIC_VOLUME;
+        next.volume = STORYTELLER_MUSIC_VOLUME;
+        activeMusicRef.current = nextIndex as 0 | 1;
+        musicFadeFrameRef.current = null;
+        musicFadeRunningRef.current = false;
+      };
+
+      musicFadeFrameRef.current = window.requestAnimationFrame(step);
+    };
+
+    const handleTimeUpdate = () => {
+      const current = audios[activeMusicRef.current];
+      if (!current || !Number.isFinite(current.duration) || current.duration <= 0) return;
+      if (current.duration - current.currentTime <= STORYTELLER_CROSSFADE_SECONDS) crossfadeToNextTrack();
+    };
+
+    const handleEnded = () => crossfadeToNextTrack();
+
+    audios.forEach((audio, index) => {
+      if (!audio) return;
+      audio.loop = false;
+      audio.volume = index === activeMusicRef.current ? STORYTELLER_MUSIC_VOLUME : 0;
+      audio.addEventListener('timeupdate', handleTimeUpdate);
+      audio.addEventListener('ended', handleEnded);
+    });
 
     if (!musicEnabled) {
-      audio.pause();
-      return;
+      cancelFade();
+      audios.forEach((audio) => audio?.pause());
+      return () => {
+        audios.forEach((audio) => {
+          audio?.removeEventListener('timeupdate', handleTimeUpdate);
+          audio?.removeEventListener('ended', handleEnded);
+        });
+      };
     }
 
-    audio.play().catch(() => setMusicEnabled(false));
+    const activeAudio = audios[activeMusicRef.current];
+    activeAudio?.play().catch(() => setMusicEnabled(false));
+
+    return () => {
+      audios.forEach((audio) => {
+        audio?.removeEventListener('timeupdate', handleTimeUpdate);
+        audio?.removeEventListener('ended', handleEnded);
+      });
+    };
   }, [musicEnabled]);
 
   useEffect(() => {
     return () => {
-      musicRef.current?.pause();
+      if (musicFadeFrameRef.current) window.cancelAnimationFrame(musicFadeFrameRef.current);
+      primaryMusicRef.current?.pause();
+      secondaryMusicRef.current?.pause();
     };
   }, []);
 
@@ -378,7 +460,8 @@ const LegadoSangiovanniGame = () => {
         }
 
       `}</style>
-      <audio ref={musicRef} src={STORYTELLER_MUSIC_SRC} preload="auto" loop />
+      <audio ref={primaryMusicRef} src={STORYTELLER_MUSIC_TRACKS[0]} preload="auto" />
+      <audio ref={secondaryMusicRef} src={STORYTELLER_MUSIC_TRACKS[1]} preload="auto" />
 
       <div className="relative h-full w-full overflow-hidden bg-[#080706]">
 
