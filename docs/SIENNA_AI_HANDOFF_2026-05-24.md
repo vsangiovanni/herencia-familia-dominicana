@@ -10,6 +10,15 @@ Produccion: `https://herenciard.vmsencf.com`
 Frontend local: `http://localhost:8080/`  
 Backend local: `http://localhost:3001/api/health`
 
+Actualizacion posterior - 2026-05-27 07:55 AST:
+
+- Produccion fue corregida por pantalla negra causada por chunks Vite obsoletos servidos como `text/html`.
+- Fix desplegado en Hostinger: `.htaccess` devuelve 404 para `/assets/*` inexistentes, `sw.js` usa cache `legado-sangiovanni-v4` y `src/main.tsx` fuerza una recarga unica en `vite:preloadError`.
+- Validacion post-deploy: `/api/health` OK MySQL/PHP, rutas Sienna principales en 200, JS principales con `application/x-javascript`, CSS con `text/css`, assets inexistentes bajo `/assets/*.js` en 404.
+- Por urgencia se uso deploy quirurgico de archivos criticos porque el FTP completo se colgo subiendo media pesada del juego.
+- Produccion DB fue actualizada solo con el miembro `maria-rosa-grisolia` (Maria Rosa Grisolia / Grisolia Divanna), su foto `maria-rosa-grisolia-portrait.webp` y el vinculo `Domenico.spouse_member_id = maria-rosa-grisolia`.
+- No se tocaron otros miembros, calculos sucesorales ni migraciones. Backup previo local: `backups/prod_maria_rosa_grisolia_before_2026-05-27T11-54-40-029Z.json`.
+
 Actualizacion posterior - 2026-05-24 21:15 AST:
 
 - GitHub actualizado hasta commit `1c78c01` (`Unify document and heir presentation table`).

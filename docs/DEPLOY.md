@@ -184,6 +184,31 @@ Rutas Sienna deben devolver HTTP 200 (SPA):
 - `/sienna/explicacion-herederos`
 - `/sienna/miembros-arbol`
 
+## Incidente de assets Vite - 2026-05-27
+
+Produccion quedo en pantalla negra despues de un deploy porque el navegador pidio chunks viejos bajo `/assets/*.js` y Apache/Hostinger devolvio `index.html` con `content-type: text/html`. El error visible en consola fue:
+
+```text
+Expected a JavaScript-or-Wasm module script but the server responded with MIME type "text/html"
+Failed to fetch dynamically imported module
+```
+
+Correccion aplicada:
+
+- `public/.htaccess`: si un archivo bajo `/assets/` no existe, responder 404 en vez de aplicar fallback SPA a `index.html`.
+- `public/sw.js`: subir `CACHE_VERSION` a `legado-sangiovanni-v4` y no cachear respuestas HTML como si fueran JS.
+- `src/main.tsx`: escuchar `vite:preloadError` y ejecutar una recarga unica para recuperar navegadores con `index.html` viejo y chunks nuevos.
+
+Validacion ejecutada tras deploy:
+
+- `/api/health` respondio `{"ok":true,"storage":"mysql","runtime":"php"}`.
+- Rutas Sienna principales respondieron 200.
+- Assets principales respondieron `200 application/x-javascript`.
+- CSS respondio `200 text/css`.
+- Asset inexistente bajo `/assets/*.js` respondio 404, no `index.html`.
+
+Nota operativa: el FTP completo puede colgarse con media pesada del juego. En urgencias, usar deploy quirurgico de `.htaccess`, `index.html`, `sw.js`, `api.php`, manifest y `dist/assets/*`; luego validar HTTP antes de reportar cierre.
+
 ## Git
 
 `dist/` está en `.gitignore`; el artefacto de producción se sube solo por FTP.

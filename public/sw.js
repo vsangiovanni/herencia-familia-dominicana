@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'legado-sangiovanni-v3';
+const CACHE_VERSION = 'legado-sangiovanni-v4';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 
 const STATIC_ASSETS = [
@@ -74,7 +74,12 @@ self.addEventListener('fetch', (event) => {
     caches.match(request).then((cached) => {
       const networkFetch = fetch(request)
         .then((response) => {
-          if (response.ok) {
+          const contentType = response.headers.get('content-type') || '';
+          const isJavaScriptAsset =
+            url.pathname.startsWith('/assets/') && url.pathname.endsWith('.js');
+          const isValidJavaScript = !isJavaScriptAsset || /javascript|ecmascript/.test(contentType);
+
+          if (response.ok && isValidJavaScript) {
             const copy = response.clone();
             caches.open(STATIC_CACHE).then((cache) => cache.put(request, copy));
           }

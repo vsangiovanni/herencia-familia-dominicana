@@ -118,6 +118,14 @@ Assets de archivo familiar:
 - `public/game/legado/archive/maria-rosa-grisolia-portrait.webp`
 - `public/game/legado/archive/domenico-maria-rosa-clean.webp`
 
+Estado DB produccion 2026-05-27:
+
+- `maria-rosa-grisolia` existe en produccion como miembro propio.
+- Maria Rosa Grisolia y Maria Rosa Grisolia Divanna deben tratarse como la misma persona dentro del expediente.
+- Domenico queda vinculado por `spouse_member_id = maria-rosa-grisolia`.
+- Su foto fue copiada desde local a `confirmed_heirs` como `maria-rosa-grisolia-portrait.webp` (`image/webp`).
+- Esta sincronizacion fue puntual: no tocar otros miembros ni recalcular sucesion por este ajuste.
+
 Referencias de puerta/casa:
 
 - `public/game/legado/references/puerta-casa-sangiovanni-santa-domenica-video.jpg`

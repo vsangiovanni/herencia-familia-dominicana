@@ -4,6 +4,9 @@
 
   RewriteRule ^api(?:/(.*))?$ api.php [L,QSA]
 
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteRule ^assets/ - [R=404,L]
+
   RewriteRule ^index\.html$ - [L]
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
