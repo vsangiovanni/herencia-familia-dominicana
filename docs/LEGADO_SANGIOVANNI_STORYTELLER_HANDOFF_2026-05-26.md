@@ -70,18 +70,19 @@ La logica actual agrupa en capitulos generacionales:
 1. Calabria / Santa Domenica Talao
 2. La despedida en Santa Domenica
 3. Ruta hacia America
-4. Llegada a Puerto Plata
-5. Primeras ramas documentadas
-6. Generacion 1929-1932
-7. Generacion 1935-1939
-8. Generacion 1957-1959
-9. Generacion 1960-1964
-10. Generacion 1963 con contexto exterior cuando aplica
-11. Generacion 1965-1969
-12. Generacion 1971-1978
-13. Entrada moderna / memoria final
-14. Ramas de memoria sin fecha exacta agrupadas
-15. Cierre del libro familiar
+4. Samana / Casa Hermanos Sangiovanni
+5. Integracion dominicana en Samana
+6. Primeras ramas documentadas
+7. Generacion 1929-1932
+8. Generacion 1935-1939
+9. Generacion 1957-1959
+10. Generacion 1960-1964
+11. Generacion 1963 con contexto exterior cuando aplica
+12. Generacion 1965-1969
+13. Generacion 1971-1978
+14. Entrada moderna / memoria final
+15. Ramas de memoria sin fecha exacta agrupadas
+16. Cierre del libro familiar
 
 Las agrupaciones deben seguir siendo inteligentes:
 - por decada,
@@ -125,6 +126,7 @@ Estado DB produccion 2026-05-27:
 - Domenico queda vinculado por `spouse_member_id = maria-rosa-grisolia`.
 - Su foto fue copiada desde local a `confirmed_heirs` como `maria-rosa-grisolia-portrait.webp` (`image/webp`).
 - Esta sincronizacion fue puntual: no tocar otros miembros ni recalcular sucesion por este ajuste.
+- Ajuste posterior autorizado por Victor: `confirmed_heirs` de produccion ahora tambien contiene a `domenico` con `domenico-sangiovanni-portrait.webp` (`image/webp`). Antes el asset estatico existia en produccion, pero faltaba la fila de foto por miembro. Backup previo: `backups/prod_domenico_photo_before_2026-05-27T12-31-45.207Z.json`.
 
 Referencias de puerta/casa:
 
@@ -137,7 +139,6 @@ Fondos generados relevantes:
 
 - `public/game/legado/generated/storyteller/legado-puerta-sangiovanni-santa-domenica-escenario.png`
 - `public/game/legado/generated/storyteller/legado-santa-domenica-origen-documental.png`
-- `public/game/legado/generated/storyteller/legado-puerto-plata-llegada-documental.png`
 - `public/game/legado/generated/storyteller/legado-samana-capitulo-familiar-documental.png`
 - `public/game/legado/generated/storyteller/legado-santo-domingo-consolidacion-familiar.png`
 - `public/game/legado/generated/storyteller/legado-santo-domingo-generacion-1930s.png`
@@ -178,6 +179,7 @@ Texto:
 La narrativa debe:
 
 - sonar humana, historica y emocional,
+- naturalizar el contexto historico: usarlo como trasfondo de oportunidad, viaje, iniciativa familiar e integracion; evitar cargar el relato con miseria, hambre, tragedia o condiciones negativas salvo que Victor lo pida explicitamente,
 - no mencionar HerenciaRD,
 - no sonar tecnica ni administrativa,
 - no mostrar IDs ni lenguaje de DB,
@@ -185,6 +187,10 @@ La narrativa debe:
 - mencionar a todos los miembros en algun capitulo,
 - agrupar cuando haga falta para no crear cientos de escenas,
 - mantener el fondo visual como protagonista emocional.
+- Resaltar con sobriedad a personas clave cuando aparezcan: Alessandro de Paola Sangiovanni debe sentirse como figura central del legado familiar; Jocelyn del Jesus Sangiovanni Baez debe sentirse como presencia importante de la rama de Jose Vicente dentro de la linea Vincenzo/Vicente.
+- Usar como canon historico contextual, sin modificar datos genealogicos: raices en Santa Domenica Talao, Calabria; migracion de Domenico/Domingo Sangiovanni y Maria Rosa Grisolia hacia Republica Dominicana; hijos Paolo Sangiovanni Grisolia y Vincenzo/Vicente Sangiovanni Grisolia; Maria Magdalena permanece en Santa Domenica como rama que guarda el origen; presencia en Samana; actividad comercial de Paolo y Vincenzo mediante la Casa Hermanos Sangiovanni; evitar referencias historicas descartadas por Victor.
+- Enriquecimiento contextual autorizado por Victor, sin tocar DB ni datos genealogicos: Domenico Sangiovanni Cino y Maria Rosa Grisolia Di Vanna llegan a Samana a fines del siglo XIX; se menciona tambien a Bonifacio como hijo contextual historico sin crear miembro; Domenico aparece hacia 1896 como joyero ambulante; la Casa Hermanos Sangiovanni fue una casa comercial importante de Samana fundada en 1904, dedicada a comercio importador/exportador; Paulino/Paolo se asocia con la primera fabrica de hielo de Samana y el Cine Colon; Vicente/Vincenzo forma parte del nucleo comercial familiar y casa con Maria Balbina Perez Alvarez.
+- La voz debe sentirse como relato familiar contado con orgullo, no como expediente ni reporte: evitar frases tipo "los registros indican", "los registros ubican", "documentado", "evidencia", "base de datos", "sin fecha exacta", "se suma a la historia" o "queda integrado".
 
 Ejemplo de tono correcto:
 
@@ -299,7 +305,7 @@ Backend:
 
 3. Mejorar seleccion de fondos:
    - Santo Domingo 1960s aun se usa en 3 escenas; aceptable por ahora, pero puede dividirse con nuevo asset de 1965-1969 si Victor lo pide.
-   - Puerto Plata se usa 2 veces; aceptable por contexto.
+   - La referencia historica descartada por Victor no debe usarse en la narrativa Sangiovanni.
    - Ramas sin fecha usan 3 variantes de archivo; si se sienten repetidas, generar mas variantes.
 
 4. Arbol genealogico vivo:

@@ -1,4 +1,4 @@
-export type LegadoStoryVisual = 'calabria' | 'migration' | 'puertoPlata' | 'familyTree' | 'legacy';
+export type LegadoStoryVisual = 'calabria' | 'migration' | 'samana' | 'familyTree' | 'legacy';
 
 export type LegadoStoryScene = {
   id: string;
@@ -26,6 +26,7 @@ export type LegadoStoryScene = {
     generation?: number | null;
     treePosition?: string | null;
     photoData?: string | null;
+    importance?: string | null;
   }>;
   tone: 'origin' | 'migration' | 'arrival' | 'lineage' | 'memory';
   members?: string[];
@@ -39,7 +40,7 @@ export const legadoStoryScenes: LegadoStoryScene[] = [
     id: 'calabria',
     title: 'Calabria, Italia',
     text:
-      'En un pueblo de Calabria, Santa Domenica Talao, la joven familia de Domenico Sangiovanni y Maria Rosa Grisolia tomaron una decision que cambiaria sus vidas y las generaciones venideras.',
+      'La historia familiar empieza en Santa Domenica Talao, un pueblo montanoso de Calabria, al sur de Italia. Desde alli, Domenico, tambien recordado como Domingo Sangiovanni, y Maria Rosa Grisolia guardaron una raiz que con el tiempo miraria hacia America: no como despedida del origen, sino como deseo de abrir caminos nuevos para los suyos.',
     location: 'Santa Domenica Talao, Calabria',
     visual: 'calabria',
     durationMs: 12500,
@@ -66,7 +67,7 @@ export const legadoStoryScenes: LegadoStoryScene[] = [
     id: 'migration',
     title: 'La casa Sangiovanni',
     text:
-      'La puerta familiar quedo como testigo del momento en que la historia comenzo a dividirse entre dos orillas. Domenico y Maria Rosa saldrian con Paolo y Vincenzo; Maria Magdalena permaneceria en Italia.',
+      'Se recuerda que desde Santa Domenica Talao, Domenico Sangiovanni Cino emprendio camino hacia Republica Dominicana con Maria Rosa Grisolia Di Vanna y sus hijos. En esa memoria familiar aparecen Bonifacio, Paolo Sangiovanni Grisolia y Vincenzo Sangiovanni Grisolia, luego conocido como Vicente. Maria Magdalena permanecio en Santa Domenica, como esa rama que siguio cuidando el origen.',
     location: 'Casa Sangiovanni, Santa Domenica Talao',
     visual: 'migration',
     durationMs: 13500,
@@ -77,24 +78,22 @@ export const legadoStoryScenes: LegadoStoryScene[] = [
     id: 'migration-ship',
     title: 'La ruta hacia America',
     text:
-      'El matrimonio parte con sus hijos varones, Paolo y Vincenzo. Maria Magdalena queda en Italia, y la historia familiar se bifurca.',
-    location: 'Italia -> Puerto Plata',
+      'Aquel viaje hacia America fue mas que cruzar distancia. La familia llevo consigo idioma, fe, oficio y apellido. En Samana, el apellido calabres empezo a encontrar casa, trabajo y una manera nueva de pertenecer a la vida dominicana sin soltar lo que venia de Italia.',
+    location: 'Italia -> Samana',
     visual: 'migration',
     durationMs: 13000,
     backgroundImage: '/game/legado/generated/legado-slide-02-migracion-barco.png',
     tone: 'migration',
   },
   {
-    id: 'puerto-plata',
-    title: 'Puerto Plata recibe el legado',
+    id: 'samana-comercial',
+    title: 'Samana y la Casa Hermanos Sangiovanni',
     text:
-      'La llegada abre una nueva etapa: el apellido se arraiga en Republica Dominicana y empieza a expandirse en nuevas ramas.',
-    location: 'Puerto Plata, Republica Dominicana',
-    visual: 'puertoPlata',
+      'En Republica Dominicana, los hijos de Domenico llevaron aquel impulso familiar a una escala mayor. En 1904, la Casa Hermanos Sangiovanni se convirtio en una presencia comercial importante de Samana, dedicada al comercio importador y exportador. Alli, Paolo y Vincenzo no solo trabajaban: ayudaban a mover mercancias, credito, relaciones y confianza dentro de la vida economica del pueblo.',
+    location: 'Samana, Republica Dominicana',
+    visual: 'samana',
     durationMs: 12000,
-    backgroundImage: '/game/legado/generated/legado-slide-03-puerto-plata.png',
-    archiveImage: '/game/legado/archive/paolo-vicente-sangiovanni-puerto-plata.jpg',
-    archiveCaption: 'Paolo Sangiovanni y Vincenzo/Vicente Sangiovanni',
+    backgroundImage: '/game/legado/generated/storyteller/legado-samana-casa-hermanos-sangiovanni-v2.jpg',
     memberPhotos: [
       {
         id: 'domenico',
@@ -111,12 +110,55 @@ export const legadoStoryScenes: LegadoStoryScene[] = [
       {
         id: 'paolo',
         name: 'Paolo (Paulino) Sangiovanni',
-        photoData: '/game/legado/archive/paolo-vicente-sangiovanni-puerto-plata.jpg',
+        photoData: '/game/legado/archive/extracted-faces/named/paolo-sangiovanni.jpg',
       },
       {
         id: 'vincenzo',
         name: 'Vincenzo (Vicente) Sangiovanni',
-        photoData: '/game/legado/archive/paolo-vicente-sangiovanni-puerto-plata.jpg',
+        photoData: '/game/legado/archive/extracted-faces/named/vincenzo-vicente-sangiovanni.jpg',
+      },
+    ],
+    tone: 'arrival',
+  },
+  {
+    id: 'domenico-joyero',
+    title: 'El oficio de Domenico',
+    text:
+      'En Samana, Domenico no aparece como una figura lejana, sino como un hombre de oficio. Hacia 1896 se le recuerda como joyero ambulante: alguien que llevaba trabajo fino, palabra y confianza de un lugar a otro. Ese comienzo artesanal ayuda a entender la raiz comercial de la familia, nacida primero en el trato directo con la gente.',
+    location: 'Santa Barbara de Samana',
+    visual: 'samana',
+    durationMs: 14500,
+    backgroundImage: '/game/legado/generated/storyteller/legado-samana-casa-hermanos-sangiovanni-v2.jpg',
+    memberPhotos: [
+      {
+        id: 'domenico',
+        name: 'Domenico (Domingo) Sangiovanni',
+        photoData: '/game/legado/archive/domenico-sangiovanni-portrait.webp',
+        deceased: true,
+      },
+      {
+        id: 'maria-rosa-grisolia',
+        name: 'Maria Rosa Grisolia',
+        photoData: '/game/legado/archive/maria-rosa-grisolia-portrait.webp',
+        deceased: true,
+      },
+    ],
+    tone: 'arrival',
+  },
+  {
+    id: 'paolo-hielo-cine',
+    title: 'Hielo, cine y vida urbana',
+    text:
+      'Paulino, tambien recordado como Paolo o Paolino, llego a ocupar un lugar visible en la vida economica y social de Samana. Se le asocia con la primera fabrica de hielo de la ciudad, un avance clave para conservar alimentos y sostener el comercio costero, y tambien con el Cine Colon, un espacio que habla de entretenimiento, encuentro y vida urbana. Su historia muestra que la familia no solo echo raices: tambien aporto movimiento y modernidad a su comunidad.',
+    location: 'Samana, Republica Dominicana',
+    visual: 'samana',
+    durationMs: 15500,
+    backgroundImage: '/game/legado/generated/storyteller/legado-samana-casa-hermanos-sangiovanni-v2.jpg',
+    memberPhotos: [
+      {
+        id: 'paolo',
+        name: 'Paolo (Paulino) Sangiovanni',
+        photoData: '/game/legado/archive/extracted-faces/named/paolo-sangiovanni.jpg',
       },
     ],
     tone: 'arrival',
@@ -125,9 +167,9 @@ export const legadoStoryScenes: LegadoStoryScene[] = [
     id: 'primeros-hogares',
     title: 'Los primeros hogares',
     text:
-      'Con el tiempo, Paolo y Vincenzo no solo llevaron un apellido: comenzaron a formar hogares. En esas uniones, la historia dejo de ser solamente una migracion y se convirtio en familia dominicana, con nuevas ramas destinadas a crecer.',
-    location: 'Puerto Plata, Republica Dominicana',
-    visual: 'puertoPlata',
+      'Con el tiempo, la familia se fue haciendo dominicana desde Samana. Paolo formo hogar con Matilde Perez Alvarez, y Vicente con Maria Balbina Perez Alvarez. Desde esas uniones nacieron ramas Sangiovanni Perez que conservaron el apellido, la memoria calabresa y una identidad cada vez mas unida al pais.',
+    location: 'Samana, Republica Dominicana',
+    visual: 'samana',
     durationMs: 12000,
     backgroundImage: '/game/legado/generated/storyteller/legado-primeros-hogares-casa-familiar.png',
     archiveImage: '/game/legado/archive/paolo-vicente-sangiovanni-matrimonios.jpg',
@@ -150,7 +192,7 @@ export const legadoStoryScenes: LegadoStoryScene[] = [
     id: 'family-tree',
     title: 'El arbol empieza a moverse',
     text:
-      'Nacimientos, despedidas, hijos, primos y documentos empiezan a conectarse como una memoria familiar que cruza generaciones.',
+      'Empiezan a encontrarse nacimientos, despedidas, hijos, primos y recuerdos. Poco a poco, el arbol deja de ser una lista de nombres y se vuelve una memoria familiar que cruza generaciones.',
     location: 'Base genealogica familiar',
     visual: 'familyTree',
     durationMs: 12500,
@@ -161,7 +203,7 @@ export const legadoStoryScenes: LegadoStoryScene[] = [
     id: 'legacy',
     title: 'Raices que sobreviven generaciones',
     text:
-      'Esta no es solo una familia. Es una historia de migracion, identidad y memoria que sigue creciendo.',
+      'Esta no es solo una familia. Es una historia de origen, viaje, identidad y memoria que sigue creciendo cada vez que alguien vuelve a contarla.',
     location: 'Legado Sangiovanni',
     visual: 'legacy',
     durationMs: 12000,

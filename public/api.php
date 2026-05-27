@@ -533,13 +533,16 @@ function build_storybook_credit_members(array $members, array $parentLinks, arra
   return array_map(function ($member) use ($generationLookup, $photoLookup) {
     $id = (string)($member['id'] ?? '');
     $generation = $generationLookup[$id] ?? null;
+    $creditRole = $id === 'alessandro'
+      ? 'Figura central del legado'
+      : ($id === 'jocelyn' ? 'Rama importante - Jose Vicente' : null);
     return [
       'memberId' => $id,
       'name' => $member['name'] ?? '',
       'birth' => $member['birth'] ?? null,
       'death' => $member['death'] ?? null,
       'generation' => $generation,
-      'treePosition' => $generation ? ('Generacion ' . $generation) : 'Linaje familiar',
+      'treePosition' => $creditRole ?: ($generation ? ('Generacion ' . $generation) : 'Linaje familiar'),
       'photoData' => resolve_storybook_photo($member, $photoLookup),
     ];
   }, $sorted);
@@ -550,9 +553,9 @@ function storybook_backgrounds(): array {
     'origin' => '/game/legado/generated/storyteller/legado-puerta-sangiovanni-santa-domenica-escenario.png',
     'santaDomenica' => '/game/legado/generated/storyteller/legado-santa-domenica-origen-documental.png',
     'migration' => '/game/legado/generated/legado-slide-02-migracion-barco.png',
-    'arrival' => '/game/legado/generated/storyteller/legado-puerto-plata-llegada-documental.png',
-    'puertoPlata' => '/game/legado/generated/storyteller/legado-puerto-plata-llegada-documental.png',
-    'samana' => '/game/legado/generated/storyteller/legado-samana-capitulo-familiar-documental.png',
+    'arrival' => '/game/legado/generated/storyteller/legado-samana-casa-hermanos-sangiovanni-v2.jpg',
+    'samanaArrival' => '/game/legado/generated/storyteller/legado-samana-casa-hermanos-sangiovanni-v2.jpg',
+    'samana' => '/game/legado/generated/storyteller/legado-samana-casa-hermanos-sangiovanni-v2.jpg',
     'santoDomingo' => '/game/legado/generated/storyteller/legado-santo-domingo-consolidacion-familiar.png',
     'santoDomingo1930s' => '/game/legado/generated/storyteller/legado-santo-domingo-generacion-1930s.png',
     'santoDomingo1950s' => '/game/legado/generated/storyteller/legado-santo-domingo-generacion-1950s.png',
@@ -610,7 +613,6 @@ function select_storybook_background(array $group, array $placeLookup, int $inde
   $years = array_values(array_filter(array_map(fn($m) => storybook_year($m['birth'] ?? null), $group)));
   $minYear = count($years) ? min($years) : null;
   if (str_contains($placeText, 'santa domenica') || str_contains($placeText, 'calabria')) return $bg['santaDomenica'];
-  if (str_contains($placeText, 'puerto plata')) return $bg['puertoPlata'];
   if (str_contains($placeText, 'samana') || str_contains($placeText, 'samaná')) return $bg['samana'];
   if (str_contains($placeText, 'santo domingo') || str_contains($placeText, 'sto.dgo')) {
     if ($minYear && $minYear < 1940) return $bg['santoDomingo1930s'];
@@ -624,23 +626,36 @@ function select_storybook_background(array $group, array $placeLookup, int $inde
   $memory = [$bg['memory1'], $bg['memory2'], $bg['memory3']];
   if ($eventKind === 'registro-sin-fecha') return $memory[abs($indexSeed) % count($memory)];
   if ($minYear && $minYear >= 1980) return $memory[$minYear % count($memory)];
-  $rotation = [$bg['origin'], $bg['santaDomenica'], $bg['puertoPlata'], $bg['samana'], $bg['santoDomingo'], $bg['laRomana'], $bg['ocoa'], $bg['newYork'], $bg['lineage'], $bg['memory2']];
+  $rotation = [$bg['origin'], $bg['santaDomenica'], $bg['samana'], $bg['santoDomingo'], $bg['laRomana'], $bg['ocoa'], $bg['newYork'], $bg['lineage'], $bg['memory2']];
   return $rotation[$indexSeed % count($rotation)];
 }
 
 function storybook_lineage(array $member, array $memberById): string {
   $parentId = (string)($member['parent_id'] ?? '');
-  if ($parentId !== '' && isset($memberById[$parentId])) return 'descendiente de ' . ($memberById[$parentId]['name'] ?? 'su familia');
-  return !empty($member['relationship_to_parent']) ? 'con un vinculo familiar conservado en la memoria' : 'como parte de la memoria familiar';
+  if ($parentId !== '' && isset($memberById[$parentId])) return 'dentro de la rama de ' . ($memberById[$parentId]['name'] ?? 'su familia');
+  return !empty($member['relationship_to_parent']) ? 'con un vinculo que la familia conserva en su memoria' : 'como parte de la memoria familiar';
 }
 
 function storybook_member_sentence(array $member, array $memberById, string $mode = 'dated'): string {
   $year = storybook_year($member['birth'] ?? null);
   $deathYear = storybook_year($member['death'] ?? null);
   $lineage = storybook_lineage($member, $memberById);
-  if ($year) $text = 'En ' . $year . ', ' . ($member['name'] ?? '') . ' se suma a la historia familiar, ' . $lineage;
-  else $text = ($mode === 'undated' ? 'El nombre de ' : '') . ($member['name'] ?? '') . ($mode === 'undated' ? ' queda unido a esta rama, ' : ' queda integrado a la memoria familiar, ') . $lineage;
-  return $text . ($deathYear ? ', y su memoria queda marcada tambien por su partida en ' . $deathYear : '') . '.';
+  $id = (string)($member['id'] ?? '');
+  $normalizedName = storybook_normalize($member['name'] ?? '');
+  $importanceText = '';
+  if ($id === 'alessandro' || $normalizedName === 'alessandro-de-paola-sangiovanni') {
+    $importanceText = 'Su nombre ocupa un lugar central en este legado: alrededor de Alessandro de Paola Sangiovanni la familia vuelve a mirar sus ramas, sus memorias y el camino que la trajo hasta aqui.';
+  } elseif ($id === 'jocelyn' || $normalizedName === 'jocelyn-del-jesus-sangiovanni-baez') {
+    $importanceText = 'Jocelyn no aparece solo como un nombre mas: su presencia recuerda la fuerza de la rama de Jose Vicente Sangiovanni Gesualdo dentro de la linea de Vincenzo/Vicente.';
+  }
+  if ($year) {
+    $text = 'En ' . $year . ' llega ' . ($member['name'] ?? '') . ', ' . $lineage . ', y con esa vida nueva la historia familiar abre otra pagina';
+  } else {
+    $text = $mode === 'undated'
+      ? 'En esta rama tambien vive el nombre de ' . ($member['name'] ?? '') . ', ' . $lineage . ', como parte de las memorias que la familia conserva'
+      : ($member['name'] ?? '') . ' forma parte de esta memoria familiar, ' . $lineage . ', ayudando a completar el recorrido del linaje';
+  }
+  return $text . '.' . ($deathYear ? ' Su recuerdo tambien permanece unido al ano ' . $deathYear . '.' : '') . ($importanceText ? ' ' . $importanceText : '');
 }
 
 function storybook_era_intro(int $decade, array $group): string {
@@ -665,7 +680,7 @@ function storybook_memory_title(int $index): string {
 
 function storybook_memory_intro(int $index): string {
   $intros = [
-    'La historia tambien se sostiene con nombres que completan ramas, hogares y vinculos familiares conservados por el expediente. ',
+    'La historia tambien se sostiene con nombres que completan ramas, hogares y vinculos que la familia conserva con respeto. ',
     'Estas voces aparecen como parte del tejido familiar: no interrumpen la cronologia, la completan desde los hogares que ayudan a explicar. ',
     'Aqui se reunen ramas que sostienen el linaje desde otro angulo, conectando descendencias, matrimonios y recuerdos familiares. ',
     'Son memorias presentes en el archivo familiar: nombres que ayudan a reconocer como la familia se fue enlazando de una generacion a otra. ',
@@ -689,18 +704,22 @@ function build_sienna_storybook(): array {
   $pick = function (array $ids) use ($memberById): array { $out = []; foreach ($ids as $id) if (isset($memberById[$id])) $out[] = $memberById[$id]; return $out; };
 
   $originMembers = $pick(['domenico', 'maria-rosa-grisolia', 'paolo', 'vincenzo']);
-  $slides[] = ['id' => 'origen-calabria', 'title' => 'Calabria, Italia', 'year' => 'Siglo XIX', 'location' => 'Santa Domenica Talao', 'tone' => 'origin', 'visual' => 'calabria', 'backgroundImage' => $bg['santaDomenica'], 'archiveImage' => '/game/legado/archive/domenico-maria-rosa-clean.webp', 'archiveCaption' => 'Domenico Sangiovanni y Maria Rosa Grisolia', 'text' => 'En un pueblo de Calabria, Santa Domenica Talao, la joven familia de Domenico Sangiovanni y Maria Rosa Grisolia tomo una decision que cambiaria sus vidas y alcanzaria a generaciones venideras. Desde ese origen comienza esta historia: una casa, una familia y un apellido preparado para cruzar el mar.', 'members' => array_column($originMembers, 'id'), 'memberPhotos' => build_storybook_member_photos($pick(['domenico', 'maria-rosa-grisolia']), $photoLookup)];
+  $slides[] = ['id' => 'origen-calabria', 'title' => 'Calabria, Italia', 'year' => 'Siglo XIX', 'location' => 'Santa Domenica Talao', 'tone' => 'origin', 'visual' => 'calabria', 'backgroundImage' => $bg['santaDomenica'], 'archiveImage' => '/game/legado/archive/domenico-maria-rosa-clean.webp', 'archiveCaption' => 'Domenico Sangiovanni y Maria Rosa Grisolia', 'text' => 'La historia familiar empieza en Santa Domenica Talao, un pueblo montanoso de Calabria, al sur de Italia. Desde alli, Domenico, tambien recordado como Domingo Sangiovanni, y Maria Rosa Grisolia guardaron una raiz que con el tiempo miraria hacia America: no como despedida del origen, sino como deseo de abrir caminos nuevos para los suyos.', 'members' => array_column($originMembers, 'id'), 'memberPhotos' => build_storybook_member_photos($pick(['domenico', 'maria-rosa-grisolia']), $photoLookup)];
   $addCovered(array_column($originMembers, 'id'));
 
   $houseMembers = $pick(['domenico', 'maria-rosa-grisolia', 'paolo', 'vincenzo']);
-  $slides[] = ['id' => 'casa-sangiovanni', 'title' => 'La casa Sangiovanni', 'year' => 'Calabria', 'location' => 'Santa Domenica Talao', 'tone' => 'origin', 'visual' => 'calabria', 'backgroundImage' => $bg['origin'], 'text' => 'Antes del barco hubo una puerta. Desde la casa Sangiovanni, entre despedidas contenidas y promesas familiares, Paolo y Vincenzo aprendieron que partir tambien podia ser una forma de cuidar el futuro de los suyos.', 'members' => array_column($houseMembers, 'id'), 'memberPhotos' => build_storybook_member_photos($houseMembers, $photoLookup)];
+  $slides[] = ['id' => 'casa-sangiovanni', 'title' => 'La casa Sangiovanni', 'year' => 'Calabria', 'location' => 'Santa Domenica Talao', 'tone' => 'origin', 'visual' => 'calabria', 'backgroundImage' => $bg['origin'], 'text' => 'Se recuerda que desde Santa Domenica Talao, Domenico Sangiovanni Cino emprendio camino hacia Republica Dominicana con Maria Rosa Grisolia Di Vanna y sus hijos. En esa memoria familiar aparecen Bonifacio, Paolo Sangiovanni Grisolia y Vincenzo Sangiovanni Grisolia, luego conocido como Vicente. Maria Magdalena permanecio en Santa Domenica, como esa rama que siguio cuidando el origen.', 'members' => array_column($pick(['domenico', 'maria-rosa-grisolia', 'paolo', 'vincenzo', 'maria-magdalena']), 'id'), 'memberPhotos' => build_storybook_member_photos($houseMembers, $photoLookup)];
 
-  $slides[] = ['id' => 'ruta-america', 'title' => 'La ruta hacia America', 'year' => 'Migracion', 'location' => 'Atlantico', 'tone' => 'migration', 'visual' => 'migration', 'backgroundImage' => $bg['migration'], 'text' => 'El viaje no fue solo una ruta sobre el mar. Fue una apuesta familiar. Lo que salio de Calabria llegaria a Puerto Plata con idioma, recuerdos, fe y una voluntad silenciosa de comenzar de nuevo.', 'members' => ['domenico', 'maria-rosa-grisolia', 'paolo', 'vincenzo'], 'memberPhotos' => build_storybook_member_photos($houseMembers, $photoLookup)];
+  $slides[] = ['id' => 'ruta-america', 'title' => 'La ruta hacia America', 'year' => 'Migracion', 'location' => 'Italia -> Samana', 'tone' => 'migration', 'visual' => 'migration', 'backgroundImage' => $bg['migration'], 'text' => 'Aquel viaje hacia America fue mas que cruzar distancia. La familia llevo consigo idioma, fe, oficio y apellido. En Samana, el apellido calabres empezo a encontrar casa, trabajo y una manera nueva de pertenecer a la vida dominicana sin soltar lo que venia de Italia.', 'members' => ['domenico', 'maria-rosa-grisolia', 'paolo', 'vincenzo'], 'memberPhotos' => build_storybook_member_photos($houseMembers, $photoLookup)];
 
   $pv = $pick(['paolo', 'vincenzo']);
-  $slides[] = ['id' => 'puerto-plata-llegada', 'title' => 'Puerto Plata recibe el legado', 'year' => 'Llegada', 'location' => 'Puerto Plata, Republica Dominicana', 'tone' => 'arrival', 'visual' => 'arrival', 'backgroundImage' => $bg['arrival'], 'archiveImage' => '/game/legado/archive/paolo-vicente-sangiovanni-puerto-plata.jpg', 'archiveCaption' => 'Paolo y Vincenzo al llegar a Puerto Plata', 'text' => 'Cuando Paolo y Vincenzo llegaron a Puerto Plata, el apellido comenzo a pronunciarse en otra tierra. En ellos viajaba Calabria, pero tambien nacian las primeras paginas dominicanas de esta familia.', 'members' => ['domenico', 'maria-rosa-grisolia', 'paolo', 'vincenzo'], 'memberPhotos' => build_storybook_member_photos($houseMembers, $photoLookup)];
+  $slides[] = ['id' => 'domenico-joyero', 'title' => 'El oficio de Domenico', 'year' => '1896', 'location' => 'Santa Barbara de Samana', 'tone' => 'arrival', 'visual' => 'arrival', 'backgroundImage' => $bg['samana'], 'text' => 'En Samana, Domenico no aparece como una figura lejana, sino como un hombre de oficio. Hacia 1896 se le recuerda como joyero ambulante: alguien que llevaba trabajo fino, palabra y confianza de un lugar a otro. Ese comienzo artesanal ayuda a entender la raiz comercial de la familia, nacida primero en el trato directo con la gente.', 'members' => ['domenico', 'maria-rosa-grisolia'], 'memberPhotos' => build_storybook_member_photos($pick(['domenico', 'maria-rosa-grisolia']), $photoLookup)];
 
-  $slides[] = ['id' => 'primeros-hogares', 'title' => 'Los primeros hogares', 'year' => 'Nuevas familias', 'location' => 'Republica Dominicana', 'tone' => 'family', 'visual' => 'arrival', 'backgroundImage' => '/game/legado/generated/storyteller/legado-primeros-hogares-casa-familiar.png', 'archiveImage' => '/game/legado/archive/paolo-vicente-sangiovanni-matrimonios.jpg', 'archiveCaption' => 'Paolo y Vincenzo en sus matrimonios', 'text' => 'Con el tiempo, la llegada se convirtio en hogar. Paolo y Vincenzo formaron sus familias, y desde esas uniones el legado empezo a multiplicarse en ramas, nombres y memorias que todavia nos alcanzan.', 'members' => ['paolo', 'vincenzo'], 'memberPhotos' => build_storybook_member_photos($pv, $photoLookup)];
+  $slides[] = ['id' => 'samana-comercial', 'title' => 'Samana y la Casa Hermanos Sangiovanni', 'year' => '1904', 'location' => 'Samana, Republica Dominicana', 'tone' => 'arrival', 'visual' => 'arrival', 'backgroundImage' => $bg['samana'], 'text' => 'En Republica Dominicana, los hijos de Domenico llevaron aquel impulso familiar a una escala mayor. En 1904, la Casa Hermanos Sangiovanni se convirtio en una presencia comercial importante de Samana, dedicada al comercio importador y exportador. Alli, Paolo y Vincenzo no solo trabajaban: ayudaban a mover mercancias, credito, relaciones y confianza dentro de la vida economica del pueblo.', 'members' => ['domenico', 'maria-rosa-grisolia', 'paolo', 'vincenzo'], 'memberPhotos' => build_storybook_member_photos($houseMembers, $photoLookup)];
+
+  $slides[] = ['id' => 'paolo-hielo-cine', 'title' => 'Hielo, cine y vida urbana', 'year' => 'Samana', 'location' => 'Samana, Republica Dominicana', 'tone' => 'arrival', 'visual' => 'arrival', 'backgroundImage' => $bg['samana'], 'text' => 'Paulino, tambien recordado como Paolo o Paolino, llego a ocupar un lugar visible en la vida economica y social de Samana. Se le asocia con la primera fabrica de hielo de la ciudad, un avance clave para conservar alimentos y sostener el comercio costero, y tambien con el Cine Colon, un espacio que habla de entretenimiento, encuentro y vida urbana. Su historia muestra que la familia no solo echo raices: tambien aporto movimiento y modernidad a su comunidad.', 'members' => ['paolo'], 'memberPhotos' => build_storybook_member_photos($pick(['paolo']), $photoLookup)];
+
+  $slides[] = ['id' => 'primeros-hogares', 'title' => 'Los primeros hogares', 'year' => 'Nuevas familias', 'location' => 'Samana, Republica Dominicana', 'tone' => 'family', 'visual' => 'arrival', 'backgroundImage' => '/game/legado/generated/storyteller/legado-primeros-hogares-casa-familiar.png', 'archiveImage' => '/game/legado/archive/paolo-vicente-sangiovanni-matrimonios.jpg', 'archiveCaption' => 'Paolo y Vincenzo en sus matrimonios', 'text' => 'Con el tiempo, la familia se fue haciendo dominicana desde Samana. Paolo formo hogar con Matilde Perez Alvarez, y Vicente con Maria Balbina Perez Alvarez. Desde esas uniones nacieron ramas Sangiovanni Perez que conservaron el apellido, la memoria calabresa y una identidad cada vez mas unida al pais.', 'members' => ['paolo', 'vincenzo'], 'memberPhotos' => build_storybook_member_photos($pv, $photoLookup)];
 
   $dated = array_values(array_filter($members, fn($m) => storybook_year($m['birth'] ?? null) !== null && !isset($covered[(string)$m['id']])));
   usort($dated, fn($a, $b) => storybook_year($a['birth'] ?? null) <=> storybook_year($b['birth'] ?? null));

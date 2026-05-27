@@ -49,19 +49,33 @@ const getScenePlaybackMs = (scene: LegadoStoryScene) => {
 const MemberPhotoCollage = ({ photos }: { photos: NonNullable<LegadoStoryScene['memberPhotos']> }) => {
   if (!photos.length) return null;
 
+  const isDense = photos.length > 6;
+  const visiblePhotos = photos.slice(0, isDense ? 16 : 12);
+  const mobileLayoutClass = isDense
+    ? 'right-[3vw] top-[13vh] grid max-h-[76vh] max-w-[9.4rem] grid-cols-2 items-start gap-x-1.5 gap-y-1.5 overflow-visible'
+    : 'right-[5vw] top-[33vh] flex max-h-[54vh] max-w-[5.6rem] flex-col flex-nowrap items-center gap-1.5 overflow-hidden';
+  const photoSizeClass = isDense
+    ? 'h-11 w-11 md:h-20 md:w-20 xl:h-24 xl:w-24'
+    : 'h-12 w-12 md:h-20 md:w-20 xl:h-24 xl:w-24';
+  const labelClass = isDense
+    ? 'mt-0.5 max-w-[4.1rem] truncate rounded-full bg-[#080706]/58 px-1 py-0.5 text-center text-[0.48rem] font-bold uppercase tracking-normal text-[#fff7e6]/90 backdrop-blur md:mt-1 md:max-w-[6rem] md:px-2 md:text-[0.65rem]'
+    : 'mt-0.5 max-w-[4.6rem] truncate rounded-full bg-[#080706]/58 px-1.5 py-0.5 text-center text-[0.52rem] font-bold uppercase tracking-normal text-[#fff7e6]/90 backdrop-blur md:mt-1 md:max-w-[6rem] md:px-2 md:text-[0.65rem]';
+
   return (
     <motion.div
-      className="pointer-events-none absolute right-[5vw] top-[33vh] z-30 flex max-h-[54vh] max-w-[5.6rem] flex-col flex-nowrap items-center gap-1.5 overflow-hidden md:bottom-[8vh] md:left-auto md:right-[7vw] md:top-auto md:max-h-none md:max-w-[38vw] md:flex-row md:flex-wrap md:items-end md:justify-end md:gap-2.5 md:overflow-visible"
+      className={`pointer-events-none absolute z-30 md:bottom-[8vh] md:left-auto md:right-[7vw] md:top-auto md:flex md:max-h-none md:max-w-[38vw] md:flex-row md:flex-wrap md:items-end md:justify-end md:gap-2.5 md:overflow-visible ${mobileLayoutClass}`}
       initial={{ opacity: 0, y: 24, filter: 'blur(6px)' }}
       animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
       transition={{ duration: 1.05, delay: 0.55, ease: 'easeOut' }}
     >
-      {photos.slice(0, 12).map((photo, index) => (
+      {visiblePhotos.map((photo, index) => {
+        const isImportant = photo.memberId === 'alessandro' || photo.memberId === 'jocelyn';
+        return (
         <div
           key={`${photo.memberId}-${index}`}
           className="group relative grid place-items-center"
         >
-          <div className="relative h-12 w-12 overflow-hidden rounded-full border-2 border-[#f8e5bd]/80 bg-[#f7ead0] shadow-[0_12px_32px_rgba(0,0,0,0.42)] ring-2 ring-[#080706]/50 md:h-20 md:w-20 xl:h-24 xl:w-24">
+          <div className={`relative overflow-hidden rounded-full border-2 bg-[#f7ead0] shadow-[0_12px_32px_rgba(0,0,0,0.42)] ring-2 ${photoSizeClass} ${isImportant ? 'border-[#fff7e6] ring-[#f8e5bd]/80 shadow-[0_0_30px_rgba(248,229,189,0.38)]' : 'border-[#f8e5bd]/80 ring-[#080706]/50'}`}>
             <img
               src={photo.photoData}
               alt={photo.name}
@@ -77,11 +91,12 @@ const MemberPhotoCollage = ({ photos }: { photos: NonNullable<LegadoStoryScene['
               </span>
             </div>
           )}
-          <div className="mt-0.5 max-w-[4.6rem] truncate rounded-full bg-[#080706]/58 px-1.5 py-0.5 text-center text-[0.52rem] font-bold uppercase tracking-normal text-[#fff7e6]/90 backdrop-blur md:mt-1 md:max-w-[6rem] md:px-2 md:text-[0.65rem]">
+          <div className={`${labelClass} ${isImportant ? 'bg-[#f8e5bd]/88 text-[#1b1208] ring-1 ring-[#fff7e6]/80' : ''}`}>
             {photo.name}
           </div>
         </div>
-      ))}
+        );
+      })}
     </motion.div>
   );
 };
@@ -166,11 +181,13 @@ const LegacyCredits = ({ members }: { members: NonNullable<LegadoStoryScene['cre
         <p className="mb-5 font-serif text-2xl font-black uppercase tracking-normal text-[#fff7e6] drop-shadow-[0_4px_22px_rgba(0,0,0,0.8)] md:text-5xl">
           Creditos del linaje
         </p>
-        {members.map((member, index) => (
-          <div key={member.memberId + '-' + index} className="flex w-full items-center gap-3 border-b border-[#f8e5bd]/10 pb-2 md:gap-5">
+        {members.map((member, index) => {
+          const isImportant = member.memberId === 'alessandro' || member.memberId === 'jocelyn';
+          return (
+          <div key={member.memberId + '-' + index} className={`flex w-full items-center gap-3 border-b pb-2 md:gap-5 ${isImportant ? 'border-[#f8e5bd]/42 bg-[#f8e5bd]/10 px-2 py-2 shadow-[0_0_34px_rgba(248,229,189,0.14)]' : 'border-[#f8e5bd]/10'}`}>
             {member.photoData ? (
               <motion.div
-                className="h-12 w-12 shrink-0 overflow-hidden rounded-full border-2 border-[#f8e5bd]/78 bg-[#f7ead0] shadow-[0_10px_26px_rgba(0,0,0,0.42)] md:h-16 md:w-16"
+                className={`h-12 w-12 shrink-0 overflow-hidden rounded-full border-2 bg-[#f7ead0] shadow-[0_10px_26px_rgba(0,0,0,0.42)] md:h-16 md:w-16 ${isImportant ? 'border-[#fff7e6] ring-2 ring-[#f8e5bd]/80' : 'border-[#f8e5bd]/78'}`}
                 initial={{ opacity: 0, x: -96, scale: 0.8, filter: 'blur(4px)' }}
                 animate={{ opacity: 1, x: 0, scale: 1, filter: 'blur(0px)' }}
                 transition={{ duration: 1.05, delay: getCreditDockSeconds(index, durationSeconds), ease: 'easeOut' }}
@@ -194,7 +211,7 @@ const LegacyCredits = ({ members }: { members: NonNullable<LegadoStoryScene['cre
               </motion.div>
             )}
             <div className="min-w-0">
-              <p className="font-serif text-lg font-black leading-tight text-[#fff7e6] drop-shadow-[0_3px_16px_rgba(0,0,0,0.78)] md:text-3xl">
+              <p className={`font-serif text-lg font-black leading-tight drop-shadow-[0_3px_16px_rgba(0,0,0,0.78)] md:text-3xl ${isImportant ? 'text-[#f8e5bd]' : 'text-[#fff7e6]'}`}>
                 {member.name}
               </p>
               <p className="mt-1 text-[0.62rem] font-black uppercase tracking-[0.22em] text-[#f8e5bd]/78 md:text-xs">
@@ -202,7 +219,8 @@ const LegacyCredits = ({ members }: { members: NonNullable<LegadoStoryScene['cre
               </p>
             </div>
           </div>
-        ))}
+          );
+        })}
         <p className="mt-8 font-serif text-xl font-black text-[#fff7e6]/92 md:text-3xl">
           Una historia viva, guardada por la familia.
         </p>

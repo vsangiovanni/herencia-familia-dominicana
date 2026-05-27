@@ -18,6 +18,16 @@ Actualizacion posterior - 2026-05-27 07:55 AST:
 - Por urgencia se uso deploy quirurgico de archivos criticos porque el FTP completo se colgo subiendo media pesada del juego.
 - Produccion DB fue actualizada solo con el miembro `maria-rosa-grisolia` (Maria Rosa Grisolia / Grisolia Divanna), su foto `maria-rosa-grisolia-portrait.webp` y el vinculo `Domenico.spouse_member_id = maria-rosa-grisolia`.
 - No se tocaron otros miembros, calculos sucesorales ni migraciones. Backup previo local: `backups/prod_maria_rosa_grisolia_before_2026-05-27T11-54-40-029Z.json`.
+- Ajuste posterior autorizado por Victor - 2026-05-27 08:31 AST: produccion ya tenia el asset estatico `/game/legado/archive/domenico-sangiovanni-portrait.webp`, pero faltaba la fila/foto de Domenico en `confirmed_heirs`. Se sincronizo solo `sienna_member_id = domenico` desde local hacia produccion, con backup previo `backups/prod_domenico_photo_before_2026-05-27T12-31-45.207Z.json`. No se tocaron otros miembros, calculos, migraciones ni deploy.
+
+Actualizacion posterior - 2026-05-27 11:16 AST:
+
+- Victor autorizo subir a Hostinger y GitHub esta ronda, con alcance limitado a codigo/frontend/PHP/assets/docs. No tocar DB, datos, migraciones, calculos ni `.env`.
+- Canon narrativo contextual agregado sin modificar datos genealogicos: Domenico Sangiovanni Cino y Maria Rosa Grisolia Di Vanna llegan a Samana a fines del siglo XIX desde Santa Domenica Talao; Bonifacio puede mencionarse solo como contexto historico familiar, sin crear miembro; Maria Magdalena permanece en Santa Domenica como rama que cuida el origen.
+- Enriquecimiento historico de la rama Domenico/Maria Rosa: Domenico como joyero ambulante hacia 1896 en Samana; Casa Hermanos Sangiovanni fundada en 1904 como casa comercial importante de importacion/exportacion; Paulino/Paolo asociado a la primera fabrica de hielo de Samana y al Cine Colon; Vicente/Vincenzo como parte del nucleo comercial familiar y esposo de Maria Balbina Perez Alvarez.
+- Se corrigio el foco geografico: no usar Puerto Plata para esta rama; el nucleo verificable del relato es Samana / Santa Barbara de Samana.
+- Se genero y conecto el asset `public/game/legado/generated/storyteller/legado-samana-casa-hermanos-sangiovanni-v2.jpg` para representar una casa comercial importante en el centro de Samana, no una construccion rural humilde. La fuente PNG queda local como origen, pero produccion usa JPG para evitar errores del optimizador de imagenes de Hostinger.
+- La narrativa debe evitar tono de informe: no usar frases como "los registros indican", "los registros ubican", "documentado", "evidencia", "base de datos", "sin fecha exacta", "se suma a la historia" o "queda integrado".
 
 Actualizacion posterior - 2026-05-24 21:15 AST:
 

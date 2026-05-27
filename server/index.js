@@ -3852,9 +3852,9 @@ const STORYBOOK_BACKGROUNDS = {
   santaDomenica: '/game/legado/generated/storyteller/legado-santa-domenica-origen-documental.png',
   farewell: '/game/legado/generated/legado-slide-02-despedida-casa-sangiovanni.png',
   migration: '/game/legado/generated/legado-slide-02-migracion-barco.png',
-  arrival: '/game/legado/generated/storyteller/legado-puerto-plata-llegada-documental.png',
-  puertoPlata: '/game/legado/generated/storyteller/legado-puerto-plata-llegada-documental.png',
-  samana: '/game/legado/generated/storyteller/legado-samana-capitulo-familiar-documental.png',
+  arrival: '/game/legado/generated/storyteller/legado-samana-casa-hermanos-sangiovanni-v2.jpg',
+  samanaArrival: '/game/legado/generated/storyteller/legado-samana-casa-hermanos-sangiovanni-v2.jpg',
+  samana: '/game/legado/generated/storyteller/legado-samana-casa-hermanos-sangiovanni-v2.jpg',
   santoDomingo: '/game/legado/generated/storyteller/legado-santo-domingo-consolidacion-familiar.png',
   santoDomingo1930s: '/game/legado/generated/storyteller/legado-santo-domingo-generacion-1930s.png',
   santoDomingo1950s: '/game/legado/generated/storyteller/legado-santo-domingo-generacion-1950s.png',
@@ -3872,7 +3872,6 @@ const STORYBOOK_BACKGROUNDS = {
 const STORYBOOK_ROTATION_BACKGROUNDS = [
   STORYBOOK_BACKGROUNDS.origin,
   STORYBOOK_BACKGROUNDS.santaDomenica,
-  STORYBOOK_BACKGROUNDS.puertoPlata,
   STORYBOOK_BACKGROUNDS.samana,
   STORYBOOK_BACKGROUNDS.santoDomingo,
   STORYBOOK_BACKGROUNDS.laRomana,
@@ -3910,28 +3909,44 @@ const describeMemberLineage = (member, parentsByChildId, memberById) => {
     const parentNames = parents
       .map((link) => memberById.get(link.parent_member_id)?.name)
       .filter(Boolean);
-    if (parentNames.length) return 'en el hogar de ' + parentNames.join(' y ');
+    if (parentNames.length === 1) return 'en la rama de ' + parentNames[0];
+    if (parentNames.length) return 'en el hogar formado por ' + parentNames.join(' y ');
   }
   if (member.parent_id && memberById.get(member.parent_id)) {
-    return 'en el linaje de ' + memberById.get(member.parent_id).name;
+    return 'dentro de la rama de ' + memberById.get(member.parent_id).name;
   }
   if (member.spouse_member_id && memberById.get(member.spouse_member_id)) {
     return 'junto a ' + memberById.get(member.spouse_member_id).name;
   }
   if (member.spouse) return 'junto a ' + member.spouse;
-  return member.relationship_to_parent ? 'con un vinculo familiar conservado en la memoria' : 'como parte de la memoria familiar';
+  return member.relationship_to_parent ? 'con un vinculo que la familia conserva en su memoria' : 'como parte de la memoria familiar';
+};
+
+const storybookMemberImportance = (member) => {
+  const id = String(member?.id || '');
+  const normalizedName = storybookNormalize(member?.name || '');
+  if (id === 'alessandro' || normalizedName === 'alessandro-de-paola-sangiovanni') {
+    return 'Su nombre ocupa un lugar central en este legado: alrededor de Alessandro de Paola Sangiovanni la familia vuelve a mirar sus ramas, sus memorias y el camino que la trajo hasta aqui.';
+  }
+  if (id === 'jocelyn' || normalizedName === 'jocelyn-del-jesus-sangiovanni-baez') {
+    return 'Jocelyn no aparece solo como un nombre mas: su presencia recuerda la fuerza de la rama de Jose Vicente Sangiovanni Gesualdo dentro de la linea de Vincenzo/Vicente.';
+  }
+  return '';
 };
 
 const storybookMemberSentence = (member, parentsByChildId, memberById, mode = 'dated') => {
   const year = extractStorybookYear(member.birth);
   const lineage = describeMemberLineage(member, parentsByChildId, memberById);
   const deathYear = extractStorybookYear(member.death);
+  const importanceText = storybookMemberImportance(member);
   const birthText = year
-    ? 'En ' + year + ', ' + member.name + ' se suma a la historia familiar, ' + lineage
+    ? 'En ' + year + ' llega ' + member.name + ', ' + lineage + ', y con esa vida nueva la historia familiar abre otra pagina'
     : mode === 'undated'
-      ? 'El nombre de ' + member.name + ' queda unido a esta rama, ' + lineage
-      : member.name + ' queda integrado a la memoria familiar, ' + lineage;
-  return birthText + (deathYear ? ', y su memoria queda marcada tambien por su partida en ' + deathYear : '') + '.';
+      ? 'En esta rama tambien vive el nombre de ' + member.name + ', ' + lineage + ', como parte de las memorias que la familia conserva'
+      : member.name + ' forma parte de esta memoria familiar, ' + lineage + ', ayudando a completar el recorrido del linaje';
+  return birthText + '.'
+    + (deathYear ? ' Su recuerdo tambien permanece unido al ano ' + deathYear + '.' : '')
+    + (importanceText ? ' ' + importanceText : '');
 };
 
 const buildStorybookPhotoLookup = (heirs) => {
@@ -4003,7 +4018,6 @@ const selectStorybookBackground = (group, placeLookup, indexSeed = 0, eventKind 
   const minYear = years.length ? Math.min(...years) : Number(indexSeed) || null;
 
   if (placeText.includes('santa domenica') || placeText.includes('calabria')) return STORYBOOK_BACKGROUNDS.santaDomenica;
-  if (placeText.includes('puerto plata')) return STORYBOOK_BACKGROUNDS.puertoPlata;
   if (placeText.includes('samana') || placeText.includes('samaná')) return STORYBOOK_BACKGROUNDS.samana;
   if (placeText.includes('santo domingo') || placeText.includes('sto.dgo')) {
     if (minYear && minYear < 1940) return STORYBOOK_BACKGROUNDS.santoDomingo1930s;
@@ -4041,7 +4055,7 @@ const storybookEraTitle = (yearStart, yearEnd, group) => {
 };
 
 const storybookEraIntro = (yearStart, yearEnd, group) => {
-  if (yearStart === yearEnd && group.length === 1) return 'La historia se detiene un momento en ' + yearStart + ', cuando una nueva vida se suma al camino familiar. ';
+  if (yearStart === yearEnd && group.length === 1) return 'La historia se detiene un momento en ' + yearStart + ', cuando una nueva vida abre otra pagina del camino familiar. ';
   if (yearStart < 1929) {
     return 'Antes de que la memoria se multiplicara en nuevas ciudades, estos nombres ayudan a sostener el puente entre las raices italianas y la vida que comenzaba a abrirse en America. ';
   }
@@ -4057,7 +4071,7 @@ const storybookEraIntro = (yearStart, yearEnd, group) => {
   if (yearStart < 1980) {
     return 'En los anos setenta, el legado ya no vive solo en los recuerdos de los mayores. Empieza a caminar en una generacion que recibe nombres, costumbres y relatos para llevarlos hacia adelante. ';
   }
-  if (yearStart === yearEnd) return 'En ' + yearStart + ', otra vida se suma a esta historia que sigue creciendo. ';
+  if (yearStart === yearEnd) return 'En ' + yearStart + ', otra vida llega a esta historia que sigue creciendo. ';
   return 'Entre ' + yearStart + ' y ' + yearEnd + ', la familia sigue abriendo caminos y dejando nuevas huellas para quienes vendrian despues. ';
 };
 
@@ -4070,7 +4084,7 @@ const storybookMemoryTitle = (chapterIndex) => ([
 ][chapterIndex] || 'Memorias que siguen presentes');
 
 const storybookMemoryIntro = (chapterIndex) => ([
-  'La historia tambien se sostiene con nombres que completan ramas, hogares y vinculos familiares conservados por el expediente. ',
+  'La historia tambien se sostiene con nombres que completan ramas, hogares y vinculos que la familia conserva con respeto. ',
   'Estas voces aparecen como parte del tejido familiar: no interrumpen la cronologia, la completan desde los hogares que ayudan a explicar. ',
   'Aqui se reunen ramas que sostienen el linaje desde otro angulo, conectando descendencias, matrimonios y recuerdos familiares. ',
   'Son memorias presentes en el archivo familiar: nombres que ayudan a reconocer como la familia se fue enlazando de una generacion a otra. ',
@@ -4085,7 +4099,7 @@ const splitStorybookGroup = (group, maxSize = 6) => {
 
 const STORYBOOK_DECEASED_MEMBER_IDS = new Set(['domenico', 'maria-rosa-grisolia']);
 const STORYBOOK_AI_NARRATIVE_CACHE = new Map();
-const STORYBOOK_AI_NARRATIVE_PROMPT_VERSION = '2026-05-27-v2';
+const STORYBOOK_AI_NARRATIVE_PROMPT_VERSION = '2026-05-27-v3';
 const STORYBOOK_AI_MODEL = process.env.STORYBOOK_OPENAI_MODEL || 'gpt-5-nano';
 
 const buildStorybookMemberPhotos = (members, photoLookup) =>
@@ -4148,14 +4162,21 @@ const buildStorybookCreditMembers = (members, parentLinks, photoLookup) => {
     })
     .map((member) => {
       const generation = generationLookup.get(String(member.id)) || null;
+      const importance = storybookMemberImportance(member);
+      const creditRole = String(member.id) === 'alessandro'
+        ? 'Figura central del legado'
+        : String(member.id) === 'jocelyn'
+          ? 'Rama importante - Jose Vicente'
+          : null;
       return {
         memberId: member.id,
         name: member.name,
         birth: member.birth || null,
         death: member.death || null,
         generation,
-        treePosition: generation ? 'Generacion ' + generation : 'Linaje familiar',
+        treePosition: creditRole || (generation ? 'Generacion ' + generation : 'Linaje familiar'),
         photoData: resolveStorybookPhoto(member, photoLookup) || null,
+        importance: importance || null,
       };
     });
 };
@@ -4259,11 +4280,12 @@ async function generateStorybookSlideNarrative(packet) {
         {
           role: 'system',
           content: [
-            'Eres narrador documental del Legado Sangiovanni.',
+            'Eres narrador familiar del Legado Sangiovanni.',
             'Escribe en espanol, con tono historico, humano, elegante y cinematografico.',
             'Usa solamente los datos del paquete. No inventes fechas, lugares, parentescos, migraciones ni fallecimientos.',
             'Si falta un dato, no lo menciones como ausencia tecnica. Integra a la persona por su hogar, rama o vinculo real.',
-            'Evita frases monotonas como "sin fecha exacta", "no hay datos", "base de datos" o "registro".',
+            'Evita sonar a informe. No uses frases como "los registros indican", "los registros ubican", "documentado", "evidencia", "expediente", "base de datos", "sin fecha exacta" o "no hay datos".',
+            'Cuenta la escena como una voz familiar: cercana, orgullosa, natural y motivadora, como alguien narrando a sus descendientes de donde vienen.',
             'Menciona todos los miembros del slide de forma natural, sin convertir el texto en tabla.',
             'Escribe 2 a 4 frases completas, entre 90 y 150 palabras, y termina siempre con punto.',
             'Mantén coherencia con el texto actual si su direccion narrativa es buena.',
@@ -4380,7 +4402,7 @@ function buildSiennaStorybookSlides({ family, heirs, documents }) {
     {
       id: 'calabria',
       title: 'Calabria, Italia',
-      text: 'En un pueblo de Calabria, Santa Domenica Talao, la joven familia de Domenico Sangiovanni y Maria Rosa Grisolia tomaron una decision que cambiaria sus vidas y las generaciones venideras.',
+    text: 'La historia familiar empieza en Santa Domenica Talao, un pueblo montanoso de Calabria, al sur de Italia. Desde alli, Domenico, tambien recordado como Domingo Sangiovanni, y Maria Rosa Grisolia guardaron una raiz que con el tiempo miraria hacia America: no como despedida del origen, sino como deseo de abrir caminos nuevos para los suyos.',
       location: 'Santa Domenica Talao, Calabria',
       visual: 'calabria',
       durationMs: 15000,
@@ -4391,27 +4413,27 @@ function buildSiennaStorybookSlides({ family, heirs, documents }) {
       members: ['domenico', 'maria-rosa-grisolia'].filter((id) => memberById.has(id)),
       memberPhotos: buildStorybookMemberPhotos(['domenico', 'maria-rosa-grisolia'].map((id) => memberById.get(id)).filter(Boolean), photoLookup),
       eventKind: 'origen',
-      assetPrompt: 'Retrato documental hiperrealista de Santa Domenica Talao en el siglo XIX, con Domenico Sangiovanni y Maria Rosa Grisolia integrados de forma honorable en la memoria familiar.',
+      assetPrompt: 'Retrato documental hiperrealista de Santa Domenica Talao en Calabria a finales del siglo XIX, pueblo montanoso, memoria familiar italiana, esperanza migratoria, con Domenico Sangiovanni y Maria Rosa Grisolia integrados de forma honorable.',
     },
     {
       id: 'migration',
       title: 'La casa Sangiovanni',
-      text: 'La puerta familiar quedo como testigo silencioso del momento en que la historia empezo a dividirse entre dos orillas. Domenico y Maria Rosa saldrian con Paolo y Vincenzo; Maria Magdalena permaneceria en Italia, guardando en Santa Domenica una parte esencial del origen.',
+    text: 'Se recuerda que desde Santa Domenica Talao, Domenico Sangiovanni Cino emprendio camino hacia Republica Dominicana con Maria Rosa Grisolia Di Vanna y sus hijos. En esa memoria familiar aparecen Bonifacio, Paolo Sangiovanni Grisolia y Vincenzo Sangiovanni Grisolia, luego conocido como Vicente. Maria Magdalena permanecio en Santa Domenica, como esa rama que siguio cuidando el origen.',
       location: 'Casa Sangiovanni, Santa Domenica Talao',
       visual: 'migration',
       durationMs: 17000,
       backgroundImage: STORYBOOK_BACKGROUNDS.origin,
       tone: 'migration',
       members: ['domenico', 'maria-rosa-grisolia', 'paolo', 'vincenzo', 'maria-magdalena'].filter((id) => memberById.has(id)),
-      memberPhotos: [],
+      memberPhotos: buildStorybookMemberPhotos(['domenico', 'maria-rosa-grisolia', 'paolo', 'vincenzo'].map((id) => memberById.get(id)).filter(Boolean), photoLookup),
       eventKind: 'despedida',
-      assetPrompt: 'Escena melancolica hiperrealista frente a la puerta original de la casa Sangiovanni en Santa Domenica Talao, familia despidiendose en la calle antes de emigrar.',
+      assetPrompt: 'Escena documental hiperrealista frente a una casa familiar de Santa Domenica Talao, Calabria, Domenico Sangiovanni Cino y Maria Rosa Grisolia Di Vanna con sus hijos antes de la emigracion hacia Republica Dominicana.',
     },
     {
       id: 'migration-ship',
       title: 'La ruta hacia America',
-      text: 'El viaje hacia Puerto Plata no fue solamente un traslado. Fue una apuesta de familia, una despedida al mundo conocido y el comienzo de una memoria que aprenderia a vivir entre Italia y Republica Dominicana.',
-      location: 'Italia -> Puerto Plata',
+    text: 'Aquel viaje hacia America fue mas que cruzar distancia. La familia llevo consigo idioma, fe, oficio y apellido. En Samana, el apellido calabres empezo a encontrar casa, trabajo y una manera nueva de pertenecer a la vida dominicana sin soltar lo que venia de Italia.',
+      location: 'Italia -> Samana',
       visual: 'migration',
       durationMs: 14500,
       backgroundImage: STORYBOOK_BACKGROUNDS.migration,
@@ -4419,30 +4441,56 @@ function buildSiennaStorybookSlides({ family, heirs, documents }) {
       members: ['domenico', 'maria-rosa-grisolia', 'paolo', 'vincenzo'].filter((id) => memberById.has(id)),
       memberPhotos: buildStorybookMemberPhotos(['domenico', 'maria-rosa-grisolia', 'paolo', 'vincenzo'].map((id) => memberById.get(id)).filter(Boolean), photoLookup),
       eventKind: 'migracion',
-      assetPrompt: 'Familia italiana abordando un barco hacia America a finales del siglo XIX, Puerto Plata como destino, tono documental cinematografico.',
+      assetPrompt: 'Familia italiana abordando un barco hacia America a finales del siglo XIX, ruta hacia Samana y el norte de Republica Dominicana, tono documental cinematografico.',
     },
     {
-      id: 'puerto-plata',
-      title: 'Puerto Plata recibe el legado',
-      text: 'Puerto Plata recibe aquella historia como quien recibe una semilla. Desde alli, las ramas de Paolo y Vincenzo empiezan a crecer, y con ellas nace una descendencia que todavia mira hacia atras para entender a quienes debe agradecer su camino.',
-      location: 'Puerto Plata, Republica Dominicana',
-      visual: 'puertoPlata',
+      id: 'domenico-joyero',
+      title: 'El oficio de Domenico',
+      text: 'En Samana, Domenico no aparece como una figura lejana, sino como un hombre de oficio. Hacia 1896 se le recuerda como joyero ambulante: alguien que llevaba trabajo fino, palabra y confianza de un lugar a otro. Ese comienzo artesanal ayuda a entender la raiz comercial de la familia, nacida primero en el trato directo con la gente.',
+      location: 'Santa Barbara de Samana',
+      visual: 'samana',
       durationMs: 14500,
-      backgroundImage: STORYBOOK_BACKGROUNDS.arrival,
-      archiveImage: '/game/legado/archive/paolo-vicente-sangiovanni-puerto-plata.jpg',
-      archiveCaption: 'Paolo Sangiovanni y Vincenzo/Vicente Sangiovanni',
+      backgroundImage: STORYBOOK_BACKGROUNDS.samana,
+      tone: 'arrival',
+      members: ['domenico', 'maria-rosa-grisolia'].filter((id) => memberById.has(id)),
+      memberPhotos: buildStorybookMemberPhotos(['domenico', 'maria-rosa-grisolia'].map((id) => memberById.get(id)).filter(Boolean), photoLookup),
+      eventKind: 'oficio-domenico',
+      assetPrompt: 'Samana historica de finales del siglo XIX, Domenico Sangiovanni como joyero ambulante, comercio artesanal de confianza, escena familiar digna y documental.',
+    },
+    {
+      id: 'samana-comercial',
+      title: 'Samana y la Casa Hermanos Sangiovanni',
+    text: 'En Republica Dominicana, los hijos de Domenico llevaron aquel impulso familiar a una escala mayor. En 1904, la Casa Hermanos Sangiovanni se convirtio en una presencia comercial importante de Samana, dedicada al comercio importador y exportador. Alli, Paolo y Vincenzo no solo trabajaban: ayudaban a mover mercancias, credito, relaciones y confianza dentro de la vida economica del pueblo.',
+      location: 'Samana, Republica Dominicana',
+      visual: 'samana',
+      durationMs: 14500,
+      backgroundImage: STORYBOOK_BACKGROUNDS.samana,
       tone: 'arrival',
       members: ['domenico', 'maria-rosa-grisolia', 'paolo', 'vincenzo'].filter((id) => memberById.has(id)),
       memberPhotos: buildStorybookMemberPhotos(['domenico', 'maria-rosa-grisolia', 'paolo', 'vincenzo'].map((id) => memberById.get(id)).filter(Boolean), photoLookup),
-      eventKind: 'llegada',
-      assetPrompt: 'Puerto de Puerto Plata historico recibiendo una familia inmigrante italiana, lenguaje visual premium documental, no ilustracion infantil.',
+      eventKind: 'comercio-samana',
+      assetPrompt: 'Samana historica a principios del siglo XX, centro del pueblo, Casa Hermanos Sangiovanni como casa comercial importante de importacion y exportacion, edificio digno y urbano, lenguaje visual premium documental.',
+    },
+    {
+      id: 'paolo-hielo-cine',
+      title: 'Hielo, cine y vida urbana',
+      text: 'Paulino, tambien recordado como Paolo o Paolino, llego a ocupar un lugar visible en la vida economica y social de Samana. Se le asocia con la primera fabrica de hielo de la ciudad, un avance clave para conservar alimentos y sostener el comercio costero, y tambien con el Cine Colon, un espacio que habla de entretenimiento, encuentro y vida urbana. Su historia muestra que la familia no solo echo raices: tambien aporto movimiento y modernidad a su comunidad.',
+      location: 'Samana, Republica Dominicana',
+      visual: 'samana',
+      durationMs: 15500,
+      backgroundImage: STORYBOOK_BACKGROUNDS.samana,
+      tone: 'arrival',
+      members: ['paolo'].filter((id) => memberById.has(id)),
+      memberPhotos: buildStorybookMemberPhotos(['paolo'].map((id) => memberById.get(id)).filter(Boolean), photoLookup),
+      eventKind: 'aportes-paulino',
+      assetPrompt: 'Samana a principios del siglo XX con fabrica de hielo, comercio costero y cine urbano de epoca, aporte social y economico de Paulino Sangiovanni, estilo documental elegante.',
     },
     {
       id: 'primeros-hogares',
       title: 'Los primeros hogares',
-      text: 'Con el tiempo, Paolo y Vincenzo no solo llevaron un apellido: comenzaron a formar hogares. En esas uniones, la historia dejo de ser solamente una migracion y se convirtio en familia dominicana, con nuevas ramas destinadas a crecer.',
-      location: 'Puerto Plata, Republica Dominicana',
-      visual: 'puertoPlata',
+    text: 'Con el tiempo, la familia se fue haciendo dominicana desde Samana. Paolo formo hogar con Matilde Perez Alvarez, y Vicente con Maria Balbina Perez Alvarez. Desde esas uniones nacieron ramas Sangiovanni Perez que conservaron el apellido, la memoria calabresa y una identidad cada vez mas unida al pais.',
+      location: 'Samana, Republica Dominicana',
+      visual: 'samana',
       durationMs: 14000,
       backgroundImage: '/game/legado/generated/storyteller/legado-primeros-hogares-casa-familiar.png',
       archiveImage: '/game/legado/archive/paolo-vicente-sangiovanni-matrimonios.jpg',
@@ -4451,7 +4499,7 @@ function buildSiennaStorybookSlides({ family, heirs, documents }) {
       members: ['paolo', 'vincenzo'].filter((id) => memberById.has(id)),
       memberPhotos: buildStorybookMemberPhotos(['paolo', 'vincenzo'].map((id) => memberById.get(id)).filter(Boolean), photoLookup),
       eventKind: 'matrimonios',
-      assetPrompt: 'Capitulo documental sobre Paolo y Vincenzo formando sus primeros hogares en Puerto Plata, con foto familiar integrada de manera honorable.',
+      assetPrompt: 'Capitulo documental sobre Paolo y Vincenzo formando hogares y actividad comercial en Samana, Republica Dominicana, con foto familiar integrada de manera honorable.',
     },
   ];
   const slides = [...staticSlides];

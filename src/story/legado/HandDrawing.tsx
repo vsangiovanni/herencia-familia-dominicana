@@ -17,7 +17,7 @@ const routeByVisual: Record<LegadoStoryVisual, { x: number[]; y: number[]; rotat
     y: [480, 395, 375, 420, 485, 405],
     rotate: [-20, -8, -4, -10, -18, -8],
   },
-  puertoPlata: {
+  samana: {
     x: [350, 460, 590, 730, 870, 1030],
     y: [615, 430, 560, 350, 520, 615],
     rotate: [-17, -10, -19, -8, -15, -20],

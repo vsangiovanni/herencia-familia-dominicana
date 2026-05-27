@@ -16,6 +16,36 @@ const getTypewriterCharMs = (length: number) => {
   return 34;
 };
 
+const IMPORTANT_MEMBER_NAMES = [
+  'Alessandro de Paola Sangiovanni',
+  'Jocelyn del Jesús Sangiovanni Báez',
+];
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const IMPORTANT_MEMBER_PATTERN = new RegExp(
+  '(' + IMPORTANT_MEMBER_NAMES.map(escapeRegExp).join('|') + ')',
+  'gi'
+);
+
+const renderHighlightedNarrative = (text: string) =>
+  text.split(IMPORTANT_MEMBER_PATTERN).map((part, index) => {
+    const isImportant = IMPORTANT_MEMBER_NAMES.some(
+      (name) => name.localeCompare(part, 'es', { sensitivity: 'base' }) === 0
+    );
+
+    if (!isImportant) return part;
+
+    return (
+      <span
+        key={part + '-' + index}
+        className="rounded bg-[#f8e5bd]/22 px-1 font-black text-[#fff7e6] shadow-[0_0_22px_rgba(248,229,189,0.28)] ring-1 ring-[#f8e5bd]/45"
+      >
+        {part}
+      </span>
+    );
+  });
+
 const NarrativeText = ({
   scene,
   hideBody = false,
@@ -86,7 +116,7 @@ const NarrativeText = ({
       transition={{ duration: hideBody ? 1.15 : 0.8, delay: hideBody ? 0 : 0.55, ease: 'easeOut' }}
     >
       <p className="whitespace-pre-line font-serif text-base font-semibold leading-7 text-[#fff7e6]/88 drop-shadow-[0_3px_18px_rgba(0,0,0,0.78)] md:text-2xl md:leading-9">
-        {typedText}
+        {renderHighlightedNarrative(typedText)}
         {typedText.length < typedSource.length ? <span className="typewriter-cursor">|</span> : null}
       </p>
     </motion.div>

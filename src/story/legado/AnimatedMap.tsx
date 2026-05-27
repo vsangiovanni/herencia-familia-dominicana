@@ -115,7 +115,7 @@ const AnimatedMap = ({ visual }: { visual: LegadoStoryVisual }) => (
       </g>
     )}
 
-    {visual === 'puertoPlata' && (
+    {visual === 'samana' && (
       <g>
         <InkPath d="M360 612 V428 H490 V612 M538 612 V342 H700 V612 M748 612 V452 H914 V612 M956 612 V500 H1082 V612" delay={0.3} width={7} />
         <InkPath d="M310 612 H1128" delay={0.55} width={9} />

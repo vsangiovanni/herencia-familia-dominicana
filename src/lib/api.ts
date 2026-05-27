@@ -295,7 +295,7 @@ export interface SiennaFamilyMember {
 }
 
 export type SiennaStorybookTone = 'origin' | 'migration' | 'arrival' | 'lineage' | 'memory';
-export type SiennaStorybookVisual = 'calabria' | 'migration' | 'puertoPlata' | 'familyTree' | 'legacy';
+export type SiennaStorybookVisual = 'calabria' | 'migration' | 'samana' | 'familyTree' | 'legacy';
 
 export interface SiennaStorybookSlide {
   id: string;
