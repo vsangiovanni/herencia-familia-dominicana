@@ -4053,6 +4053,14 @@ const storybookEraIntro = (yearStart, yearEnd, group) => {
   return 'Entre ' + yearStart + ' y ' + yearEnd + ', la familia sigue abriendo caminos y dejando nuevas huellas para quienes vendrian despues. ';
 };
 
+const storybookMemoryTitle = (chapterIndex) => ([
+  'Nombres que completan la historia',
+  'Voces guardadas por la familia',
+  'Ramas que sostienen el linaje',
+  'Memorias que siguen presentes',
+  'Huellas familiares sin fecha exacta',
+][chapterIndex] || 'Memorias que siguen presentes');
+
 const splitStorybookGroup = (group, maxSize = 6) => {
   const chunks = [];
   for (let index = 0; index < group.length; index += maxSize) chunks.push(group.slice(index, index + maxSize));
@@ -4234,7 +4242,7 @@ function buildSiennaStorybookSlides({ family, heirs, documents }) {
     const text = 'Hay nombres que no entran por una fecha exacta, sino por el lugar que ocupan en la memoria. Son parte del tejido familiar: personas que conectan hogares, ramas y recuerdos, y que ayudan a entender mejor de donde venimos. ' + peopleLines.join(' ');
     slides.push({
       id: 'undated-' + chapter,
-      title: 'Ramas de memoria ' + chapter,
+      title: storybookMemoryTitle(chapter - 1),
       text,
       location: 'Memoria familiar',
       visual: 'familyTree',

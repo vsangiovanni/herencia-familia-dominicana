@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronLeft, ChevronRight, Map, Pause, Play, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Home, Map, Pause, Play, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import PageHelp from '@/components/PageHelp';
 import { useSiennaStorybook } from '@/hooks/useSiennaData';
 import NarrativeText from '@/story/legado/NarrativeText';
@@ -120,6 +121,7 @@ const LineageThread = ({ scene }: { scene: (typeof legadoStoryScenes)[number] })
 };
 
 const LegadoSangiovanniGame = () => {
+  const navigate = useNavigate();
   const [sceneIndex, setSceneIndex] = useState(0);
   const [playing, setPlaying] = useState(true);
   const [mapOpen, setMapOpen] = useState(false);
@@ -133,6 +135,15 @@ const LegadoSangiovanniGame = () => {
     () => ((sceneIndex + 1) / scenes.length) * 100,
     [sceneIndex, scenes.length]
   );
+  const cameraMove = useMemo(() => {
+    const direction = sceneIndex % 2 === 0 ? 1 : -1;
+    return {
+      x: direction * 28,
+      y: sceneIndex % 3 === 0 ? -18 : 16,
+      startScale: sceneIndex % 2 === 0 ? 1.04 : 1.14,
+      endScale: sceneIndex % 2 === 0 ? 1.18 : 1.03,
+    };
+  }, [sceneIndex]);
 
   useEffect(() => {
     setSceneIndex((current) => Math.min(current, Math.max(0, scenes.length - 1)));
@@ -210,11 +221,16 @@ const LegadoSangiovanniGame = () => {
             transition={{ duration: 1.65, ease: 'easeInOut' }}
           >
             <motion.div
-              className="absolute inset-[-4%] bg-cover bg-center"
+              className="absolute inset-[-8%] bg-cover bg-center"
               style={{ backgroundImage: `url(${scene.backgroundImage})` }}
-              initial={{ scale: 1.04, opacity: 0.92 }}
-              animate={{ scale: 1.1, opacity: 1 }}
-              transition={{ scale: { duration: scenePlaybackMs / 1000, ease: 'linear' }, opacity: { duration: 0.55 } }}
+              initial={{ scale: cameraMove.startScale, x: -cameraMove.x, y: -cameraMove.y, opacity: 0.92 }}
+              animate={{ scale: cameraMove.endScale, x: cameraMove.x, y: cameraMove.y, opacity: 1 }}
+              transition={{
+                scale: { duration: scenePlaybackMs / 1000, ease: 'easeInOut' },
+                x: { duration: scenePlaybackMs / 1000, ease: 'easeInOut' },
+                y: { duration: scenePlaybackMs / 1000, ease: 'easeInOut' },
+                opacity: { duration: 0.55 },
+              }}
             />
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_62%_42%,rgba(255,244,218,0.08)_0%,rgba(8,7,6,0.28)_38%,rgba(8,7,6,0.82)_100%)]" />
             <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(8,7,6,0.82),rgba(8,7,6,0.32)_42%,rgba(8,7,6,0.56))]" />
@@ -227,9 +243,9 @@ const LegadoSangiovanniGame = () => {
                 alt={scene.archiveCaption || ''}
                 className="pointer-events-none absolute bottom-[-2vh] left-[-7vw] z-20 h-[50vh] max-h-[540px] min-h-[280px] w-auto object-contain opacity-60 mix-blend-screen sepia [mask-image:radial-gradient(circle_at_center,black_0%,black_46%,transparent_82%)] md:left-auto md:right-[-4vw]"
                 draggable={false}
-                initial={{ opacity: 0, scale: 1.04, filter: 'blur(3px)' }}
-                animate={{ opacity: 0.6, scale: 1, filter: 'blur(0.4px)' }}
-                transition={{ duration: 1.2, delay: 0.45, ease: 'easeOut' }}
+                initial={{ opacity: 0, scale: 0.98, x: 18, filter: 'blur(3px)' }}
+                animate={{ opacity: 0.66, scale: 1.08, x: 0, filter: 'blur(0.4px)' }}
+                transition={{ duration: Math.min(5.5, scenePlaybackMs / 2500), delay: 0.45, ease: 'easeInOut' }}
               />
             )}
             <LineageThread scene={scene} />
@@ -249,6 +265,15 @@ const LegadoSangiovanniGame = () => {
         </div>
 
         <div className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] z-50 flex items-center gap-2 opacity-15 transition-opacity hover:opacity-80 focus-within:opacity-90">
+          <button
+            type="button"
+            onClick={() => navigate('/dashboard')}
+            className="grid h-10 w-10 place-items-center rounded-full border-2 border-[#111827] bg-[#f7f3ea]/72 text-[#111827] shadow-[0_14px_40px_rgba(0,0,0,0.18)] backdrop-blur transition"
+            aria-label="Volver a la app"
+            title="Volver a la app"
+          >
+            <Home className="h-4 w-4" />
+          </button>
           <PageHelp helpKey="sienna-legado" className="border-[#111827] bg-[#f7f3ea]/72 text-[#111827] shadow-[0_14px_40px_rgba(0,0,0,0.18)] backdrop-blur" />
           <button
             type="button"

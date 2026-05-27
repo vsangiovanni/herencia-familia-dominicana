@@ -579,6 +579,17 @@ function storybook_era_intro(int $decade, array $group): string {
   return 'La memoria familiar llega a tiempos mas cercanos, donde cada nuevo nombre ayuda a sostener la continuidad del linaje. ';
 }
 
+function storybook_memory_title(int $index): string {
+  $titles = [
+    'Nombres que completan la historia',
+    'Voces guardadas por la familia',
+    'Ramas que sostienen el linaje',
+    'Memorias que siguen presentes',
+    'Huellas familiares sin fecha exacta',
+  ];
+  return $titles[$index] ?? 'Memorias que siguen presentes';
+}
+
 function build_sienna_storybook(): array {
   $family = fetch_sienna_family_bundle();
   $members = $family['members'];
@@ -624,7 +635,7 @@ function build_sienna_storybook(): array {
   foreach ($chunks as $chunkIndex => $chunk) {
     $addCovered(array_column($chunk, 'id'));
     $lines = array_map(fn($m) => storybook_member_sentence($m, $memberById, 'undated'), $chunk);
-    $slides[] = ['id' => 'memoria-sin-fecha-' . ($chunkIndex + 1), 'title' => 'Ramas en la memoria', 'year' => null, 'location' => 'Archivo familiar', 'tone' => 'memory', 'visual' => 'archive', 'backgroundImage' => select_storybook_background($chunk, $placeLookup, $chunkIndex, 'registro-sin-fecha'), 'text' => 'Hay nombres que no entran por una fecha exacta, sino por el lugar que ocupan en la memoria. ' . implode(' ', $lines), 'members' => array_column($chunk, 'id'), 'memberPhotos' => build_storybook_member_photos($chunk, $photoLookup)];
+    $slides[] = ['id' => 'memoria-sin-fecha-' . ($chunkIndex + 1), 'title' => storybook_memory_title($chunkIndex), 'year' => null, 'location' => 'Archivo familiar', 'tone' => 'memory', 'visual' => 'archive', 'backgroundImage' => select_storybook_background($chunk, $placeLookup, $chunkIndex, 'registro-sin-fecha'), 'text' => 'Hay nombres que no entran por una fecha exacta, sino por el lugar que ocupan en la memoria. ' . implode(' ', $lines), 'members' => array_column($chunk, 'id'), 'memberPhotos' => build_storybook_member_photos($chunk, $photoLookup)];
   }
 
   $photoMembers = array_values(array_filter($members, fn($m) => resolve_storybook_photo($m, $photoLookup)));
