@@ -69,11 +69,20 @@ def remove_legacy_remote(ftp: FTP) -> None:
     remove_legacy_assets(ftp)
 
 
+def upload_file(ftp: FTP, item: Path) -> None:
+    with item.open("rb") as handle:
+        ftp.storbinary(f"STOR {item.name}", handle)
+    print(f"OK: {item.relative_to(DIST_DIR)}")
+
+
 def upload_tree(ftp: FTP, local_dir: Path) -> int:
     uploaded = 0
     for item in sorted(local_dir.iterdir()):
         if item.name in SKIP_REMOTE:
             print(f"SKIP (local): {item.name}")
+            continue
+        if local_dir == DIST_DIR and item.name == "index.html":
+            print("DEFER: index.html (se sube al final para evitar chunks faltantes)")
             continue
         if item.is_dir():
             if item.name in LEGACY_REMOTE_ENTRIES:
@@ -87,9 +96,7 @@ def upload_tree(ftp: FTP, local_dir: Path) -> int:
             uploaded += upload_tree(ftp, item)
             ftp.cwd("..")
             continue
-        with item.open("rb") as handle:
-            ftp.storbinary(f"STOR {item.name}", handle)
-        print(f"OK: {item.relative_to(DIST_DIR)}")
+        upload_file(ftp, item)
         uploaded += 1
     return uploaded
 
@@ -106,6 +113,10 @@ def upload_dist() -> int:
 
     remove_legacy_remote(ftp)
     count = upload_tree(ftp, DIST_DIR)
+    index_file = DIST_DIR / "index.html"
+    if index_file.exists():
+        upload_file(ftp, index_file)
+        count += 1
     ftp.quit()
     print(f"Listo: {count} archivo(s) subidos a {remote_dir}/ (sin tocar .env remoto)")
     return count
