@@ -3943,6 +3943,7 @@ const buildStorybookPhotoLookup = (heirs) => {
 };
 
 const STORYBOOK_LOCAL_MEMBER_PHOTOS = new Map([
+  ['maria-rosa', '/game/legado/archive/member-photos/maria-rosa-sangiovanni-perez.jpg'],
   ['paolo', '/game/legado/archive/extracted-faces/named/paolo-sangiovanni.jpg'],
   ['vincenzo', '/game/legado/archive/extracted-faces/named/vincenzo-vicente-sangiovanni.jpg'],
   ['victor-manuel', '/game/legado/archive/member-photos/victor-manuel-sangiovanni-sangiovanni.jpg'],

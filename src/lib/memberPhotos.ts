@@ -7,6 +7,7 @@ export type MemberPhotoLookup = {
 };
 
 const LOCAL_MEMBER_PHOTO_OVERRIDES = new Map<string, string>([
+  ['maria-rosa', '/game/legado/archive/member-photos/maria-rosa-sangiovanni-perez.jpg'],
   ['victor-manuel', '/game/legado/archive/member-photos/victor-manuel-sangiovanni-sangiovanni.jpg'],
 ]);
 

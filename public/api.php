@@ -440,6 +440,7 @@ function storybook_photo_lookup(array $heirs): array {
 
 function storybook_local_member_photos(): array {
   return [
+    'maria-rosa' => '/game/legado/archive/member-photos/maria-rosa-sangiovanni-perez.jpg',
     'paolo' => '/game/legado/archive/extracted-faces/named/paolo-sangiovanni.jpg',
     'vincenzo' => '/game/legado/archive/extracted-faces/named/vincenzo-vicente-sangiovanni.jpg',
     'victor-manuel' => '/game/legado/archive/member-photos/victor-manuel-sangiovanni-sangiovanni.jpg',
