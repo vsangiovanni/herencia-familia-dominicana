@@ -141,64 +141,26 @@ const formatCreditYears = (member: NonNullable<LegadoStoryScene['creditMembers']
 const getCreditDockSeconds = (creditIndex: number, durationSeconds: number) =>
   Math.min(creditIndex * 0.95, durationSeconds - 4);
 
+const getMemberInitials = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('');
+
 const LegacyCredits = ({ members }: { members: NonNullable<LegadoStoryScene['creditMembers']> }) => {
   const durationSeconds = Math.max(46, Math.min(92, members.length * 1.15));
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const photoMembers = members
-    .map((member, index) => ({ ...member, creditIndex: index }))
-    .filter((member) => member.photoData);
-  const railPhotoMembers = photoMembers
-    .filter((member) => elapsedSeconds < getCreditDockSeconds(member.creditIndex, durationSeconds))
-    .slice(0, 18);
-
-  useEffect(() => {
-    const startedAt = performance.now();
-    let frameId = 0;
-
-    const tick = (now: number) => {
-      setElapsedSeconds((now - startedAt) / 1000);
-      frameId = window.requestAnimationFrame(tick);
-    };
-
-    frameId = window.requestAnimationFrame(tick);
-
-    return () => window.cancelAnimationFrame(frameId);
-  }, []);
 
   return (
     <motion.div
-      className="pointer-events-none absolute bottom-0 left-[7vw] right-[5vw] top-[20vh] z-[35] overflow-hidden text-left md:left-[11vw] md:right-[14vw] md:top-[18vh]"
+      className="pointer-events-none absolute bottom-0 left-[7vw] right-[5vw] top-[20vh] z-[35] overflow-hidden text-left md:left-[9vw] md:right-[7vw] md:top-[18vh]"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 1.4, ease: 'easeOut' }}
     >
-      <div className="absolute right-0 top-[8vh] z-10 hidden h-[66vh] w-16 overflow-hidden md:block">
-        <motion.div layout className="flex flex-col items-center gap-2">
-          <AnimatePresence initial={false}>
-            {railPhotoMembers.map((member) => (
-              <motion.div
-                layout
-                layoutId={'legacy-credit-photo-' + member.memberId}
-                key={'rail-' + member.memberId}
-                className="h-12 w-12 shrink-0 overflow-hidden rounded-full border border-[#f8e5bd]/55 bg-[#f7ead0] shadow-[0_10px_26px_rgba(0,0,0,0.42)]"
-                initial={{ opacity: 0, x: 14, scale: 0.92 }}
-                animate={{ opacity: 0.95, x: 0, scale: 1 }}
-                exit={{ opacity: 0, x: -46, scale: 0.78, filter: 'blur(2px)' }}
-                transition={{ duration: 0.62, ease: 'easeInOut', layout: { duration: 0.7, ease: 'easeInOut' } }}
-              >
-                <img
-                  src={member.photoData || ''}
-                  alt=""
-                  className="h-full w-full object-cover sepia-[0.2] contrast-[1.05] saturate-[0.88]"
-                  draggable={false}
-                />
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </motion.div>
-      </div>
       <div
-        className="legacy-credit-roll flex max-w-4xl flex-col items-stretch gap-3 pb-[48vh] md:pr-24"
+        className="legacy-credit-roll flex max-w-5xl flex-col items-stretch gap-3 pb-[48vh]"
         style={{ '--credit-duration': durationSeconds + 's' } as React.CSSProperties}
       >
         <p className="mb-5 font-serif text-2xl font-black uppercase tracking-normal text-[#fff7e6] drop-shadow-[0_4px_22px_rgba(0,0,0,0.8)] md:text-5xl">
@@ -207,30 +169,29 @@ const LegacyCredits = ({ members }: { members: NonNullable<LegadoStoryScene['cre
         {members.map((member, index) => (
           <div key={member.memberId + '-' + index} className="flex w-full items-center gap-3 border-b border-[#f8e5bd]/10 pb-2 md:gap-5">
             {member.photoData ? (
-              <div className="relative h-12 w-12 shrink-0 md:h-16 md:w-16">
-                <AnimatePresence mode="popLayout">
-                  {elapsedSeconds >= getCreditDockSeconds(index, durationSeconds) ? (
-                    <motion.div
-                      layout
-                      layoutId={'legacy-credit-photo-' + member.memberId}
-                      className="absolute inset-0 overflow-hidden rounded-full border-2 border-[#f8e5bd]/78 bg-[#f7ead0] shadow-[0_10px_26px_rgba(0,0,0,0.42)]"
-                      initial={{ opacity: 0.72, scale: 0.82 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.72, ease: 'easeInOut', layout: { duration: 0.78, ease: 'easeInOut' } }}
-                    >
-                      <img
-                        src={member.photoData}
-                        alt={member.name}
-                        className="h-full w-full object-cover sepia-[0.2] contrast-[1.05] saturate-[0.88]"
-                        draggable={false}
-                      />
-                    </motion.div>
-                  ) : null}
-                </AnimatePresence>
-              </div>
+              <motion.div
+                className="h-12 w-12 shrink-0 overflow-hidden rounded-full border-2 border-[#f8e5bd]/78 bg-[#f7ead0] shadow-[0_10px_26px_rgba(0,0,0,0.42)] md:h-16 md:w-16"
+                initial={{ opacity: 0, x: 76, scale: 0.82, filter: 'blur(3px)' }}
+                animate={{ opacity: 1, x: 0, scale: 1, filter: 'blur(0px)' }}
+                transition={{ duration: 0.75, delay: getCreditDockSeconds(index, durationSeconds), ease: 'easeOut' }}
+              >
+                <img
+                  src={member.photoData}
+                  alt={member.name}
+                  className="h-full w-full object-cover sepia-[0.2] contrast-[1.05] saturate-[0.88]"
+                  draggable={false}
+                />
+              </motion.div>
             ) : (
-              <div className="h-12 w-12 shrink-0 rounded-full border border-[#f8e5bd]/18 bg-[#080706]/35 md:h-16 md:w-16" aria-hidden="true" />
+              <motion.div
+                className="grid h-12 w-12 shrink-0 place-items-center rounded-full border border-[#f8e5bd]/26 bg-[#080706]/48 text-xs font-black uppercase text-[#f8e5bd]/76 shadow-[0_10px_26px_rgba(0,0,0,0.28)] md:h-16 md:w-16 md:text-sm"
+                initial={{ opacity: 0, x: 54, scale: 0.86 }}
+                animate={{ opacity: 1, x: 0, scale: 1 }}
+                transition={{ duration: 0.68, delay: getCreditDockSeconds(index, durationSeconds), ease: 'easeOut' }}
+                aria-hidden="true"
+              >
+                {getMemberInitials(member.name)}
+              </motion.div>
             )}
             <div className="min-w-0">
               <p className="font-serif text-lg font-black leading-tight text-[#fff7e6] drop-shadow-[0_3px_16px_rgba(0,0,0,0.78)] md:text-3xl">
