@@ -148,7 +148,7 @@ const LegacyCredits = ({ members }: { members: NonNullable<LegadoStoryScene['cre
     .map((member, index) => ({ ...member, creditIndex: index }))
     .filter((member) => member.photoData);
   const railPhotoMembers = photoMembers
-    .filter((member) => elapsedSeconds < getCreditDockSeconds(member.creditIndex, durationSeconds) + 0.2)
+    .filter((member) => elapsedSeconds < getCreditDockSeconds(member.creditIndex, durationSeconds))
     .slice(0, 18);
 
   useEffect(() => {
@@ -178,12 +178,13 @@ const LegacyCredits = ({ members }: { members: NonNullable<LegadoStoryScene['cre
             {railPhotoMembers.map((member) => (
               <motion.div
                 layout
+                layoutId={'legacy-credit-photo-' + member.memberId}
                 key={'rail-' + member.memberId}
                 className="h-12 w-12 shrink-0 overflow-hidden rounded-full border border-[#f8e5bd]/55 bg-[#f7ead0] shadow-[0_10px_26px_rgba(0,0,0,0.42)]"
                 initial={{ opacity: 0, x: 14, scale: 0.92 }}
                 animate={{ opacity: 0.95, x: 0, scale: 1 }}
-                exit={{ opacity: 0, x: -58, scale: 0.72, filter: 'blur(3px)' }}
-                transition={{ duration: 0.55, ease: 'easeOut', layout: { duration: 0.58, ease: 'easeInOut' } }}
+                exit={{ opacity: 0, x: -46, scale: 0.78, filter: 'blur(2px)' }}
+                transition={{ duration: 0.62, ease: 'easeInOut', layout: { duration: 0.7, ease: 'easeInOut' } }}
               >
                 <img
                   src={member.photoData || ''}
@@ -206,16 +207,27 @@ const LegacyCredits = ({ members }: { members: NonNullable<LegadoStoryScene['cre
         {members.map((member, index) => (
           <div key={member.memberId + '-' + index} className="flex w-full items-center gap-3 border-b border-[#f8e5bd]/10 pb-2 md:gap-5">
             {member.photoData ? (
-              <div
-                className="legacy-credit-photo-dock h-12 w-12 shrink-0 overflow-hidden rounded-full border-2 border-[#f8e5bd]/78 bg-[#f7ead0] shadow-[0_10px_26px_rgba(0,0,0,0.42)] md:h-16 md:w-16"
-                style={{ '--dock-delay': getCreditDockSeconds(index, durationSeconds) + 's' } as React.CSSProperties}
-              >
-                <img
-                  src={member.photoData}
-                  alt={member.name}
-                  className="h-full w-full object-cover sepia-[0.2] contrast-[1.05] saturate-[0.88]"
-                  draggable={false}
-                />
+              <div className="relative h-12 w-12 shrink-0 md:h-16 md:w-16">
+                <AnimatePresence mode="popLayout">
+                  {elapsedSeconds >= getCreditDockSeconds(index, durationSeconds) ? (
+                    <motion.div
+                      layout
+                      layoutId={'legacy-credit-photo-' + member.memberId}
+                      className="absolute inset-0 overflow-hidden rounded-full border-2 border-[#f8e5bd]/78 bg-[#f7ead0] shadow-[0_10px_26px_rgba(0,0,0,0.42)]"
+                      initial={{ opacity: 0.72, scale: 0.82 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.72, ease: 'easeInOut', layout: { duration: 0.78, ease: 'easeInOut' } }}
+                    >
+                      <img
+                        src={member.photoData}
+                        alt={member.name}
+                        className="h-full w-full object-cover sepia-[0.2] contrast-[1.05] saturate-[0.88]"
+                        draggable={false}
+                      />
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
               </div>
             ) : (
               <div className="h-12 w-12 shrink-0 rounded-full border border-[#f8e5bd]/18 bg-[#080706]/35 md:h-16 md:w-16" aria-hidden="true" />
@@ -385,25 +397,6 @@ const LegadoSangiovanniGame = () => {
           animation: legacy-credit-roll var(--credit-duration) linear forwards;
         }
 
-        @keyframes legacy-credit-photo-dock {
-          0%, 70% {
-            opacity: 0;
-            transform: translateX(34vw) scale(0.78);
-          }
-          82% {
-            opacity: 1;
-            transform: translateX(8vw) scale(0.92);
-          }
-          100% {
-            opacity: 1;
-            transform: translateX(0) scale(1);
-          }
-        }
-
-        .legacy-credit-photo-dock {
-          animation: legacy-credit-photo-dock 1.15s ease-out both;
-          animation-delay: var(--dock-delay);
-        }
       `}</style>
       <audio ref={musicRef} src={STORYTELLER_MUSIC_SRC} preload="auto" loop />
 
