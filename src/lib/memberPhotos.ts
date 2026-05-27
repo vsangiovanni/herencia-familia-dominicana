@@ -6,6 +6,10 @@ export type MemberPhotoLookup = {
   byName: Map<string, ConfirmedHeir>;
 };
 
+const LOCAL_MEMBER_PHOTO_OVERRIDES = new Map<string, string>([
+  ['victor-manuel', '/game/legado/archive/member-photos/victor-manuel-sangiovanni-sangiovanni.jpg'],
+]);
+
 export const buildMemberPhotoLookup = (heirs: ConfirmedHeir[]): MemberPhotoLookup => {
   const byMemberId = new Map<string, ConfirmedHeir>();
   const byName = new Map<string, ConfirmedHeir>();
@@ -27,6 +31,10 @@ export const resolveMemberPhotoData = (
   memberId?: string | null,
   memberName?: string | null
 ): string | null => {
+  if (memberId && LOCAL_MEMBER_PHOTO_OVERRIDES.has(String(memberId))) {
+    return LOCAL_MEMBER_PHOTO_OVERRIDES.get(String(memberId)) || null;
+  }
+
   const heir =
     (memberId ? lookup.byMemberId.get(String(memberId)) : undefined) ||
     (memberName ? lookup.byName.get(normalizeName(memberName)) : undefined);

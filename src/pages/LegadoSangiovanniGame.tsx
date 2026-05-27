@@ -264,16 +264,20 @@ const LegadoSangiovanniGame = () => {
           />
         </div>
 
-        <div className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] z-50 flex items-center gap-2 opacity-15 transition-opacity hover:opacity-80 focus-within:opacity-90">
+        <div className="absolute left-4 top-[max(1rem,env(safe-area-inset-top))] z-50">
           <button
             type="button"
             onClick={() => navigate('/dashboard')}
-            className="grid h-10 w-10 place-items-center rounded-full border-2 border-[#111827] bg-[#f7f3ea]/72 text-[#111827] shadow-[0_14px_40px_rgba(0,0,0,0.18)] backdrop-blur transition"
+            className="flex h-10 items-center gap-2 rounded-full border border-[#f8e5bd]/45 bg-[#080706]/58 px-3 text-xs font-black uppercase tracking-[0.12em] text-[#fff7e6] shadow-[0_14px_40px_rgba(0,0,0,0.28)] backdrop-blur transition hover:bg-[#080706]/78"
             aria-label="Volver a la app"
             title="Volver a la app"
           >
             <Home className="h-4 w-4" />
+            <span>Volver</span>
           </button>
+        </div>
+
+        <div className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] z-50 flex items-center gap-2 opacity-55 transition-opacity hover:opacity-90 focus-within:opacity-95">
           <PageHelp helpKey="sienna-legado" className="border-[#111827] bg-[#f7f3ea]/72 text-[#111827] shadow-[0_14px_40px_rgba(0,0,0,0.18)] backdrop-blur" />
           <button
             type="button"
