@@ -28,6 +28,7 @@ Actualizacion posterior - 2026-05-27 11:16 AST:
 - Se corrigio el foco geografico: no usar Puerto Plata para esta rama; el nucleo verificable del relato es Samana / Santa Barbara de Samana.
 - Se genero y conecto el asset `public/game/legado/generated/storyteller/legado-samana-casa-hermanos-sangiovanni-v2.jpg` para representar una casa comercial importante en el centro de Samana, no una construccion rural humilde. La fuente PNG queda local como origen, pero produccion usa JPG para evitar errores del optimizador de imagenes de Hostinger.
 - La narrativa debe evitar tono de informe: no usar frases como "los registros indican", "los registros ubican", "documentado", "evidencia", "base de datos", "sin fecha exacta", "se suma a la historia" o "queda integrado".
+- Ajuste posterior de lectura: la familia reporto que el storyteller quedo muy bien, pero el texto pasaba demasiado rapido. Se redujo la velocidad del typewriter y se agrego mas margen despues de terminar cada texto antes de avanzar al proximo slide.
 
 Actualizacion posterior - 2026-05-24 21:15 AST:
 

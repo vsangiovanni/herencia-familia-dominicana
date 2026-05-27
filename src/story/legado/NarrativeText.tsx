@@ -9,11 +9,11 @@ const splitNarrativeLines = (text: string) =>
     .filter(Boolean);
 
 const getTypewriterCharMs = (length: number) => {
-  if (length > 900) return 18;
-  if (length > 650) return 20;
-  if (length > 420) return 24;
-  if (length > 240) return 28;
-  return 34;
+  if (length > 900) return 26;
+  if (length > 650) return 29;
+  if (length > 420) return 33;
+  if (length > 240) return 38;
+  return 44;
 };
 
 const IMPORTANT_MEMBER_NAMES = [

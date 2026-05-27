@@ -9,18 +9,18 @@ import { legadoStoryScenes } from '@/story/legado/storyScenes';
 
 const TYPEWRITER_INITIAL_DELAY_MS = 720;
 const getTypewriterCharMs = (length: number) => {
-  if (length > 900) return 18;
-  if (length > 650) return 20;
-  if (length > 420) return 24;
-  if (length > 240) return 28;
-  return 34;
+  if (length > 900) return 26;
+  if (length > 650) return 29;
+  if (length > 420) return 33;
+  if (length > 240) return 38;
+  return 44;
 };
 const getAfterTypewriterHoldMs = (length: number) => {
-  if (length > 900) return 4500;
-  if (length > 650) return 3800;
-  if (length > 420) return 3200;
-  if (length > 240) return 3000;
-  return 2600;
+  if (length > 900) return 6500;
+  if (length > 650) return 6000;
+  if (length > 420) return 5400;
+  if (length > 240) return 5000;
+  return 4500;
 };
 
 const STORYTELLER_MUSIC_SRC = '/game/legado/audio/across-two-shores.mp3';
@@ -43,7 +43,7 @@ const getScenePlaybackMs = (scene: LegadoStoryScene) => {
   const typedLength = splitNarrativeLines(scene.text).join('\n').length;
   const calculated = getTypedNarrativeMs(scene) + getAfterTypewriterHoldMs(typedLength);
   const minimum = scene.tone === 'origin' || scene.tone === 'migration' ? 12000 : 10000;
-  return Math.max(minimum, calculated + 900);
+  return Math.max(minimum, calculated + 2200);
 };
 
 const MemberPhotoCollage = ({ photos }: { photos: NonNullable<LegadoStoryScene['memberPhotos']> }) => {
@@ -290,7 +290,7 @@ const LegadoSangiovanniGame = () => {
 
     const timer = window.setTimeout(() => {
       setShowLegacyCredits(true);
-    }, getTypedNarrativeMs(scene) + 1500);
+    }, getTypedNarrativeMs(scene) + 2800);
 
     return () => window.clearTimeout(timer);
   }, [scene, hasLegacyCredits, forceCredits]);

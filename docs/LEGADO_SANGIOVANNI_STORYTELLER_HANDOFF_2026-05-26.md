@@ -211,6 +211,13 @@ Si se reintroducen:
 - no deben competir con el tono historico,
 - preferible manejarlos como una linea breve de narrador en escenas grandes, no dentro de listas.
 
+## Ajuste de lectura 2026-05-27
+
+- Victor recibio feedback familiar positivo sobre el storyteller, pero pidieron que las letras pasen mas lento.
+- Se bajo la velocidad del typewriter en `LegadoSangiovanniGame.tsx` y `NarrativeText.tsx`.
+- Se aumento el margen despues de terminar de escribir cada texto para dejar tiempo real de lectura antes del cambio de slide.
+- Los creditos tambien esperan un poco mas despues de terminar la narrativa antes de aparecer.
+
 ## Validaciones realizadas
 
 Comandos ejecutados:
