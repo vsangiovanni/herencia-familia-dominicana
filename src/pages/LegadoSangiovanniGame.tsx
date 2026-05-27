@@ -138,11 +138,32 @@ const formatCreditYears = (member: NonNullable<LegadoStoryScene['creditMembers']
   return 'Memoria familiar';
 };
 
+const getCreditDockSeconds = (creditIndex: number, durationSeconds: number) =>
+  Math.min(creditIndex * 0.95, durationSeconds - 4);
+
 const LegacyCredits = ({ members }: { members: NonNullable<LegadoStoryScene['creditMembers']> }) => {
   const durationSeconds = Math.max(46, Math.min(92, members.length * 1.15));
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const photoMembers = members
     .map((member, index) => ({ ...member, creditIndex: index }))
     .filter((member) => member.photoData);
+  const railPhotoMembers = photoMembers
+    .filter((member) => elapsedSeconds < getCreditDockSeconds(member.creditIndex, durationSeconds) + 0.2)
+    .slice(0, 18);
+
+  useEffect(() => {
+    const startedAt = performance.now();
+    let frameId = 0;
+
+    const tick = (now: number) => {
+      setElapsedSeconds((now - startedAt) / 1000);
+      frameId = window.requestAnimationFrame(tick);
+    };
+
+    frameId = window.requestAnimationFrame(tick);
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, []);
 
   return (
     <motion.div
@@ -152,28 +173,28 @@ const LegacyCredits = ({ members }: { members: NonNullable<LegadoStoryScene['cre
       transition={{ duration: 1.4, ease: 'easeOut' }}
     >
       <div className="absolute right-0 top-[8vh] z-10 hidden h-[66vh] w-16 overflow-hidden md:block">
-        <div
-          className="legacy-credit-photo-queue flex flex-col items-center gap-2"
-          style={{
-            '--credit-duration': durationSeconds + 's',
-            '--photo-count': photoMembers.length,
-          } as React.CSSProperties}
-        >
-        {photoMembers.slice(0, 18).map((member) => (
-          <div
-            key={'rail-' + member.memberId}
-            className="legacy-credit-photo-rail h-12 w-12 shrink-0 overflow-hidden rounded-full border border-[#f8e5bd]/55 bg-[#f7ead0] shadow-[0_10px_26px_rgba(0,0,0,0.42)]"
-            style={{ '--dock-delay': Math.min(member.creditIndex * 0.95, durationSeconds - 4) + 's' } as React.CSSProperties}
-          >
-            <img
-              src={member.photoData || ''}
-              alt=""
-              className="h-full w-full object-cover sepia-[0.2] contrast-[1.05] saturate-[0.88]"
-              draggable={false}
-            />
-          </div>
-        ))}
-        </div>
+        <motion.div layout className="flex flex-col items-center gap-2">
+          <AnimatePresence initial={false}>
+            {railPhotoMembers.map((member) => (
+              <motion.div
+                layout
+                key={'rail-' + member.memberId}
+                className="h-12 w-12 shrink-0 overflow-hidden rounded-full border border-[#f8e5bd]/55 bg-[#f7ead0] shadow-[0_10px_26px_rgba(0,0,0,0.42)]"
+                initial={{ opacity: 0, x: 14, scale: 0.92 }}
+                animate={{ opacity: 0.95, x: 0, scale: 1 }}
+                exit={{ opacity: 0, x: -58, scale: 0.72, filter: 'blur(3px)' }}
+                transition={{ duration: 0.55, ease: 'easeOut', layout: { duration: 0.58, ease: 'easeInOut' } }}
+              >
+                <img
+                  src={member.photoData || ''}
+                  alt=""
+                  className="h-full w-full object-cover sepia-[0.2] contrast-[1.05] saturate-[0.88]"
+                  draggable={false}
+                />
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </motion.div>
       </div>
       <div
         className="legacy-credit-roll flex max-w-4xl flex-col items-stretch gap-3 pb-[48vh] md:pr-24"
@@ -187,7 +208,7 @@ const LegacyCredits = ({ members }: { members: NonNullable<LegadoStoryScene['cre
             {member.photoData ? (
               <div
                 className="legacy-credit-photo-dock h-12 w-12 shrink-0 overflow-hidden rounded-full border-2 border-[#f8e5bd]/78 bg-[#f7ead0] shadow-[0_10px_26px_rgba(0,0,0,0.42)] md:h-16 md:w-16"
-                style={{ '--dock-delay': Math.min(index * 0.95, durationSeconds - 4) + 's' } as React.CSSProperties}
+                style={{ '--dock-delay': getCreditDockSeconds(index, durationSeconds) + 's' } as React.CSSProperties}
               >
                 <img
                   src={member.photoData}
@@ -364,15 +385,6 @@ const LegadoSangiovanniGame = () => {
           animation: legacy-credit-roll var(--credit-duration) linear forwards;
         }
 
-        @keyframes legacy-credit-photo-queue {
-          from { transform: translateY(0); }
-          to { transform: translateY(calc(var(--photo-count) * -3.5rem)); }
-        }
-
-        .legacy-credit-photo-queue {
-          animation: legacy-credit-photo-queue var(--credit-duration) linear forwards;
-        }
-
         @keyframes legacy-credit-photo-dock {
           0%, 70% {
             opacity: 0;
@@ -388,28 +400,8 @@ const LegadoSangiovanniGame = () => {
           }
         }
 
-        @keyframes legacy-credit-photo-rail {
-          0%, 70% {
-            opacity: 0.9;
-            transform: translateX(0) scale(1);
-          }
-          82% {
-            opacity: 0.42;
-            transform: translateX(-1.4rem) scale(0.92);
-          }
-          100% {
-            opacity: 0;
-            transform: translateX(-4rem) scale(0.74);
-          }
-        }
-
         .legacy-credit-photo-dock {
           animation: legacy-credit-photo-dock 1.15s ease-out both;
-          animation-delay: var(--dock-delay);
-        }
-
-        .legacy-credit-photo-rail {
-          animation: legacy-credit-photo-rail 1.15s ease-out both;
           animation-delay: var(--dock-delay);
         }
       `}</style>
