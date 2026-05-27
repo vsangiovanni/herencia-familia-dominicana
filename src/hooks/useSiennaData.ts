@@ -11,7 +11,7 @@ export const siennaQueryKeys = {
   settings: ['app-settings'] as const,
   snapshot: ['sienna-calculation-snapshot-latest'] as const,
   workspace: (includeMedia = false) => ['sienna-workspace', { includeMedia }] as const,
-  storybook: (includeMedia = false) => ['sienna-storybook', { includeMedia }] as const,
+  storybook: (includeMedia = false, aiNarrative = false) => ['sienna-storybook', { includeMedia, aiNarrative }] as const,
   calculation: (estateAmount?: number | string, lawyerFeePercentage?: number | string) =>
     ['sienna-calculation', { estateAmount, lawyerFeePercentage }] as const,
   analysisSummary: ['sienna-analysis-summary'] as const,
@@ -56,11 +56,13 @@ export const useSiennaWorkspace = (includeMedia = false) =>
     staleTime: SIENNA_STALE_MS,
   });
 
-export const useSiennaStorybook = (includeMedia = true) =>
+export const useSiennaStorybook = (includeMedia = true, aiNarrative = false) =>
   useQuery({
-    queryKey: siennaQueryKeys.storybook(includeMedia),
-    queryFn: () => api.getSiennaStorybook({ includeMedia }),
-    staleTime: SIENNA_STALE_MS,
+    queryKey: siennaQueryKeys.storybook(includeMedia, aiNarrative),
+    queryFn: () => api.getSiennaStorybook({ includeMedia, aiNarrative }),
+    staleTime: 20_000,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 
 export const useSiennaCalculation = (estateAmount?: number | string, lawyerFeePercentage?: number | string) =>

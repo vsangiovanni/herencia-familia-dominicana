@@ -6,7 +6,7 @@ import cookieParser from 'cookie-parser';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import mysql from 'mysql2/promise';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { enrichSiennaMembersWithEffectiveInheritance } from './siennaMemberInheritance.js';
 
 const app = express();
@@ -2381,8 +2381,12 @@ async function askOpenAISiennaAssistant({ question, context, suggestedPaths, con
     };
   }
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+
   const response = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST',
+    signal: controller.signal,
     headers: {
       Authorization: 'Bearer ' + apiKey,
       'Content-Type': 'application/json',
@@ -2409,7 +2413,7 @@ async function askOpenAISiennaAssistant({ question, context, suggestedPaths, con
         },
       ],
     }),
-  });
+  }).finally(() => clearTimeout(timeout));
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -3943,7 +3947,9 @@ const buildStorybookPhotoLookup = (heirs) => {
 };
 
 const STORYBOOK_LOCAL_MEMBER_PHOTOS = new Map([
+  ['domenico', '/game/legado/archive/domenico-sangiovanni-portrait.webp'],
   ['maria-rosa', '/game/legado/archive/member-photos/maria-rosa-sangiovanni-perez.jpg'],
+  ['maria-rosa-grisolia', '/game/legado/archive/maria-rosa-grisolia-portrait.webp'],
   ['paolo', '/game/legado/archive/extracted-faces/named/paolo-sangiovanni.jpg'],
   ['vincenzo', '/game/legado/archive/extracted-faces/named/vincenzo-vicente-sangiovanni.jpg'],
   ['victor-manuel', '/game/legado/archive/member-photos/victor-manuel-sangiovanni-sangiovanni.jpg'],
@@ -4060,8 +4066,16 @@ const storybookMemoryTitle = (chapterIndex) => ([
   'Voces guardadas por la familia',
   'Ramas que sostienen el linaje',
   'Memorias que siguen presentes',
-  'Huellas familiares sin fecha exacta',
+  'Presencias del archivo familiar',
 ][chapterIndex] || 'Memorias que siguen presentes');
+
+const storybookMemoryIntro = (chapterIndex) => ([
+  'La historia tambien se sostiene con nombres que completan ramas, hogares y vinculos familiares conservados por el expediente. ',
+  'Estas voces aparecen como parte del tejido familiar: no interrumpen la cronologia, la completan desde los hogares que ayudan a explicar. ',
+  'Aqui se reunen ramas que sostienen el linaje desde otro angulo, conectando descendencias, matrimonios y recuerdos familiares. ',
+  'Son memorias presentes en el archivo familiar: nombres que ayudan a reconocer como la familia se fue enlazando de una generacion a otra. ',
+  'El libro familiar tambien guarda estas presencias, necesarias para que el recorrido no deje fuera a quienes forman parte del linaje. ',
+][chapterIndex] || 'El libro familiar tambien guarda estas presencias, necesarias para que el recorrido no deje fuera a quienes forman parte del linaje. ');
 
 const splitStorybookGroup = (group, maxSize = 6) => {
   const chunks = [];
@@ -4069,17 +4083,280 @@ const splitStorybookGroup = (group, maxSize = 6) => {
   return chunks;
 };
 
+const STORYBOOK_DECEASED_MEMBER_IDS = new Set(['domenico', 'maria-rosa-grisolia']);
+const STORYBOOK_AI_NARRATIVE_CACHE = new Map();
+const STORYBOOK_AI_NARRATIVE_PROMPT_VERSION = '2026-05-27-v2';
+const STORYBOOK_AI_MODEL = process.env.STORYBOOK_OPENAI_MODEL || 'gpt-5-nano';
+
 const buildStorybookMemberPhotos = (members, photoLookup) =>
   members
     .map((member) => ({
       memberId: member.id,
       name: member.name,
       photoData: resolveStorybookPhoto(member, photoLookup),
-      deceased: Boolean(member.death),
+      deceased: Boolean(member.death) || STORYBOOK_DECEASED_MEMBER_IDS.has(String(member.id)),
       birth: member.birth || null,
       death: member.death || null,
     }))
     .filter((item) => item.photoData);
+
+const buildStorybookGenerationLookup = (members, parentLinks) => {
+  const memberIds = new Set(members.map((member) => String(member.id)));
+  const parentsByChildId = new Map();
+  parentLinks.forEach((link) => {
+    const childId = String(link.child_member_id || '');
+    const parentId = String(link.parent_member_id || '');
+    if (!memberIds.has(childId) || !memberIds.has(parentId)) return;
+    const list = parentsByChildId.get(childId) || [];
+    list.push(parentId);
+    parentsByChildId.set(childId, list);
+  });
+
+  const generationCache = new Map();
+  const resolveGeneration = (memberId, stack = new Set()) => {
+    const id = String(memberId);
+    if (generationCache.has(id)) return generationCache.get(id);
+    if (stack.has(id)) return 1;
+    const parents = parentsByChildId.get(id) || [];
+    if (!parents.length) {
+      generationCache.set(id, 1);
+      return 1;
+    }
+
+    stack.add(id);
+    const generation = Math.max(...parents.map((parentId) => resolveGeneration(parentId, stack))) + 1;
+    stack.delete(id);
+    generationCache.set(id, generation);
+    return generation;
+  };
+
+  members.forEach((member) => resolveGeneration(member.id));
+  return generationCache;
+};
+
+const buildStorybookCreditMembers = (members, parentLinks, photoLookup) => {
+  const generationLookup = buildStorybookGenerationLookup(members, parentLinks);
+  return [...members]
+    .sort((a, b) => {
+      const yearA = extractStorybookYear(a.birth) || 9999;
+      const yearB = extractStorybookYear(b.birth) || 9999;
+      if (yearA !== yearB) return yearA - yearB;
+      const generationA = generationLookup.get(String(a.id)) || 999;
+      const generationB = generationLookup.get(String(b.id)) || 999;
+      if (generationA !== generationB) return generationA - generationB;
+      return String(a.name).localeCompare(String(b.name), 'es');
+    })
+    .map((member) => {
+      const generation = generationLookup.get(String(member.id)) || null;
+      return {
+        memberId: member.id,
+        name: member.name,
+        birth: member.birth || null,
+        death: member.death || null,
+        generation,
+        treePosition: generation ? 'Generacion ' + generation : 'Linaje familiar',
+        photoData: resolveStorybookPhoto(member, photoLookup) || null,
+      };
+    });
+};
+
+const hashStorybookPayload = (value) =>
+  createHash('sha256').update(JSON.stringify(value)).digest('hex');
+
+const compactStorybookMemberForPrompt = (member, parentsByChildId, memberById, placeLookup) => {
+  const parentLinks = parentsByChildId.get(String(member.id)) || [];
+  const parents = parentLinks
+    .map((link) => memberById.get(String(link.parent_member_id))?.name)
+    .filter(Boolean);
+
+  if (!parents.length && member.parent_id && memberById.get(String(member.parent_id))) {
+    parents.push(memberById.get(String(member.parent_id)).name);
+  }
+
+  return {
+    id: member.id,
+    nombre: member.name,
+    nacimiento: member.birth || null,
+    fallecimiento: member.death || null,
+    relacion_con_padre: member.relationship_to_parent || null,
+    padres: parents,
+    conyuge: member.spouse_member_id && memberById.get(String(member.spouse_member_id))
+      ? memberById.get(String(member.spouse_member_id)).name
+      : member.spouse || null,
+    lugares_documentados: getStorybookPlacesForMember(member, placeLookup),
+  };
+};
+
+const buildStorybookSlideNarrativePacket = (slide, { family, heirs, documents, parentsByChildId, memberById, placeLookup }) => {
+  const slideMembers = (slide.members || [])
+    .map((id) => memberById.get(String(id)))
+    .filter(Boolean);
+
+  const memberIds = new Set(slideMembers.map((member) => String(member.id)));
+  const relevantDocuments = documents
+    .filter((document) => (
+      memberIds.has(String(document.primary_member_id || '')) ||
+      memberIds.has(String(document.related_member_id || '')) ||
+      memberIds.has(String(document.father_member_id || '')) ||
+      memberIds.has(String(document.mother_member_id || '')) ||
+      memberIds.has(String(document.spouse_member_id || ''))
+    ))
+    .slice(0, 12)
+    .map((document) => ({
+      tipo: document.document_type || null,
+      persona: document.primary_person || document.related_heir_name || null,
+      fecha_evento: document.event_date || null,
+      lugar_evento: document.event_place || null,
+    }));
+
+  return {
+    prompt_version: STORYBOOK_AI_NARRATIVE_PROMPT_VERSION,
+    slide: {
+      id: slide.id,
+      titulo: slide.title,
+      ubicacion: slide.location,
+      periodo: slide.year || null,
+      tipo_evento: slide.eventKind || null,
+      tono: slide.tone || null,
+      texto_actual: slide.text,
+    },
+    miembros: slideMembers.map((member) => compactStorybookMemberForPrompt(member, parentsByChildId, memberById, placeLookup)),
+    documentos_relacionados: relevantDocuments,
+    totales_del_expediente: {
+      miembros: family.members.length,
+      herederos_o_mencionados: heirs.length,
+      uniones: family.unions.length,
+      documentos: documents.length,
+    },
+  };
+};
+
+async function generateStorybookSlideNarrative(packet) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  const model = STORYBOOK_AI_MODEL;
+  const cacheKey = hashStorybookPayload(packet);
+
+  if (STORYBOOK_AI_NARRATIVE_CACHE.has(cacheKey)) {
+    return { text: STORYBOOK_AI_NARRATIVE_CACHE.get(cacheKey), model, mode: 'cache', cacheKey };
+  }
+
+  if (!apiKey) {
+    return { text: packet.slide.texto_actual, model, mode: 'fallback-no-key', cacheKey };
+  }
+
+  const response = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + apiKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      max_output_tokens: 1000,
+      reasoning: { effort: 'low' },
+      text: { verbosity: 'medium' },
+      input: [
+        {
+          role: 'system',
+          content: [
+            'Eres narrador documental del Legado Sangiovanni.',
+            'Escribe en espanol, con tono historico, humano, elegante y cinematografico.',
+            'Usa solamente los datos del paquete. No inventes fechas, lugares, parentescos, migraciones ni fallecimientos.',
+            'Si falta un dato, no lo menciones como ausencia tecnica. Integra a la persona por su hogar, rama o vinculo real.',
+            'Evita frases monotonas como "sin fecha exacta", "no hay datos", "base de datos" o "registro".',
+            'Menciona todos los miembros del slide de forma natural, sin convertir el texto en tabla.',
+            'Escribe 2 a 4 frases completas, entre 90 y 150 palabras, y termina siempre con punto.',
+            'Mantén coherencia con el texto actual si su direccion narrativa es buena.',
+            'Devuelve solamente el texto narrativo final, sin markdown, sin titulo y sin explicaciones.',
+          ].join('\n'),
+        },
+        {
+          role: 'user',
+          content: JSON.stringify(packet),
+        },
+      ],
+    }),
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload?.error?.message || 'No se pudo generar narrativa con Nano.');
+  }
+
+  const text = (payload.output_text
+    || payload.output?.flatMap((item) => item.content || []).map((part) => part.text || '').join('\n')
+    || '')
+    .trim();
+
+  if (!text) throw new Error('Nano no devolvio narrativa.');
+  const minimumUsefulLength = Math.min(180, Math.max(90, Math.round(String(packet.slide.texto_actual || '').length * 0.32)));
+  if (text.length < minimumUsefulLength || !/[.!?]$/.test(text)) {
+    throw new Error('Nano devolvio una narrativa incompleta.');
+  }
+  STORYBOOK_AI_NARRATIVE_CACHE.set(cacheKey, text);
+  return { text, model, mode: 'openai', cacheKey };
+}
+
+async function applyAiNarrativeToStorybook(storybook, { family, heirs, documents }) {
+  const memberById = new Map(family.members.map((member) => [String(member.id), member]));
+  const parentsByChildId = new Map();
+  family.parent_links.forEach((link) => {
+    const list = parentsByChildId.get(String(link.child_member_id)) || [];
+    list.push(link);
+    parentsByChildId.set(String(link.child_member_id), list);
+  });
+  const placeLookup = buildStorybookPlaceLookup(documents);
+  const runSlide = async (slide) => {
+    const packet = buildStorybookSlideNarrativePacket(slide, { family, heirs, documents, parentsByChildId, memberById, placeLookup });
+    try {
+      const generated = await generateStorybookSlideNarrative(packet);
+      return {
+        slide: {
+          ...slide,
+          text: generated.text,
+          durationMs: storybookDuration(generated.text, slide.durationMs || 12000),
+          narrativeMode: generated.mode,
+        },
+        meta: { slideId: slide.id, mode: generated.mode, hash: generated.cacheKey },
+      };
+    } catch (error) {
+      return {
+        slide: { ...slide, narrativeMode: 'fallback-error' },
+        meta: { slideId: slide.id, mode: 'fallback-error', error: error instanceof Error ? error.message : 'Error desconocido' },
+      };
+    }
+  };
+
+  const concurrency = 4;
+  const results = new Array(storybook.slides.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(concurrency, storybook.slides.length) }, async () => {
+    while (cursor < storybook.slides.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await runSlide(storybook.slides[index]);
+    }
+  });
+  await Promise.all(workers);
+
+  const slides = results.map((result) => result.slide);
+  const meta = results.map((result) => result.meta);
+
+  return {
+    ...storybook,
+    slides,
+    summary: {
+      ...storybook.summary,
+      ai_narrative: {
+        enabled: true,
+        model: STORYBOOK_AI_MODEL,
+        prompt_version: STORYBOOK_AI_NARRATIVE_PROMPT_VERSION,
+        generated_at: new Date().toISOString(),
+        slides: meta,
+      },
+    },
+  };
+}
 
 function buildSiennaStorybookSlides({ family, heirs, documents }) {
   const members = [...family.members].sort((a, b) => {
@@ -4112,7 +4389,7 @@ function buildSiennaStorybookSlides({ family, heirs, documents }) {
       archiveCaption: 'Domenico Sangiovanni y Maria Rosa Grisolia',
       tone: 'origin',
       members: ['domenico', 'maria-rosa-grisolia'].filter((id) => memberById.has(id)),
-      memberPhotos: [],
+      memberPhotos: buildStorybookMemberPhotos(['domenico', 'maria-rosa-grisolia'].map((id) => memberById.get(id)).filter(Boolean), photoLookup),
       eventKind: 'origen',
       assetPrompt: 'Retrato documental hiperrealista de Santa Domenica Talao en el siglo XIX, con Domenico Sangiovanni y Maria Rosa Grisolia integrados de forma honorable en la memoria familiar.',
     },
@@ -4155,8 +4432,8 @@ function buildSiennaStorybookSlides({ family, heirs, documents }) {
       archiveImage: '/game/legado/archive/paolo-vicente-sangiovanni-puerto-plata.jpg',
       archiveCaption: 'Paolo Sangiovanni y Vincenzo/Vicente Sangiovanni',
       tone: 'arrival',
-      members: ['paolo', 'vincenzo'].filter((id) => memberById.has(id)),
-      memberPhotos: [],
+      members: ['domenico', 'maria-rosa-grisolia', 'paolo', 'vincenzo'].filter((id) => memberById.has(id)),
+      memberPhotos: buildStorybookMemberPhotos(['domenico', 'maria-rosa-grisolia', 'paolo', 'vincenzo'].map((id) => memberById.get(id)).filter(Boolean), photoLookup),
       eventKind: 'llegada',
       assetPrompt: 'Puerto de Puerto Plata historico recibiendo una familia inmigrante italiana, lenguaje visual premium documental, no ilustracion infantil.',
     },
@@ -4167,12 +4444,12 @@ function buildSiennaStorybookSlides({ family, heirs, documents }) {
       location: 'Puerto Plata, Republica Dominicana',
       visual: 'puertoPlata',
       durationMs: 14000,
-      backgroundImage: STORYBOOK_BACKGROUNDS.puertoPlata,
+      backgroundImage: '/game/legado/generated/storyteller/legado-primeros-hogares-casa-familiar.png',
       archiveImage: '/game/legado/archive/paolo-vicente-sangiovanni-matrimonios.jpg',
       archiveCaption: 'Paolo Sangiovanni y Vincenzo/Vicente Sangiovanni al formar sus hogares',
       tone: 'arrival',
       members: ['paolo', 'vincenzo'].filter((id) => memberById.has(id)),
-      memberPhotos: [],
+      memberPhotos: buildStorybookMemberPhotos(['paolo', 'vincenzo'].map((id) => memberById.get(id)).filter(Boolean), photoLookup),
       eventKind: 'matrimonios',
       assetPrompt: 'Capitulo documental sobre Paolo y Vincenzo formando sus primeros hogares en Puerto Plata, con foto familiar integrada de manera honorable.',
     },
@@ -4241,7 +4518,7 @@ function buildSiennaStorybookSlides({ family, heirs, documents }) {
     });
     const photoMember = group.find((member) => resolveStorybookPhoto(member, photoLookup));
     const chapter = Math.floor(index / 8) + 1;
-    const text = 'Hay nombres que no entran por una fecha exacta, sino por el lugar que ocupan en la memoria. Son parte del tejido familiar: personas que conectan hogares, ramas y recuerdos, y que ayudan a entender mejor de donde venimos. ' + peopleLines.join(' ');
+    const text = storybookMemoryIntro(chapter - 1) + peopleLines.join(' ');
     slides.push({
       id: 'undated-' + chapter,
       title: storybookMemoryTitle(chapter - 1),
@@ -4273,6 +4550,7 @@ function buildSiennaStorybookSlides({ family, heirs, documents }) {
     tone: 'memory',
     members: [],
     memberPhotos: buildStorybookMemberPhotos(members.filter((member) => resolveStorybookPhoto(member, photoLookup)).slice(0, 12), photoLookup),
+    creditMembers: buildStorybookCreditMembers(members, family.parent_links, photoLookup),
     eventKind: 'cierre',
     assetPrompt: 'Cierre cinematografico tipo libro documental familiar, arbol genealogico elegante, documentos historicos y fotos integradas de forma honorable.',
   });
@@ -4294,11 +4572,14 @@ function buildSiennaStorybookSlides({ family, heirs, documents }) {
 }
 
 app.get('/api/sienna-storybook', requireAuth, async (req, res) => {
-  const response = await getCachedSiennaResponse('storybook', { mediaMode: 'urls' }, async () => {
+  const aiNarrative = req.query.aiNarrative === '1';
+  const response = await getCachedSiennaResponse('storybook', { mediaMode: 'urls', aiNarrative }, async () => {
     const family = await loadSiennaFamilyBundle();
     const heirs = await loadConfirmedHeirs(false);
     const documents = await loadEvidenceDocuments(false);
-    return buildSiennaStorybookSlides({ family, heirs, documents });
+    const storybook = buildSiennaStorybookSlides({ family, heirs, documents });
+    if (!aiNarrative) return storybook;
+    return applyAiNarrativeToStorybook(storybook, { family, heirs, documents });
   });
   res.json(response);
 });

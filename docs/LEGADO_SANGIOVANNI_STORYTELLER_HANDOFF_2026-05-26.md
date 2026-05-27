@@ -56,7 +56,7 @@ Construye:
 
 Resumen validado localmente al final de la iteracion:
 
-- slides: 20
+- slides: 21
 - member_count: 77
 - heir_count: 43
 - covered_member_count: 77
@@ -244,10 +244,18 @@ Produccion usa `public/api.php`, no el servidor Node local. Por eso el storytell
 - No se actualizan miembros ni relaciones en base de datos durante el deploy.
 - Las fotos de Paolo, Vincenzo/Vicente y Vicente Sangiovanni Perez se sirven como assets estaticos versionados bajo `public/game/legado/archive/extracted-faces/named/`.
 
+Regla dinamica de fotos futuras:
+
+- Si un familiar sube o actualiza su foto desde `Miembros del arbol`, la app guarda la foto en `confirmed_heirs` vinculada por `sienna_member_id`.
+- El storyteller resuelve fotos primero por `sienna_member_id` y luego por nombre, por lo que una foto subida posteriormente aparece automaticamente en el slide generacional o familiar donde ese miembro participa.
+- El backend invalida la cache del storyteller al crear/actualizar fotos de herederos o miembros; la cache actual del endpoint es corta, de 20 segundos.
+- El frontend invalida `sienna-storybook` despues de guardar miembros/fotos; ademas el storyteller refetch al montarse y al volver el foco a la ventana, con `staleTime` de 20 segundos, para no quedarse con fotos viejas en cache.
+- Esta regla aplica a fotos disponibles en la base de datos real; no requiere editar slides uno por uno.
+
 Ayuda contextual actualizada:
 
 - Nueva clave `sienna-legado` en `src/data/screenHelp.ts`.
-- `src/pages/LegadoSangiovanniGame.tsx` muestra el help dentro de la experiencia fullscreen.
+- `src/pages/LegadoSangiovanniGame.tsx` ya no muestra el boton de help dentro de la experiencia fullscreen; quedan solo volver, musica, pausa y navegacion.
 - `docs/UI.md` documenta la ayuda de la narrativa del legado.
 
 Pagina/permisos:
@@ -291,8 +299,12 @@ Backend:
    - Futuro: construir conexiones reales padre/hijo en overlay SVG desde `family.parent_links`.
 
 5. Audio:
-   - No implementado aun.
-   - Futuro: musica instrumental suave y SFX discretos de papel/tinta/transicion.
+   - Implementada musica de fondo desde el MP3 final enviado por Victor.
+   - Asset local: `public/game/legado/audio/across-two-shores.mp3`.
+   - Se activa manualmente desde el boton de musica del menu superior porque los navegadores bloquean autoplay con sonido.
+   - Se reproduce solo como audio, en loop y sin mostrar el video.
+   - Volumen moderado para que se perciba sin dominar la narrativa.
+   - Futuro: reemplazar por pista masterizada si se aprueba una pieza musical final.
 
 ## Prohibiciones activas
 
@@ -301,3 +313,57 @@ Backend:
 - No volver a enfoque whiteboard infantil.
 - No usar placeholders genericos como solucion final.
 - No decir que esta 100% final si quedan ajustes visuales por validar en celular.
+
+## Ajustes visuales finales antes de deploy 2026-05-26 noche
+
+Autorizacion de Victor: subir a Hostinger y GitHub solo cuando el storyteller quedara validado localmente. Alcance autorizado: frontend, backend PHP y assets necesarios. La base de datos de produccion no debe tocarse.
+
+Cambios aplicados:
+
+- El slide inicial \`Calabria, Italia\` muestra fotos circulares de Domenico Sangiovanni y Maria Rosa Grisolia.
+- Los slides de ruta/llegada muestran el grupo familiar de cuatro: Domenico, Maria Rosa Grisolia, Paolo y Vincenzo.
+- El slide \`Los primeros hogares\` muestra solo a Paolo y Vincenzo, porque ahi no corresponden Domenico ni Maria Rosa.
+- Domenico y Maria Rosa Grisolia quedan marcados visualmente como difuntos con lacito negro dentro del storyteller, sin modificar datos genealogicos.
+- Se oculto el hilo inferior duplicado en escenas donde ya existe collage familiar, para evitar fotos cortadas o competencia visual.
+- Regla vigente: si una escena trae `memberPhotos`, solo se muestra el collage lateral/superior; no se repiten esas mismas fotos en el hilo inferior.
+- Se ajusto el margen del collage y del hilo inferior para que las fotos no queden pegadas al borde derecho.
+- \`Los primeros hogares\` usa un fondo de casa/hogar visto desde la calle: \`public/game/legado/generated/storyteller/legado-primeros-hogares-casa-familiar.png\`.
+- El fondo anterior de matrimonios queda como archivo de referencia/archivo historico, no como fondo principal.
+- El temporizador automatico de cada slide ya no tiene limite fijo de 32 segundos; se calcula por longitud real del texto typewriter y agrega margen despues de terminar para evitar cortes antes de que el texto completo este escrito.
+- En mobile, el contenedor del texto narrativo se extendio a `61vh` para permitir aproximadamente dos lineas mas antes de empezar a desplazar el texto hacia arriba.
+- Se agrego boton de musica en el menu superior. La musica usa el audio del video enviado por Victor como asset local, activada por el usuario para respetar restricciones de autoplay.
+- Ajuste posterior: botones superiores con opacidad 95%, fondo 90% y sombra mas marcada; la pista de fondo queda en volumen 72%.
+- La pista final fue reemplazada por el MP3 `Across Two Shores` enviado por Victor. Se usa `public/game/legado/audio/across-two-shores.mp3` y se reproduce en loop.
+- Ajuste narrativo posterior: los capitulos de memoria ya no repiten la frase `no entran por una fecha exacta`; ahora usan intros variadas y no tecnicas. Verificacion read-only local/produccion: los miembros de esos capitulos no tienen fecha de nacimiento cargada en la tabla `sienna_family_members` al momento de la revision, pero la narrativa evita sonar como excusa de data y se concentra en su lugar dentro del linaje.
+- Prototipo local posterior: narrativa dinamica con Nano bajo demanda. Se activa solo con `?ai=1` en `/sienna/legado-game?ai=1`; la ruta normal sigue usando narrativa deterministica estable.
+- El endpoint local acepta `GET /api/sienna-storybook?includeMedia=1&aiNarrative=1`. Usa `gpt-5-nano` por defecto (`STORYBOOK_OPENAI_MODEL` puede sobrescribirlo), cachea cada slide por hash del paquete de datos y cae a la narrativa deterministica si Nano falla, tarda demasiado o devuelve texto incompleto.
+- Cuando una pantalla viene generada por Nano, el frontend muestra una marca discreta `Nano` en el menu superior. Si no aparece la marca, ese slide esta usando texto deterministico/fallback.
+- Este prototipo de Nano esta documentado y probado localmente, pero no debe desplegarse a Hostinger/GitHub hasta que Victor lo valide en local y lo autorice explicitamente.
+- Cierre cinematografico local: en el ultimo slide, despues de terminar el typewriter, la narrativa se desvanece y entra un roll de creditos con los 77 miembros ordenados por ano de nacimiento y generacion/posicion en el arbol. Los creditos salen desde `creditMembers` generado por el backend.
+- Ajuste posterior del cierre: el titulo del ultimo slide permanece fijo; solo se desvanece el cuerpo narrativo. Los creditos aparecen a la izquierda.
+- Las fotos del cierre salen ordenadas por aparicion: primero viven en una columna lateral tipo fila de espera y, cuando aparece el nombre del miembro, se deslizan visualmente hacia su nombre, desaparecen de la columna lateral y suben junto con el credito; la columna se desplaza para que las siguientes fotos ocupen el espacio disponible.
+- Si se abre `/sienna/legado-game?credits=1`, la experiencia arranca directamente en el ultimo slide para probar el cierre sin recorrer todo el storytelling.
+- En modo Nano (`?ai=1`), el boton superior de play/pausa recibe borde y aro verde cuando el texto visible de ese slide proviene de Nano/cache.
+
+Archivos principales modificados:
+
+- \`server/index.js\`
+- \`public/api.php\`
+- \`src/pages/LegadoSangiovanniGame.tsx\`
+- \`src/hooks/useSiennaData.ts\`
+- \`src/lib/api.ts\`
+- \`src/story/legado/storyScenes.ts\`
+- \`public/game/legado/generated/storyteller/legado-primeros-hogares-casa-familiar.png\`
+
+Verificacion local realizada antes de deploy:
+
+- \`php -l public/api.php\`
+- \`node --check server/index.js\`
+- \`pnpm build\`
+- \`GET /api/sienna-storybook?includeMedia=1\`: 21 slides, 77 miembros cubiertos, 0 miembros faltantes, 0 assets faltantes.
+
+Nota de deploy:
+
+- Hostinger debe recibir \`dist/\` completo para asegurar \`index.html\`, bundles, \`api.php\` y assets bajo \`game/legado/\`.
+- No subir ni sobrescribir \`.env\`.
+- No ejecutar migraciones ni updates sobre miembros en produccion para este deploy.

@@ -315,11 +315,21 @@ export interface SiennaStorybookSlide {
     birth?: string | null;
     death?: string | null;
   }>;
+  creditMembers?: Array<{
+    memberId: string;
+    name: string;
+    birth?: string | null;
+    death?: string | null;
+    generation?: number | null;
+    treePosition?: string | null;
+    photoData?: string | null;
+  }>;
   tone: SiennaStorybookTone;
   members?: string[];
   year?: number | string;
   eventKind?: string;
   assetPrompt?: string;
+  narrativeMode?: string;
 }
 
 export interface SiennaStorybookResponse {
@@ -334,6 +344,13 @@ export interface SiennaStorybookResponse {
     missing_member_ids: string[];
     generated_at: string;
     source: string;
+    ai_narrative?: {
+      enabled: boolean;
+      model: string;
+      prompt_version: string;
+      generated_at: string;
+      slides: Array<{ slideId: string; mode: string; hash?: string; error?: string }>;
+    };
   };
 }
 
@@ -586,8 +603,13 @@ export const api = {
       settings: Record<string, string | number | boolean | SiennaCaseConfig | null>;
       snapshot: SiennaCalculationSnapshot | null;
     }>(`/api/sienna-workspace${options?.includeMedia ? "?includeMedia=1" : ""}`),
-  getSiennaStorybook: (options?: { includeMedia?: boolean }) =>
-    request<SiennaStorybookResponse>("/api/sienna-storybook" + (options?.includeMedia ? "?includeMedia=1" : "")),
+  getSiennaStorybook: (options?: { includeMedia?: boolean; aiNarrative?: boolean }) => {
+    const params = new URLSearchParams();
+    if (options?.includeMedia) params.set("includeMedia", "1");
+    if (options?.aiNarrative) params.set("aiNarrative", "1");
+    const query = params.toString();
+    return request<SiennaStorybookResponse>("/api/sienna-storybook" + (query ? "?" + query : ""));
+  },
   getSiennaCalculation: (options?: { estateAmount?: number | string; lawyerFeePercentage?: number | string }) => {
     const params = new URLSearchParams();
     if (options?.estateAmount !== undefined) params.set("estate_amount", String(options.estateAmount));

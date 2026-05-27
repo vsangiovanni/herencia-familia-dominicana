@@ -18,6 +18,15 @@ export type LegadoStoryScene = {
     birth?: string | null;
     death?: string | null;
   }>;
+  creditMembers?: Array<{
+    memberId: string;
+    name: string;
+    birth?: string | null;
+    death?: string | null;
+    generation?: number | null;
+    treePosition?: string | null;
+    photoData?: string | null;
+  }>;
   tone: 'origin' | 'migration' | 'arrival' | 'lineage' | 'memory';
   members?: string[];
   year?: number | string;
@@ -37,6 +46,20 @@ export const legadoStoryScenes: LegadoStoryScene[] = [
     backgroundImage: '/game/legado/generated/storyteller/legado-santa-domenica-origen-documental.png',
     archiveImage: '/game/legado/archive/domenico-maria-rosa-clean.webp',
     archiveCaption: 'Domenico Sangiovanni y Maria Rosa Grisolia',
+    memberPhotos: [
+      {
+        id: 'domenico',
+        name: 'Domenico Sangiovanni',
+        photoData: '/game/legado/archive/domenico-sangiovanni-portrait.webp',
+        deceased: true,
+      },
+      {
+        id: 'maria-rosa-grisolia',
+        name: 'Maria Rosa Grisolia',
+        photoData: '/game/legado/archive/maria-rosa-grisolia-portrait.webp',
+        deceased: true,
+      },
+    ],
     tone: 'origin',
   },
   {
@@ -72,6 +95,30 @@ export const legadoStoryScenes: LegadoStoryScene[] = [
     backgroundImage: '/game/legado/generated/legado-slide-03-puerto-plata.png',
     archiveImage: '/game/legado/archive/paolo-vicente-sangiovanni-puerto-plata.jpg',
     archiveCaption: 'Paolo Sangiovanni y Vincenzo/Vicente Sangiovanni',
+    memberPhotos: [
+      {
+        id: 'domenico',
+        name: 'Domenico (Domingo) Sangiovanni',
+        photoData: '/game/legado/archive/domenico-sangiovanni-portrait.webp',
+        deceased: true,
+      },
+      {
+        id: 'maria-rosa-grisolia',
+        name: 'Maria Rosa Grisolia',
+        photoData: '/game/legado/archive/maria-rosa-grisolia-portrait.webp',
+        deceased: true,
+      },
+      {
+        id: 'paolo',
+        name: 'Paolo (Paulino) Sangiovanni',
+        photoData: '/game/legado/archive/paolo-vicente-sangiovanni-puerto-plata.jpg',
+      },
+      {
+        id: 'vincenzo',
+        name: 'Vincenzo (Vicente) Sangiovanni',
+        photoData: '/game/legado/archive/paolo-vicente-sangiovanni-puerto-plata.jpg',
+      },
+    ],
     tone: 'arrival',
   },
   {
@@ -82,9 +129,21 @@ export const legadoStoryScenes: LegadoStoryScene[] = [
     location: 'Puerto Plata, Republica Dominicana',
     visual: 'puertoPlata',
     durationMs: 12000,
-    backgroundImage: '/game/legado/generated/storyteller/legado-puerto-plata-llegada-documental.png',
+    backgroundImage: '/game/legado/generated/storyteller/legado-primeros-hogares-casa-familiar.png',
     archiveImage: '/game/legado/archive/paolo-vicente-sangiovanni-matrimonios.jpg',
     archiveCaption: 'Paolo Sangiovanni y Vincenzo/Vicente Sangiovanni al formar sus hogares',
+    memberPhotos: [
+      {
+        id: 'paolo',
+        name: 'Paolo (Paulino) Sangiovanni',
+        photoData: '/game/legado/archive/paolo-vicente-sangiovanni-matrimonios.jpg',
+      },
+      {
+        id: 'vincenzo',
+        name: 'Vincenzo (Vicente) Sangiovanni',
+        photoData: '/game/legado/archive/paolo-vicente-sangiovanni-matrimonios.jpg',
+      },
+    ],
     tone: 'arrival',
   },
   {
