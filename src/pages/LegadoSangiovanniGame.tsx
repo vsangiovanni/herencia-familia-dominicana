@@ -150,12 +150,22 @@ const LineageThread = ({ scene }: { scene: LegadoStoryScene }) => {
   );
 };
 
-const formatCreditYears = (member: NonNullable<LegadoStoryScene['creditMembers']>[number]) => {
-  const birthYear = member.birth?.slice(0, 4);
-  const deathYear = member.death?.slice(0, 4);
-  if (birthYear && deathYear) return birthYear + ' - ' + deathYear;
-  if (birthYear) return 'N. ' + birthYear;
-  if (deathYear) return 'F. ' + deathYear;
+const formatCreditDate = (value?: string | null) => {
+  const normalized = value?.trim();
+  if (!normalized) return null;
+
+  const isoDate = normalized.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoDate) return isoDate[3] + '/' + isoDate[2] + '/' + isoDate[1];
+
+  return normalized;
+};
+
+const formatCreditDates = (member: NonNullable<LegadoStoryScene['creditMembers']>[number]) => {
+  const birthDate = formatCreditDate(member.birth);
+  const deathDate = formatCreditDate(member.death);
+  if (birthDate && deathDate) return birthDate + ' - ' + deathDate;
+  if (birthDate) return 'N. ' + birthDate;
+  if (deathDate) return 'F. ' + deathDate;
   return 'Memoria familiar';
 };
 
@@ -285,8 +295,11 @@ const LegacyCredits = ({
                 <p className={`font-serif text-lg font-black leading-tight drop-shadow-[0_3px_16px_rgba(0,0,0,0.78)] md:text-3xl ${isImportant ? 'text-[#f8e5bd]' : 'text-[#fff7e6]'}`}>
                   {member.name}
                 </p>
-                <p className="mt-1 text-[0.62rem] font-black uppercase tracking-[0.22em] text-[#f8e5bd]/78 md:text-xs">
-                  {formatCreditYears(member)} · {member.treePosition || 'Linaje familiar'}
+                <p className="mt-1 text-[0.66rem] font-black uppercase leading-snug tracking-normal text-[#f8e5bd]/82 md:text-xs">
+                  {formatCreditDates(member)}
+                </p>
+                <p className="mt-0.5 text-[0.58rem] font-black uppercase leading-snug tracking-normal text-[#f8e5bd]/62 md:text-[0.68rem]">
+                  {member.treePosition || 'Linaje familiar'}
                 </p>
               </div>
             </motion.div>
