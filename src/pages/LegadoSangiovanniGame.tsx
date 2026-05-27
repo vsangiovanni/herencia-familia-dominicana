@@ -550,7 +550,7 @@ const LegadoSangiovanniGame = () => {
           <button
             type="button"
             onClick={() => setPlaying((value) => !value)}
-            className={`grid h-10 w-10 place-items-center rounded-full border-2 bg-[#f7f3ea]/90 text-[#111827] shadow-[0_14px_40px_rgba(0,0,0,0.32)] backdrop-blur transition ${isNanoNarrative ? 'border-emerald-400 ring-2 ring-emerald-300/80' : 'border-[#111827]'}`}
+            className={`grid h-10 w-10 place-items-center rounded-full border-2 shadow-[0_14px_40px_rgba(0,0,0,0.32)] backdrop-blur transition ${isNanoNarrative ? 'border-emerald-100 bg-emerald-500 text-white ring-4 ring-emerald-300/85 shadow-emerald-900/35' : 'border-[#111827] bg-[#f7f3ea]/90 text-[#111827]'}`}
             aria-label={playing ? 'Pausar' : 'Reproducir'}
             title={isNanoNarrative ? 'Narrativa generada por Nano' : playing ? 'Pausar' : 'Reproducir'}
           >

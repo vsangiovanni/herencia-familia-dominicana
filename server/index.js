@@ -4388,6 +4388,14 @@ function buildSiennaStorybookSlides({ family, heirs, documents }) {
     return String(a.name).localeCompare(String(b.name), 'es');
   });
   const memberById = new Map(members.map((member) => [String(member.id), member]));
+  if (!memberById.has('maria-rosa-grisolia')) {
+    memberById.set('maria-rosa-grisolia', {
+      id: 'maria-rosa-grisolia',
+      name: 'Maria Rosa Grisolia Di Vanna',
+      birth: null,
+      death: null,
+    });
+  }
   const parentsByChildId = new Map();
   family.parent_links.forEach((link) => {
     const list = parentsByChildId.get(String(link.child_member_id)) || [];

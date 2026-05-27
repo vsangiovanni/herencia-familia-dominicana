@@ -695,6 +695,14 @@ function build_sienna_storybook(): array {
   $heirs = fetch_confirmed_heirs(false);
   $documents = fetch_evidence_documents(false);
   $memberById = storybook_member_by_id($members);
+  if (!isset($memberById['maria-rosa-grisolia'])) {
+    $memberById['maria-rosa-grisolia'] = [
+      'id' => 'maria-rosa-grisolia',
+      'name' => 'Maria Rosa Grisolia Di Vanna',
+      'birth' => null,
+      'death' => null,
+    ];
+  }
   $photoLookup = storybook_photo_lookup($heirs);
   $placeLookup = storybook_place_lookup($documents);
   $bg = storybook_backgrounds();
