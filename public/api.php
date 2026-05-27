@@ -756,6 +756,120 @@ function build_sienna_storybook(): array {
   return ['slides' => $slides, 'scenes' => $slides, 'summary' => ['members_total' => count($members), 'covered_member_count' => count($members) - count($missing), 'missing_member_ids' => $missing, 'heirs_total' => count($heirs), 'documents_total' => count($documents)]];
 }
 
+function response_output_text(array $data): string {
+  $text = trim((string)($data['output_text'] ?? ''));
+  if ($text !== '') return $text;
+  $parts = [];
+  foreach (($data['output'] ?? []) as $item) {
+    foreach (($item['content'] ?? []) as $part) {
+      if (isset($part['text'])) $parts[] = (string)$part['text'];
+    }
+  }
+  return trim(implode("\n", $parts));
+}
+
+function normalize_storybook_ai_text($value): string {
+  $text = trim(preg_replace('/\s+/u', ' ', (string)($value ?? '')));
+  return mb_substr($text, 0, 900, 'UTF-8');
+}
+
+function apply_ai_narrative_to_storybook(array $storybook): array {
+  $apiKey = env_value('OPENAI_API_KEY');
+  $model = env_value('OPENAI_MODEL') ?: sienna_ai_default_model();
+  if (!$apiKey || !function_exists('curl_init')) {
+    $storybook['summary']['ai_narrative_mode'] = 'fallback';
+    $storybook['summary']['ai_narrative_model'] = $model;
+    return $storybook;
+  }
+
+  $slides = array_values($storybook['slides'] ?? []);
+  $promptSlides = array_map(fn($slide) => [
+    'id' => $slide['id'] ?? '',
+    'titulo' => $slide['title'] ?? '',
+    'ubicacion' => $slide['location'] ?? '',
+    'periodo' => $slide['year'] ?? null,
+    'tono' => $slide['tone'] ?? null,
+    'texto_actual' => $slide['text'] ?? '',
+    'miembros' => array_map(fn($photo) => $photo['name'] ?? '', $slide['memberPhotos'] ?? []),
+  ], $slides);
+
+  $payload = [
+    'model' => $model,
+    'max_output_tokens' => 5000,
+    'reasoning' => ['effort' => 'low'],
+    'text' => ['verbosity' => 'medium'],
+    'input' => [
+      [
+        'role' => 'system',
+        'content' => implode("\n", [
+          'Eres narrador familiar del Legado Sangiovanni.',
+          'Reescribe cada slide en espanol con tono historico, humano, elegante, cinematografico y natural.',
+          'Usa solamente los datos de cada slide. No inventes fechas, lugares, parentescos, negocios ni fallecimientos.',
+          'Evita sonar a informe. No uses frases como "los registros indican", "documentado", "expediente", "base de datos", "sin fecha exacta" o "no hay datos".',
+          'Cuenta como una voz familiar orgullosa y motivadora, como alguien narrando a sus descendientes de donde vienen.',
+          'Mantén los nombres importantes y el sentido historico del texto actual.',
+          'Cada texto debe tener 2 a 4 frases, entre 70 y 135 palabras, y terminar con punto.',
+          'Devuelve solo JSON valido con esta forma: {"slides":[{"id":"...","text":"..."}]}.',
+        ]),
+      ],
+      [
+        'role' => 'user',
+        'content' => json_encode(['slides' => $promptSlides], JSON_UNESCAPED_UNICODE),
+      ],
+    ],
+  ];
+
+  $ch = curl_init('https://api.openai.com/v1/responses');
+  curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_POST => true,
+    CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $apiKey, 'Content-Type: application/json'],
+    CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
+    CURLOPT_TIMEOUT => 60,
+  ]);
+  $raw = curl_exec($ch);
+  $status = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+  curl_close($ch);
+  $data = json_decode($raw ?: '{}', true);
+  if ($status < 200 || $status >= 300 || !is_array($data)) {
+    $storybook['summary']['ai_narrative_mode'] = 'fallback';
+    $storybook['summary']['ai_narrative_model'] = $model;
+    return $storybook;
+  }
+
+  $parsed = extract_json_object_from_text(response_output_text($data));
+  $generatedSlides = [];
+  foreach (($parsed['slides'] ?? []) as $item) {
+    $id = (string)($item['id'] ?? '');
+    $text = normalize_storybook_ai_text($item['text'] ?? '');
+    if ($id !== '' && mb_strlen($text, 'UTF-8') >= 70 && preg_match('/[.!?]$/u', $text)) {
+      $generatedSlides[$id] = $text;
+    }
+  }
+
+  if (!$generatedSlides) {
+    $storybook['summary']['ai_narrative_mode'] = 'fallback';
+    $storybook['summary']['ai_narrative_model'] = $model;
+    return $storybook;
+  }
+
+  $applied = 0;
+  foreach ($storybook['slides'] as &$slide) {
+    $id = (string)($slide['id'] ?? '');
+    if (!isset($generatedSlides[$id])) continue;
+    $slide['text'] = $generatedSlides[$id];
+    $slide['narrativeMode'] = 'openai';
+    $slide['meta'] = ['mode' => 'openai', 'model' => $model];
+    $applied++;
+  }
+  unset($slide);
+  $storybook['scenes'] = $storybook['slides'];
+  $storybook['summary']['ai_narrative_mode'] = $applied > 0 ? 'openai' : 'fallback';
+  $storybook['summary']['ai_narrative_model'] = $model;
+  $storybook['summary']['ai_narrative_slide_count'] = $applied;
+  return $storybook;
+}
+
 function normalize_sienna_name($value): string {
   $text = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', (string)($value ?? ''));
   $text = strtolower($text ?: (string)($value ?? ''));
@@ -3186,7 +3300,7 @@ function ask_openai_sienna_assistant(string $question, array $context, array $su
     'model' => $model,
     'max_output_tokens' => 1200,
     'reasoning' => ['effort' => 'low'],
-    'text' => ['verbosity' => 'low'],
+    'text' => ['verbosity' => 'medium'],
     'input' => [
       [
         'role' => 'system',
@@ -3423,7 +3537,12 @@ function build_sienna_ai_curiosities(?array $user = null): array {
   $apiKey = env_value('OPENAI_API_KEY');
   $model = env_value('OPENAI_MODEL') ?: sienna_ai_default_model();
   if (!$apiKey || !function_exists('curl_init')) {
-    return ['curiosities' => $fallback, 'model' => $model, 'mode' => 'fallback'];
+    return [
+      'curiosities' => $fallback,
+      'model' => $model,
+      'mode' => 'fallback',
+      'warning' => !$apiKey ? 'missing-openai-key' : 'missing-curl',
+    ];
   }
   $familyForCuriosities = array_slice(array_map(fn($member) => [
     'id' => $member['id'] ?? null,
@@ -3435,11 +3554,11 @@ function build_sienna_ai_curiosities(?array $user = null): array {
     'relationship_to_parent' => $member['relationship_to_parent'] ?? null,
     'inheritance_status' => $member['inheritance_status'] ?? null,
     'inheritance_reason' => $member['inheritance_reason'] ?? null,
-  ], $context['members_index'] ?? []), 0, 140);
+  ], $context['members_index'] ?? []), 0, 60);
 
   $payload = [
     'model' => $model,
-    'max_output_tokens' => 500,
+    'max_output_tokens' => 1200,
     'reasoning' => ['effort' => 'low'],
     'text' => ['verbosity' => 'low'],
     'input' => [
@@ -3498,19 +3617,15 @@ function build_sienna_ai_curiosities(?array $user = null): array {
   curl_close($ch);
   $data = json_decode($raw ?: '{}', true);
   if ($status < 200 || $status >= 300) {
-    return ['curiosities' => $fallback, 'model' => $model, 'mode' => 'fallback'];
+    return [
+      'curiosities' => $fallback,
+      'model' => $model,
+      'mode' => 'fallback',
+      'warning' => $data['error']['message'] ?? ('OpenAI HTTP ' . $status),
+    ];
   }
 
-  $text = $data['output_text'] ?? '';
-  if (!$text && isset($data['output']) && is_array($data['output'])) {
-    $parts = [];
-    foreach ($data['output'] as $item) {
-      foreach (($item['content'] ?? []) as $part) {
-        if (isset($part['text'])) $parts[] = $part['text'];
-      }
-    }
-    $text = trim(implode("\n", $parts));
-  }
+  $text = response_output_text($data);
   $curiosities = array_values(array_filter(array_map(
     fn($line) => trim(preg_replace('/^\s*(?:[-*]\s*|\d+[.)]\s*)/', '', $line)),
     preg_split('/\R|(?<=\.)\s+(?=[A-ZÁÉÍÓÚÑ])/u', $text ?: '')
@@ -3521,6 +3636,7 @@ function build_sienna_ai_curiosities(?array $user = null): array {
     'curiosities' => count($curiosities) ? $curiosities : $fallback,
     'model' => $model,
     'mode' => count($curiosities) ? 'openai' : 'fallback',
+    'warning' => count($curiosities) ? null : ('empty-curiosities: ' . mb_substr($text ?: '', 0, 180, 'UTF-8')),
   ];
 }
 
@@ -4748,7 +4864,16 @@ try {
 
   if ($method === 'GET' && $path === '/sienna-storybook') {
     require_user();
-    json_response(sienna_cache_remember('storybook', ['mediaMode' => 'urls'], fn() => build_sienna_storybook(), 20));
+    $aiNarrative = in_array(strtolower((string)($_GET['aiNarrative'] ?? '')), ['1', 'true', 'yes', 'on'], true);
+    json_response(sienna_cache_remember('storybook', [
+      'mediaMode' => 'urls',
+      'aiNarrative' => $aiNarrative ? '1' : '0',
+      'model' => env_value('OPENAI_MODEL') ?: sienna_ai_default_model(),
+      'prompt' => '2026-05-27-php-v1',
+    ], function () use ($aiNarrative) {
+      $storybook = build_sienna_storybook();
+      return $aiNarrative ? apply_ai_narrative_to_storybook($storybook) : $storybook;
+    }, $aiNarrative ? 600 : 20));
   }
 
   if ($method === 'GET' && $path === '/sienna-calculation') {
@@ -4878,10 +5003,7 @@ try {
 
   if ($method === 'GET' && $path === '/sienna-ai-curiosities') {
     $user = require_user();
-    json_response(sienna_cache_remember('ai-curiosities', [
-      'userId' => $user['id'] ?? null,
-      'memberId' => $user['sienna_member_id'] ?? null,
-    ], fn() => build_sienna_ai_curiosities($user), 600));
+    json_response(build_sienna_ai_curiosities($user));
   }
 
   if ($method === 'GET' && $path === '/sienna-family-members') {

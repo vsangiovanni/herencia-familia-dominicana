@@ -366,6 +366,8 @@ Cambios aplicados:
 - Las fotos del cierre salen ordenadas por aparicion: primero viven en una columna lateral tipo fila de espera y, cuando aparece el nombre del miembro, se deslizan visualmente hacia su nombre, desaparecen de la columna lateral y suben junto con el credito; la columna se desplaza para que las siguientes fotos ocupen el espacio disponible.
 - Si se abre `/sienna/legado-game?credits=1`, la experiencia arranca directamente en el ultimo slide para probar el cierre sin recorrer todo el storytelling.
 - En modo Nano (`?ai=1`), el boton superior de play/pausa recibe borde y aro verde cuando el texto visible de ese slide proviene de Nano/cache.
+- Ajuste posterior: en modo Nano (`?ai=1`), el boton superior de play/pausa cambia a fondo verde solido cuando el texto visible de ese slide proviene de Nano/cache, y vuelve al estilo blanco normal cuando la narrativa es deterministica.
+- Produccion Hostinger posterior: el endpoint PHP `/api/sienna-storybook?aiNarrative=1` ya aplica narrativa Nano en bloque y devuelve `narrativeMode: openai` por slide cuando la generacion funciona. La portada `/api/sienna-ai-curiosities` quedo sin cache temporal para evitar servir fallback viejo cuando Nano ya esta disponible. El `.env` remoto debe conservar `OPENAI_API_KEY` y `OPENAI_MODEL=gpt-5-nano`; no tocar DB ni migraciones para este ajuste.
 
 Archivos principales modificados:
 
