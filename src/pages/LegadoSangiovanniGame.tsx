@@ -171,9 +171,9 @@ const LegacyCredits = ({ members }: { members: NonNullable<LegadoStoryScene['cre
             {member.photoData ? (
               <motion.div
                 className="h-12 w-12 shrink-0 overflow-hidden rounded-full border-2 border-[#f8e5bd]/78 bg-[#f7ead0] shadow-[0_10px_26px_rgba(0,0,0,0.42)] md:h-16 md:w-16"
-                initial={{ opacity: 0, x: 76, scale: 0.82, filter: 'blur(3px)' }}
+                initial={{ opacity: 0, x: -96, scale: 0.8, filter: 'blur(4px)' }}
                 animate={{ opacity: 1, x: 0, scale: 1, filter: 'blur(0px)' }}
-                transition={{ duration: 0.75, delay: getCreditDockSeconds(index, durationSeconds), ease: 'easeOut' }}
+                transition={{ duration: 1.05, delay: getCreditDockSeconds(index, durationSeconds), ease: 'easeOut' }}
               >
                 <img
                   src={member.photoData}
@@ -185,9 +185,9 @@ const LegacyCredits = ({ members }: { members: NonNullable<LegadoStoryScene['cre
             ) : (
               <motion.div
                 className="grid h-12 w-12 shrink-0 place-items-center rounded-full border border-[#f8e5bd]/26 bg-[#080706]/48 text-xs font-black uppercase text-[#f8e5bd]/76 shadow-[0_10px_26px_rgba(0,0,0,0.28)] md:h-16 md:w-16 md:text-sm"
-                initial={{ opacity: 0, x: 54, scale: 0.86 }}
+                initial={{ opacity: 0, x: -72, scale: 0.86 }}
                 animate={{ opacity: 1, x: 0, scale: 1 }}
-                transition={{ duration: 0.68, delay: getCreditDockSeconds(index, durationSeconds), ease: 'easeOut' }}
+                transition={{ duration: 0.9, delay: getCreditDockSeconds(index, durationSeconds), ease: 'easeOut' }}
                 aria-hidden="true"
               >
                 {getMemberInitials(member.name)}
