@@ -9,7 +9,25 @@ window.addEventListener('vite:preloadError', () => {
   }
 
   sessionStorage.setItem('legado:chunk-reload', '1');
-  window.location.reload();
+  const reload = () => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('reload', Date.now().toString());
+    window.location.replace(url.toString());
+  };
+
+  if ('serviceWorker' in navigator) {
+    Promise.all([
+      navigator.serviceWorker.getRegistrations().then((registrations) =>
+        Promise.all(registrations.map((registration) => registration.unregister()))
+      ),
+      'caches' in window ? caches.keys().then((keys) => Promise.all(keys.map((key) => caches.delete(key)))) : Promise.resolve(),
+    ])
+      .catch(() => undefined)
+      .finally(reload);
+    return;
+  }
+
+  reload();
 });
 
 createRoot(document.getElementById("root")!).render(<App />);

@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'legado-sangiovanni-v6';
+const CACHE_VERSION = 'legado-sangiovanni-v7';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 
 const STATIC_ASSETS = [
@@ -12,9 +12,7 @@ const STATIC_ASSETS = [
 ];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(STATIC_CACHE).then((cache) => cache.addAll(STATIC_ASSETS))
-  );
+  event.waitUntil(caches.open(STATIC_CACHE));
   self.skipWaiting();
 });
 
@@ -51,43 +49,5 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  if (request.mode === 'navigate') {
-    event.respondWith(fetch(request));
-    return;
-  }
-
-  const isStaticAsset =
-    url.pathname.startsWith('/assets/') ||
-    STATIC_ASSETS.includes(url.pathname) ||
-    url.pathname.endsWith('.png') ||
-    url.pathname.endsWith('.jpg') ||
-    url.pathname.endsWith('.jpeg') ||
-    url.pathname.endsWith('.svg') ||
-    url.pathname.endsWith('.ico') ||
-    url.pathname.endsWith('.webmanifest');
-
-  if (!isStaticAsset) {
-    return;
-  }
-
-  event.respondWith(
-    caches.match(request).then((cached) => {
-      const networkFetch = fetch(request)
-        .then((response) => {
-          const contentType = response.headers.get('content-type') || '';
-          const isJavaScriptAsset =
-            url.pathname.startsWith('/assets/') && url.pathname.endsWith('.js');
-          const isValidJavaScript = !isJavaScriptAsset || /javascript|ecmascript/.test(contentType);
-
-          if (response.ok && isValidJavaScript) {
-            const copy = response.clone();
-            caches.open(STATIC_CACHE).then((cache) => cache.put(request, copy));
-          }
-          return response;
-        })
-        .catch(() => cached);
-
-      return networkFetch || cached;
-    })
-  );
+  event.respondWith(fetch(request, { cache: 'no-store' }));
 });
