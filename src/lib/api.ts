@@ -308,6 +308,7 @@ export interface SiennaStorybookSlide {
   archiveImage?: string | null;
   archiveCaption?: string | null;
   memberPhotos?: Array<{
+    id?: string;
     memberId: string;
     name: string;
     photoData: string;

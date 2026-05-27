@@ -69,10 +69,11 @@ const MemberPhotoCollage = ({ photos }: { photos: NonNullable<LegadoStoryScene['
       transition={{ duration: 1.05, delay: 0.55, ease: 'easeOut' }}
     >
       {visiblePhotos.map((photo, index) => {
-        const isImportant = photo.memberId === 'alessandro' || photo.memberId === 'jocelyn';
+        const memberId = photo.memberId || photo.id;
+        const isImportant = memberId === 'alessandro' || memberId === 'jocelyn';
         return (
         <div
-          key={`${photo.memberId}-${index}`}
+          key={`${memberId || photo.name}-${index}`}
           className="group relative grid place-items-center"
         >
           <div className={`relative overflow-hidden rounded-full border-2 bg-[#f7ead0] shadow-[0_12px_32px_rgba(0,0,0,0.42)] ring-2 ${photoSizeClass} ${isImportant ? 'border-[#fff7e6] ring-[#f8e5bd]/80 shadow-[0_0_30px_rgba(248,229,189,0.38)]' : 'border-[#f8e5bd]/80 ring-[#080706]/50'}`}>

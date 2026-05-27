@@ -11,6 +11,7 @@ export type LegadoStoryScene = {
   archiveImage?: string;
   archiveCaption?: string;
   memberPhotos?: Array<{
+    id?: string;
     memberId: string;
     name: string;
     photoData: string;
@@ -50,12 +51,14 @@ export const legadoStoryScenes: LegadoStoryScene[] = [
     memberPhotos: [
       {
         id: 'domenico',
+        memberId: 'domenico',
         name: 'Domenico Sangiovanni',
         photoData: '/game/legado/archive/domenico-sangiovanni-portrait.webp',
         deceased: true,
       },
       {
         id: 'maria-rosa-grisolia',
+        memberId: 'maria-rosa-grisolia',
         name: 'Maria Rosa Grisolia',
         photoData: '/game/legado/archive/maria-rosa-grisolia-portrait.webp',
         deceased: true,
@@ -72,6 +75,34 @@ export const legadoStoryScenes: LegadoStoryScene[] = [
     visual: 'migration',
     durationMs: 13500,
     backgroundImage: '/game/legado/generated/storyteller/legado-puerta-sangiovanni-santa-domenica-escenario.png',
+    memberPhotos: [
+      {
+        id: 'domenico',
+        memberId: 'domenico',
+        name: 'Domenico (Domingo) Sangiovanni',
+        photoData: '/game/legado/archive/domenico-sangiovanni-portrait.webp',
+        deceased: true,
+      },
+      {
+        id: 'maria-rosa-grisolia',
+        memberId: 'maria-rosa-grisolia',
+        name: 'Maria Rosa Grisolia',
+        photoData: '/game/legado/archive/maria-rosa-grisolia-portrait.webp',
+        deceased: true,
+      },
+      {
+        id: 'paolo',
+        memberId: 'paolo',
+        name: 'Paolo (Paulino) Sangiovanni',
+        photoData: '/game/legado/archive/extracted-faces/named/paolo-sangiovanni.jpg',
+      },
+      {
+        id: 'vincenzo',
+        memberId: 'vincenzo',
+        name: 'Vincenzo (Vicente) Sangiovanni',
+        photoData: '/game/legado/archive/extracted-faces/named/vincenzo-vicente-sangiovanni.jpg',
+      },
+    ],
     tone: 'migration',
   },
   {
@@ -83,6 +114,34 @@ export const legadoStoryScenes: LegadoStoryScene[] = [
     visual: 'migration',
     durationMs: 13000,
     backgroundImage: '/game/legado/generated/legado-slide-02-migracion-barco.png',
+    memberPhotos: [
+      {
+        id: 'domenico',
+        memberId: 'domenico',
+        name: 'Domenico (Domingo) Sangiovanni',
+        photoData: '/game/legado/archive/domenico-sangiovanni-portrait.webp',
+        deceased: true,
+      },
+      {
+        id: 'maria-rosa-grisolia',
+        memberId: 'maria-rosa-grisolia',
+        name: 'Maria Rosa Grisolia',
+        photoData: '/game/legado/archive/maria-rosa-grisolia-portrait.webp',
+        deceased: true,
+      },
+      {
+        id: 'paolo',
+        memberId: 'paolo',
+        name: 'Paolo (Paulino) Sangiovanni',
+        photoData: '/game/legado/archive/extracted-faces/named/paolo-sangiovanni.jpg',
+      },
+      {
+        id: 'vincenzo',
+        memberId: 'vincenzo',
+        name: 'Vincenzo (Vicente) Sangiovanni',
+        photoData: '/game/legado/archive/extracted-faces/named/vincenzo-vicente-sangiovanni.jpg',
+      },
+    ],
     tone: 'migration',
   },
   {
@@ -97,23 +156,27 @@ export const legadoStoryScenes: LegadoStoryScene[] = [
     memberPhotos: [
       {
         id: 'domenico',
+        memberId: 'domenico',
         name: 'Domenico (Domingo) Sangiovanni',
         photoData: '/game/legado/archive/domenico-sangiovanni-portrait.webp',
         deceased: true,
       },
       {
         id: 'maria-rosa-grisolia',
+        memberId: 'maria-rosa-grisolia',
         name: 'Maria Rosa Grisolia',
         photoData: '/game/legado/archive/maria-rosa-grisolia-portrait.webp',
         deceased: true,
       },
       {
         id: 'paolo',
+        memberId: 'paolo',
         name: 'Paolo (Paulino) Sangiovanni',
         photoData: '/game/legado/archive/extracted-faces/named/paolo-sangiovanni.jpg',
       },
       {
         id: 'vincenzo',
+        memberId: 'vincenzo',
         name: 'Vincenzo (Vicente) Sangiovanni',
         photoData: '/game/legado/archive/extracted-faces/named/vincenzo-vicente-sangiovanni.jpg',
       },
@@ -132,12 +195,14 @@ export const legadoStoryScenes: LegadoStoryScene[] = [
     memberPhotos: [
       {
         id: 'domenico',
+        memberId: 'domenico',
         name: 'Domenico (Domingo) Sangiovanni',
         photoData: '/game/legado/archive/domenico-sangiovanni-portrait.webp',
         deceased: true,
       },
       {
         id: 'maria-rosa-grisolia',
+        memberId: 'maria-rosa-grisolia',
         name: 'Maria Rosa Grisolia',
         photoData: '/game/legado/archive/maria-rosa-grisolia-portrait.webp',
         deceased: true,
@@ -157,6 +222,7 @@ export const legadoStoryScenes: LegadoStoryScene[] = [
     memberPhotos: [
       {
         id: 'paolo',
+        memberId: 'paolo',
         name: 'Paolo (Paulino) Sangiovanni',
         photoData: '/game/legado/archive/extracted-faces/named/paolo-sangiovanni.jpg',
       },
@@ -177,11 +243,13 @@ export const legadoStoryScenes: LegadoStoryScene[] = [
     memberPhotos: [
       {
         id: 'paolo',
+        memberId: 'paolo',
         name: 'Paolo (Paulino) Sangiovanni',
         photoData: '/game/legado/archive/paolo-vicente-sangiovanni-matrimonios.jpg',
       },
       {
         id: 'vincenzo',
+        memberId: 'vincenzo',
         name: 'Vincenzo (Vicente) Sangiovanni',
         photoData: '/game/legado/archive/paolo-vicente-sangiovanni-matrimonios.jpg',
       },
