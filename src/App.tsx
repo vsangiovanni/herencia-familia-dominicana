@@ -36,6 +36,7 @@ const ExplicacionHerederosSienna = lazy(() => import('./pages/ExplicacionHereder
 const AnalisisDoblesLinajesSienna = lazy(() => import('./pages/AnalisisDoblesLinajesSienna'));
 const DocumentosProbatorios = lazy(() => import('./pages/DocumentosProbatorios'));
 const AsistenteIA = lazy(() => import('./pages/AsistenteIA'));
+const LegadoSangiovanniGame = lazy(() => import('./pages/LegadoSangiovanniGame'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -49,15 +50,16 @@ const queryClient = new QueryClient({
 const AppContent = () => {
   const { user } = useAuth();
   const location = useLocation();
+  const isGameRoute = location.pathname === '/sienna/legado-game' || location.pathname === '/sienna/juego';
 
   return (
     <>
       <PageVisitTracker />
-      {user && <PwaInstallPrompt />}
-      {user && <PullToRefresh />}
+      {user && !isGameRoute && <PwaInstallPrompt />}
+      {user && !isGameRoute && <PullToRefresh />}
       <div className="min-h-screen flex flex-col">
-        <NavBar />
-        <main className={`flex-1 ${user ? 'md:pl-64' : ''}`}>
+        {!isGameRoute && <NavBar />}
+        <main className={`flex-1 ${user && !isGameRoute ? 'md:pl-64' : ''}`}>
           <Suspense
             fallback={
               <div className="py-6">
@@ -322,6 +324,22 @@ const AppContent = () => {
                 }
               />
               <Route
+                path="/sienna/legado-game"
+                element={
+                  <ProtectedRoute>
+                    <LegadoSangiovanniGame />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/sienna/juego"
+                element={
+                  <ProtectedRoute>
+                    <LegadoSangiovanniGame />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
                 path="/admin/usuarios"
                 element={
                   <ProtectedRoute requireAdmin={true}>
@@ -333,9 +351,9 @@ const AppContent = () => {
             </div>
           </Suspense>
         </main>
-        <div className={user ? 'md:pl-64' : ''}>
+        {!isGameRoute && <div className={user ? 'md:pl-64' : ''}>
           <Footer />
-        </div>
+        </div>}
       </div>
     </>
   );

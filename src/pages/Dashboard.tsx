@@ -1563,10 +1563,14 @@ const Dashboard = () => {
               </div>
               <div className="grid gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.8fr)] 2xl:grid-cols-[minmax(0,1.7fr)_minmax(380px,0.9fr)]">
                 <div>
-                  <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-legal-gold/35 bg-[#FFF6D8] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[#0A1020]">
+                  <Link
+                    to="/sienna/legado-game"
+                    className="mb-4 inline-flex items-center gap-2 rounded-full border border-legal-gold/35 bg-[#FFF6D8] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[#0A1020] transition hover:border-legal-gold hover:bg-[#FFECA8] focus:outline-none focus:ring-2 focus:ring-legal-gold/50"
+                    aria-label="Ver narrativa del legado Sangiovanni"
+                  >
                     <Sparkles className="h-3.5 w-3.5 text-legal-gold" />
-                    Caso Alessandro de Paola Sangiovanni
-                  </div>
+                    Ver narrativa del legado Sangiovanni
+                  </Link>
                   <h1 className="max-w-5xl font-serif text-3xl font-bold text-legal-blue dark:text-[#F5F7FA] sm:text-5xl">
                     {siennaPersonalization.isLinkedMember
                       ? `${firstName}, el legado de Alessandro visto desde tu familia.`

@@ -1,0 +1,343 @@
+import { useEffect, useMemo, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { ChevronLeft, ChevronRight, Map, Pause, Play, X } from 'lucide-react';
+import PageHelp from '@/components/PageHelp';
+import { useSiennaStorybook } from '@/hooks/useSiennaData';
+import NarrativeText from '@/story/legado/NarrativeText';
+import { legadoStoryScenes } from '@/story/legado/storyScenes';
+
+const TYPEWRITER_INITIAL_DELAY_MS = 720;
+const getTypewriterCharMs = (length: number) => {
+  if (length > 900) return 18;
+  if (length > 650) return 20;
+  if (length > 420) return 24;
+  if (length > 240) return 28;
+  return 34;
+};
+const getAfterTypewriterHoldMs = (length: number) => {
+  if (length > 900) return 4500;
+  if (length > 650) return 3800;
+  if (length > 420) return 3200;
+  if (length > 240) return 2600;
+  return 2200;
+};
+
+const splitNarrativeLines = (text: string) =>
+  text
+    .split(/(?<=\.)\s+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+const getScenePlaybackMs = (scene: (typeof legadoStoryScenes)[number]) => {
+  const typedLength = splitNarrativeLines(scene.text).join('\n').length;
+  const calculated =
+    TYPEWRITER_INITIAL_DELAY_MS +
+    typedLength * getTypewriterCharMs(typedLength) +
+    getAfterTypewriterHoldMs(typedLength);
+  const minimum = scene.tone === 'origin' || scene.tone === 'migration' ? 12000 : 10000;
+  return Math.max(minimum, Math.min(32000, calculated));
+};
+
+const MemberPhotoCollage = ({ photos }: { photos: NonNullable<(typeof legadoStoryScenes)[number]['memberPhotos']> }) => {
+  if (!photos.length) return null;
+
+  return (
+    <motion.div
+      className="pointer-events-none absolute right-[3vw] top-[33vh] z-30 flex max-h-[54vh] max-w-[5.6rem] flex-col flex-nowrap items-center gap-1.5 overflow-hidden md:bottom-[8vh] md:left-auto md:right-[5vw] md:top-auto md:max-h-none md:max-w-[42vw] md:flex-row md:flex-wrap md:items-end md:justify-end md:gap-2.5 md:overflow-visible"
+      initial={{ opacity: 0, y: 24, filter: 'blur(6px)' }}
+      animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+      transition={{ duration: 1.05, delay: 0.55, ease: 'easeOut' }}
+    >
+      {photos.slice(0, 12).map((photo, index) => (
+        <div
+          key={`${photo.memberId}-${index}`}
+          className="group relative grid place-items-center"
+        >
+          <div className="relative h-12 w-12 overflow-hidden rounded-full border-2 border-[#f8e5bd]/80 bg-[#f7ead0] shadow-[0_12px_32px_rgba(0,0,0,0.42)] ring-2 ring-[#080706]/50 md:h-20 md:w-20 xl:h-24 xl:w-24">
+            <img
+              src={photo.photoData}
+              alt={photo.name}
+              className="h-full w-full object-cover sepia-[0.22] contrast-[1.04] saturate-[0.86]"
+              draggable={false}
+            />
+          </div>
+          {photo.deceased && (
+            <div className="absolute -right-1 top-0 flex h-4 w-4 items-center justify-center rounded-full bg-[#f7ead0] shadow-[0_4px_12px_rgba(0,0,0,0.35)] md:h-6 md:w-6" aria-hidden="true">
+              <span className="relative block h-3.5 w-3.5 md:h-4 md:w-4">
+                <span className="absolute left-[6px] top-0 h-4 w-1.5 -rotate-45 rounded-full bg-[#050505] md:left-[7px]" />
+                <span className="absolute left-[6px] top-0 h-4 w-1.5 rotate-45 rounded-full bg-[#050505] md:left-[7px]" />
+              </span>
+            </div>
+          )}
+          <div className="mt-0.5 max-w-[4.6rem] truncate rounded-full bg-[#080706]/58 px-1.5 py-0.5 text-center text-[0.52rem] font-bold uppercase tracking-normal text-[#fff7e6]/90 backdrop-blur md:mt-1 md:max-w-[6rem] md:px-2 md:text-[0.65rem]">
+            {photo.name}
+          </div>
+        </div>
+      ))}
+    </motion.div>
+  );
+};
+
+const LineageThread = ({ scene }: { scene: (typeof legadoStoryScenes)[number] }) => {
+  const photoNodes = scene.memberPhotos?.slice(0, 8) || [];
+  if (photoNodes.length < 2 || scene.visual === 'calabria' || scene.visual === 'migration') return null;
+
+  return (
+    <motion.div
+      className="pointer-events-none absolute bottom-[6.2vh] left-1/2 z-30 w-[min(72rem,82vw)] -translate-x-1/2 md:bottom-[6.8vh]"
+      initial={{ opacity: 0, y: 18 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 1.05, delay: 0.75, ease: 'easeOut' }}
+    >
+      <div className="relative h-20">
+        <motion.div
+          className="absolute left-0 right-0 top-1/2 h-px bg-gradient-to-r from-transparent via-[#f8e5bd]/58 to-transparent"
+          initial={{ scaleX: 0, opacity: 0 }}
+          animate={{ scaleX: 1, opacity: 1 }}
+          transition={{ duration: 1.7, delay: 0.85, ease: 'easeInOut' }}
+        />
+        <div className="relative flex h-full items-center justify-between">
+          {photoNodes.map((photo, index) => {
+            return (
+              <motion.div
+                key={photo.memberId || scene.id + '-node-' + index}
+                className="relative grid place-items-center"
+                initial={{ opacity: 0, scale: 0.78, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                transition={{ duration: 0.7, delay: 1 + index * 0.08, ease: 'easeOut' }}
+              >
+                <div className="relative h-10 w-10 overflow-hidden rounded-full border border-[#f8e5bd]/80 bg-[#f7ead0] shadow-[0_10px_28px_rgba(0,0,0,0.38)] md:h-12 md:w-12">
+                  <img src={photo.photoData} alt="" className="h-full w-full object-cover sepia-[0.2] saturate-[0.88]" draggable={false} />
+                  {photo.deceased ? <span className="absolute right-0 top-0 h-3 w-3 rounded-full bg-[#050505] ring-1 ring-[#f8e5bd]/80" /> : null}
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+const LegadoSangiovanniGame = () => {
+  const [sceneIndex, setSceneIndex] = useState(0);
+  const [playing, setPlaying] = useState(true);
+  const [mapOpen, setMapOpen] = useState(false);
+  const { data: storybook } = useSiennaStorybook(true);
+
+  const scenes = storybook?.slides?.length ? storybook.slides : legadoStoryScenes;
+  const scene = scenes[sceneIndex] || scenes[0];
+  const scenePlaybackMs = useMemo(() => getScenePlaybackMs(scene), [scene]);
+  const isFinished = sceneIndex === scenes.length - 1;
+  const totalProgress = useMemo(
+    () => ((sceneIndex + 1) / scenes.length) * 100,
+    [sceneIndex, scenes.length]
+  );
+
+  useEffect(() => {
+    setSceneIndex((current) => Math.min(current, Math.max(0, scenes.length - 1)));
+  }, [scenes.length]);
+
+  useEffect(() => {
+    if (!playing || isFinished) return;
+
+    const timer = window.setTimeout(() => {
+      setSceneIndex((current) => Math.min(scenes.length - 1, current + 1));
+    }, scenePlaybackMs);
+
+    return () => window.clearTimeout(timer);
+  }, [playing, scenePlaybackMs, sceneIndex, isFinished, scenes.length]);
+
+  const advance = () => {
+    if (isFinished) {
+      setSceneIndex(0);
+      setPlaying(true);
+      return;
+    }
+
+    setSceneIndex((current) => Math.min(scenes.length - 1, current + 1));
+  };
+
+  const goToPrevious = () => {
+    setPlaying(false);
+    setSceneIndex((current) => Math.max(0, current - 1));
+  };
+
+  const goToNext = () => {
+    setPlaying(false);
+    setSceneIndex((current) => Math.min(scenes.length - 1, current + 1));
+  };
+
+  const goToScene = (index: number) => {
+    setPlaying(false);
+    setSceneIndex(index);
+    setMapOpen(false);
+  };
+
+  return (
+    <div className="h-[100dvh] overflow-hidden bg-[#080706] text-[#fff7e6]">
+      <style>{`
+        @keyframes scene-progress {
+          from { width: 0%; }
+          to { width: 100%; }
+        }
+
+        .scene-progress {
+          animation: scene-progress var(--scene-duration) linear forwards;
+        }
+
+        @keyframes legado-cursor {
+          0%, 45% { opacity: 1; }
+          46%, 100% { opacity: 0; }
+        }
+
+        .typewriter-cursor {
+          display: inline-block;
+          margin-left: 0.12em;
+          animation: legado-cursor 0.75s steps(1, end) infinite;
+        }
+      `}</style>
+
+      <div className="relative h-full w-full overflow-hidden bg-[#080706]">
+
+        <AnimatePresence initial={false}>
+          <motion.section
+            key={scene.id}
+            className="absolute inset-0"
+            initial={{ opacity: 0.28, scale: 1.025 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0.38, scale: 1.012 }}
+            transition={{ duration: 1.65, ease: 'easeInOut' }}
+          >
+            <motion.div
+              className="absolute inset-[-4%] bg-cover bg-center"
+              style={{ backgroundImage: `url(${scene.backgroundImage})` }}
+              initial={{ scale: 1.04, opacity: 0.92 }}
+              animate={{ scale: 1.1, opacity: 1 }}
+              transition={{ scale: { duration: scenePlaybackMs / 1000, ease: 'linear' }, opacity: { duration: 0.55 } }}
+            />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_62%_42%,rgba(255,244,218,0.08)_0%,rgba(8,7,6,0.28)_38%,rgba(8,7,6,0.82)_100%)]" />
+            <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(8,7,6,0.82),rgba(8,7,6,0.32)_42%,rgba(8,7,6,0.56))]" />
+            <div className="absolute inset-0 bg-[#9a6d3f]/20 mix-blend-color" />
+            {scene.memberPhotos?.length ? (
+              <MemberPhotoCollage photos={scene.memberPhotos} />
+            ) : scene.archiveImage && (
+              <motion.img
+                src={scene.archiveImage}
+                alt={scene.archiveCaption || ''}
+                className="pointer-events-none absolute bottom-[-2vh] left-[-7vw] z-20 h-[50vh] max-h-[540px] min-h-[280px] w-auto object-contain opacity-60 mix-blend-screen sepia [mask-image:radial-gradient(circle_at_center,black_0%,black_46%,transparent_82%)] md:left-auto md:right-[-4vw]"
+                draggable={false}
+                initial={{ opacity: 0, scale: 1.04, filter: 'blur(3px)' }}
+                animate={{ opacity: 0.6, scale: 1, filter: 'blur(0.4px)' }}
+                transition={{ duration: 1.2, delay: 0.45, ease: 'easeOut' }}
+              />
+            )}
+            <LineageThread scene={scene} />
+            <NarrativeText scene={scene} />
+          </motion.section>
+        </AnimatePresence>
+
+        <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-50 h-1 bg-[#f7ead0]/10">
+          <div
+            key={`${scene.id}-${playing ? 'playing' : 'paused'}`}
+            className={playing && !isFinished ? 'scene-progress h-full bg-[#991b1b]' : 'h-full bg-[#991b1b]'}
+            style={{
+              width: isFinished ? '100%' : undefined,
+              '--scene-duration': `${scenePlaybackMs}ms`,
+            } as React.CSSProperties}
+          />
+        </div>
+
+        <div className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] z-50 flex items-center gap-2 opacity-15 transition-opacity hover:opacity-80 focus-within:opacity-90">
+          <PageHelp helpKey="sienna-legado" className="border-[#111827] bg-[#f7f3ea]/72 text-[#111827] shadow-[0_14px_40px_rgba(0,0,0,0.18)] backdrop-blur" />
+          <button
+            type="button"
+            onClick={() => setPlaying((value) => !value)}
+            className="grid h-10 w-10 place-items-center rounded-full border-2 border-[#111827] bg-[#f7f3ea]/72 text-[#111827] shadow-[0_14px_40px_rgba(0,0,0,0.18)] backdrop-blur transition"
+            aria-label={playing ? 'Pausar' : 'Reproducir'}
+          >
+            {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+          </button>
+        </div>
+
+        <div className="absolute bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-50 flex items-center gap-2 opacity-35 transition-opacity hover:opacity-95">
+          <button
+            type="button"
+            onClick={goToPrevious}
+            disabled={sceneIndex === 0}
+            className="grid h-11 w-11 place-items-center rounded-full border border-[#f8e5bd]/35 bg-[#080706]/45 text-[#fff7e6] shadow-[0_14px_40px_rgba(0,0,0,0.28)] backdrop-blur transition disabled:cursor-not-allowed disabled:opacity-30"
+            aria-label="Escena anterior"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <button
+            type="button"
+            onClick={goToNext}
+            disabled={isFinished}
+            className="grid h-11 w-11 place-items-center rounded-full border border-[#f8e5bd]/35 bg-[#080706]/45 text-[#fff7e6] shadow-[0_14px_40px_rgba(0,0,0,0.28)] backdrop-blur transition disabled:cursor-not-allowed disabled:opacity-30"
+            aria-label="Escena siguiente"
+          >
+            <ChevronRight className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="absolute bottom-[max(1rem,env(safe-area-inset-bottom))] left-4 z-50">
+          <button
+            type="button"
+            onClick={() => setMapOpen((value) => !value)}
+            className="grid h-11 w-11 place-items-center rounded-full border border-[#f8e5bd]/35 bg-[#080706]/45 text-[#fff7e6] shadow-[0_14px_40px_rgba(0,0,0,0.28)] backdrop-blur transition hover:bg-[#080706]/68"
+            aria-label="Mapa de escenas"
+          >
+            {mapOpen ? <X className="h-5 w-5" /> : <Map className="h-5 w-5" />}
+          </button>
+        </div>
+
+        <AnimatePresence>
+          {mapOpen && (
+            <motion.div
+              className="absolute bottom-[calc(max(1rem,env(safe-area-inset-bottom))+3.5rem)] left-4 z-50 max-h-[48vh] w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-md border border-[#f8e5bd]/28 bg-[#080706]/78 p-3 text-[#fff7e6] shadow-[0_24px_70px_rgba(0,0,0,0.48)] backdrop-blur-md"
+              initial={{ opacity: 0, y: 14, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 14, scale: 0.98 }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+            >
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-[#f8e5bd]/80">Mapa narrativo</p>
+                <p className="text-xs font-bold text-[#fff7e6]/55">{sceneIndex + 1}/{scenes.length}</p>
+              </div>
+              <div className="max-h-[38vh] space-y-1 overflow-y-auto pr-1">
+                {scenes.map((item, index) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => goToScene(index)}
+                    className={`flex w-full items-center gap-2 rounded px-2 py-2 text-left transition ${index === sceneIndex ? 'bg-[#f8e5bd]/18 text-[#fff7e6]' : 'text-[#fff7e6]/68 hover:bg-[#f8e5bd]/10 hover:text-[#fff7e6]'}`}
+                  >
+                    <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${index === sceneIndex ? 'bg-[#b88a4d]' : 'bg-[#fff7e6]/35'}`} />
+                    <span className="min-w-0 flex-1 truncate text-xs font-bold md:text-sm">{item.title}</span>
+                    {item.year ? <span className="text-[0.62rem] font-black text-[#f8e5bd]/65">{item.year}</span> : null}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {isFinished && (
+          <button
+            type="button"
+            onClick={advance}
+            className="absolute inset-0 z-10 cursor-default"
+            aria-label="Reiniciar historia"
+          />
+        )}
+
+        <div className="pointer-events-none absolute bottom-5 left-20 z-40 hidden w-40 overflow-hidden rounded-full bg-[#f7ead0]/12 md:block">
+          <div className="h-1.5 rounded-full bg-[#991b1b]" style={{ width: `${totalProgress}%` }} />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default LegadoSangiovanniGame;

@@ -49,6 +49,7 @@ No deja espacio vacío cuando está oculto (`return null`).
 | `sienna-miembros` | Miembros del árbol |
 | `sienna-explicacion` | Explicación para herederos |
 | `sienna-miembros-agregar` | Ayuda específica del formulario «Agregar miembro» |
+| `sienna-legado` | Narrativa cinematográfica del legado |
 
 ## Perfil de usuario
 
@@ -86,6 +87,12 @@ No deja espacio vacío cuando está oculto (`return null`).
 
 - En menú móvil, la sección Sienna se muestra como lista directa dentro del mismo dropdown (sin submenú lateral).
 - Objetivo: evitar recortes visuales y asegurar legibilidad completa de cada opción.
+
+## Narrativa del legado
+
+- La ruta `/sienna/legado-game` usa ayuda contextual propia (`sienna-legado`) dentro de la experiencia fullscreen.
+- El botón de ayuda comparte la esquina superior con reproducir/pausar y mantiene baja opacidad hasta interacción para no competir con la escena.
+- La ayuda documenta el mapa narrativo, controles de escena, fotos circulares, lazo de fallecidos, typewriter y desplazamiento de texto en móvil.
 
 ## Hallazgos
 

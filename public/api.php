@@ -410,6 +410,227 @@ function fetch_app_settings(): array {
   return $settings;
 }
 
+function storybook_normalize($value): string {
+  return normalize_sienna_name($value);
+}
+
+function storybook_year($value): ?int {
+  if (!preg_match('/(18|19|20)\\d{2}/', (string)($value ?? ''), $match)) return null;
+  return (int)$match[0];
+}
+
+function storybook_is_deceased(array $member): bool {
+  return trim((string)($member['death'] ?? '')) !== '';
+}
+
+function storybook_photo_lookup(array $heirs): array {
+  $byMemberId = [];
+  $byName = [];
+  foreach ($heirs as $heir) {
+    $photo = $heir['photo_data'] ?? null;
+    if (!$photo) continue;
+    if (!empty($heir['sienna_member_id'])) $byMemberId[(string)$heir['sienna_member_id']] = $photo;
+    if (!empty($heir['heir_name'])) $byName[storybook_normalize($heir['heir_name'])] = $photo;
+  }
+  return ['byMemberId' => $byMemberId, 'byName' => $byName];
+}
+
+function storybook_local_member_photos(): array {
+  return [
+    'paolo' => '/game/legado/archive/extracted-faces/named/paolo-sangiovanni.jpg',
+    'vincenzo' => '/game/legado/archive/extracted-faces/named/vincenzo-vicente-sangiovanni.jpg',
+    'vicente-sangiovanni-perez-1779294692767' => '/game/legado/archive/extracted-faces/named/vicente-sangiovanni-perez.jpg',
+  ];
+}
+
+function resolve_storybook_photo(array $member, array $photoLookup): ?string {
+  $id = (string)($member['id'] ?? '');
+  $local = storybook_local_member_photos();
+  if ($id !== '' && isset($local[$id])) return $local[$id];
+  if ($id !== '' && isset($photoLookup['byMemberId'][$id])) return $photoLookup['byMemberId'][$id];
+  $nameKey = storybook_normalize($member['name'] ?? '');
+  return $photoLookup['byName'][$nameKey] ?? null;
+}
+
+function build_storybook_member_photos(array $members, array $photoLookup): array {
+  $items = [];
+  foreach ($members as $member) {
+    $photo = resolve_storybook_photo($member, $photoLookup);
+    if (!$photo) continue;
+    $items[] = [
+      'id' => $member['id'] ?? null,
+      'memberId' => $member['id'] ?? null,
+      'name' => $member['name'] ?? '',
+      'photoData' => $photo,
+      'photo' => $photo,
+      'deceased' => storybook_is_deceased($member),
+    ];
+  }
+  return $items;
+}
+
+function storybook_backgrounds(): array {
+  return [
+    'origin' => '/game/legado/generated/storyteller/legado-puerta-sangiovanni-santa-domenica-escenario.png',
+    'santaDomenica' => '/game/legado/generated/storyteller/legado-santa-domenica-origen-documental.png',
+    'migration' => '/game/legado/generated/legado-slide-02-migracion-barco.png',
+    'arrival' => '/game/legado/generated/storyteller/legado-puerto-plata-llegada-documental.png',
+    'puertoPlata' => '/game/legado/generated/storyteller/legado-puerto-plata-llegada-documental.png',
+    'samana' => '/game/legado/generated/storyteller/legado-samana-capitulo-familiar-documental.png',
+    'santoDomingo' => '/game/legado/generated/storyteller/legado-santo-domingo-consolidacion-familiar.png',
+    'santoDomingo1930s' => '/game/legado/generated/storyteller/legado-santo-domingo-generacion-1930s.png',
+    'santoDomingo1950s' => '/game/legado/generated/storyteller/legado-santo-domingo-generacion-1950s.png',
+    'santoDomingo1960s' => '/game/legado/generated/storyteller/legado-santo-domingo-generacion-1960s.png',
+    'laRomana' => '/game/legado/generated/storyteller/legado-la-romana-expansion-familiar.png',
+    'ocoa' => '/game/legado/generated/storyteller/legado-ocoa-memoria-familiar.png',
+    'newYork' => '/game/legado/generated/storyteller/legado-new-york-diaspora-familiar.png',
+    'lineage' => '/game/legado/santa-domenica-concept.png',
+    'memory1' => '/game/legado/generated/storyteller/legado-memoria-ramas-sin-fecha-01.png',
+    'memory2' => '/game/legado/generated/storyteller/legado-memoria-ramas-sin-fecha-02.png',
+    'memory3' => '/game/legado/generated/storyteller/legado-memoria-ramas-sin-fecha-03.png',
+  ];
+}
+
+function storybook_member_by_id(array $members): array {
+  $map = [];
+  foreach ($members as $member) $map[(string)$member['id']] = $member;
+  return $map;
+}
+
+function storybook_place_lookup(array $documents): array {
+  $byMemberId = [];
+  $byName = [];
+  $append = function (&$map, $key, $place): void {
+    $key = trim((string)($key ?? ''));
+    $place = trim((string)($place ?? ''));
+    if ($key === '' || $place === '') return;
+    if (!isset($map[$key])) $map[$key] = [];
+    $map[$key][] = $place;
+  };
+  foreach ($documents as $doc) {
+    $place = $doc['event_place'] ?? '';
+    $append($byMemberId, $doc['primary_member_id'] ?? '', $place);
+    $append($byMemberId, $doc['related_member_id'] ?? '', $place);
+    $append($byName, storybook_normalize($doc['primary_person'] ?? ''), $place);
+    $append($byName, storybook_normalize($doc['related_heir_name'] ?? ''), $place);
+    $append($byName, storybook_normalize($doc['father_name'] ?? ''), $place);
+    $append($byName, storybook_normalize($doc['mother_name'] ?? ''), $place);
+  }
+  return ['byMemberId' => $byMemberId, 'byName' => $byName];
+}
+
+function storybook_places_for_member(array $member, array $placeLookup): array {
+  $places = [];
+  $id = (string)($member['id'] ?? '');
+  if ($id !== '' && isset($placeLookup['byMemberId'][$id])) $places = array_merge($places, $placeLookup['byMemberId'][$id]);
+  $key = storybook_normalize($member['name'] ?? '');
+  if ($key !== '' && isset($placeLookup['byName'][$key])) $places = array_merge($places, $placeLookup['byName'][$key]);
+  return $places;
+}
+
+function select_storybook_background(array $group, array $placeLookup, int $indexSeed = 0, string $eventKind = 'nacimiento'): string {
+  $bg = storybook_backgrounds();
+  $placeText = strtolower(implode(' ', array_merge(...array_map(fn($m) => storybook_places_for_member($m, $placeLookup), $group ?: [[]]))));
+  $years = array_values(array_filter(array_map(fn($m) => storybook_year($m['birth'] ?? null), $group)));
+  $minYear = count($years) ? min($years) : null;
+  if (str_contains($placeText, 'santa domenica') || str_contains($placeText, 'calabria')) return $bg['santaDomenica'];
+  if (str_contains($placeText, 'puerto plata')) return $bg['puertoPlata'];
+  if (str_contains($placeText, 'samana') || str_contains($placeText, 'samaná')) return $bg['samana'];
+  if (str_contains($placeText, 'santo domingo') || str_contains($placeText, 'sto.dgo')) {
+    if ($minYear && $minYear < 1940) return $bg['santoDomingo1930s'];
+    if ($minYear && $minYear < 1960) return $bg['santoDomingo1950s'];
+    if ($minYear && $minYear < 1970) return $bg['santoDomingo1960s'];
+    return $bg['santoDomingo'];
+  }
+  if (str_contains($placeText, 'romana')) return $bg['laRomana'];
+  if (str_contains($placeText, 'ocoa')) return $bg['ocoa'];
+  if (str_contains($placeText, 'new york')) return $bg['newYork'];
+  $memory = [$bg['memory1'], $bg['memory2'], $bg['memory3']];
+  if ($eventKind === 'registro-sin-fecha') return $memory[abs($indexSeed) % count($memory)];
+  if ($minYear && $minYear >= 1980) return $memory[$minYear % count($memory)];
+  $rotation = [$bg['origin'], $bg['santaDomenica'], $bg['puertoPlata'], $bg['samana'], $bg['santoDomingo'], $bg['laRomana'], $bg['ocoa'], $bg['newYork'], $bg['lineage'], $bg['memory2']];
+  return $rotation[$indexSeed % count($rotation)];
+}
+
+function storybook_lineage(array $member, array $memberById): string {
+  $parentId = (string)($member['parent_id'] ?? '');
+  if ($parentId !== '' && isset($memberById[$parentId])) return 'descendiente de ' . ($memberById[$parentId]['name'] ?? 'su familia');
+  return !empty($member['relationship_to_parent']) ? 'con un vinculo familiar conservado en la memoria' : 'como parte de la memoria familiar';
+}
+
+function storybook_member_sentence(array $member, array $memberById, string $mode = 'dated'): string {
+  $year = storybook_year($member['birth'] ?? null);
+  $deathYear = storybook_year($member['death'] ?? null);
+  $lineage = storybook_lineage($member, $memberById);
+  if ($year) $text = 'En ' . $year . ', ' . ($member['name'] ?? '') . ' se suma a la historia familiar, ' . $lineage;
+  else $text = ($mode === 'undated' ? 'El nombre de ' : '') . ($member['name'] ?? '') . ($mode === 'undated' ? ' queda unido a esta rama, ' : ' queda integrado a la memoria familiar, ') . $lineage;
+  return $text . ($deathYear ? ', y su memoria queda marcada tambien por su partida en ' . $deathYear : '') . '.';
+}
+
+function storybook_era_intro(int $decade, array $group): string {
+  $count = count($group);
+  if ($decade < 1930) return 'En las primeras decadas dominicanas, la familia comenzo a echar raices nuevas. ';
+  if ($decade < 1950) return 'Mientras el pais cambiaba, la familia tambien iba encontrando su propio lugar. ';
+  if ($decade < 1970) return 'Con la mitad del siglo, el apellido ya sonaba en mas hogares y nuevas ramas empezaban a crecer. ';
+  if ($decade < 1990) return 'En estos anos, el legado empieza a caminar en una generacion que recibe nombres, costumbres y relatos para llevarlos hacia adelante. ';
+  return 'La memoria familiar llega a tiempos mas cercanos, donde cada nuevo nombre ayuda a sostener la continuidad del linaje. ';
+}
+
+function build_sienna_storybook(): array {
+  $family = fetch_sienna_family_bundle();
+  $members = $family['members'];
+  $heirs = fetch_confirmed_heirs(true);
+  $documents = fetch_evidence_documents(false);
+  $memberById = storybook_member_by_id($members);
+  $photoLookup = storybook_photo_lookup($heirs);
+  $placeLookup = storybook_place_lookup($documents);
+  $bg = storybook_backgrounds();
+  $slides = [];
+  $covered = [];
+  $addCovered = function ($ids) use (&$covered): void { foreach ($ids as $id) if ($id) $covered[(string)$id] = true; };
+  $pick = function (array $ids) use ($memberById): array { $out = []; foreach ($ids as $id) if (isset($memberById[$id])) $out[] = $memberById[$id]; return $out; };
+
+  $originMembers = $pick(['domenico', 'maria-rosa-grisolia', 'paolo', 'vincenzo']);
+  $slides[] = ['id' => 'origen-calabria', 'title' => 'Calabria, Italia', 'year' => 'Siglo XIX', 'location' => 'Santa Domenica Talao', 'tone' => 'origin', 'visual' => 'calabria', 'backgroundImage' => $bg['santaDomenica'], 'archiveImage' => '/game/legado/archive/domenico-maria-rosa-clean.webp', 'archiveCaption' => 'Domenico Sangiovanni y Maria Rosa Grisolia', 'text' => 'En un pueblo de Calabria, Santa Domenica Talao, la joven familia de Domenico Sangiovanni y Maria Rosa Grisolia tomo una decision que cambiaria sus vidas y alcanzaria a generaciones venideras. Desde ese origen comienza esta historia: una casa, una familia y un apellido preparado para cruzar el mar.', 'members' => array_column($originMembers, 'id'), 'memberPhotos' => []];
+  $addCovered(array_column($originMembers, 'id'));
+
+  $houseMembers = $pick(['domenico', 'maria-rosa-grisolia', 'paolo', 'vincenzo']);
+  $slides[] = ['id' => 'casa-sangiovanni', 'title' => 'La casa Sangiovanni', 'year' => 'Calabria', 'location' => 'Santa Domenica Talao', 'tone' => 'origin', 'visual' => 'calabria', 'backgroundImage' => $bg['origin'], 'text' => 'Antes del barco hubo una puerta. Desde la casa Sangiovanni, entre despedidas contenidas y promesas familiares, Paolo y Vincenzo aprendieron que partir tambien podia ser una forma de cuidar el futuro de los suyos.', 'members' => array_column($houseMembers, 'id'), 'memberPhotos' => build_storybook_member_photos($houseMembers, $photoLookup)];
+
+  $slides[] = ['id' => 'ruta-america', 'title' => 'La ruta hacia America', 'year' => 'Migracion', 'location' => 'Atlantico', 'tone' => 'migration', 'visual' => 'migration', 'backgroundImage' => $bg['migration'], 'text' => 'El viaje no fue solo una ruta sobre el mar. Fue una apuesta familiar. Lo que salio de Calabria llegaria a Puerto Plata con idioma, recuerdos, fe y una voluntad silenciosa de comenzar de nuevo.', 'members' => ['domenico', 'maria-rosa-grisolia', 'paolo', 'vincenzo'], 'memberPhotos' => build_storybook_member_photos($houseMembers, $photoLookup)];
+
+  $pv = $pick(['paolo', 'vincenzo']);
+  $slides[] = ['id' => 'puerto-plata-llegada', 'title' => 'Puerto Plata recibe el legado', 'year' => 'Llegada', 'location' => 'Puerto Plata, Republica Dominicana', 'tone' => 'arrival', 'visual' => 'arrival', 'backgroundImage' => $bg['arrival'], 'archiveImage' => '/game/legado/archive/paolo-vicente-sangiovanni-puerto-plata.jpg', 'archiveCaption' => 'Paolo y Vincenzo al llegar a Puerto Plata', 'text' => 'Cuando Paolo y Vincenzo llegaron a Puerto Plata, el apellido comenzo a pronunciarse en otra tierra. En ellos viajaba Calabria, pero tambien nacian las primeras paginas dominicanas de esta familia.', 'members' => ['paolo', 'vincenzo'], 'memberPhotos' => build_storybook_member_photos($pv, $photoLookup)];
+
+  $slides[] = ['id' => 'primeros-hogares', 'title' => 'Los primeros hogares', 'year' => 'Nuevas familias', 'location' => 'Republica Dominicana', 'tone' => 'family', 'visual' => 'arrival', 'backgroundImage' => $bg['puertoPlata'], 'archiveImage' => '/game/legado/archive/paolo-vicente-sangiovanni-matrimonios.jpg', 'archiveCaption' => 'Paolo y Vincenzo en sus matrimonios', 'text' => 'Con el tiempo, la llegada se convirtio en hogar. Paolo y Vincenzo formaron sus familias, y desde esas uniones el legado empezo a multiplicarse en ramas, nombres y memorias que todavia nos alcanzan.', 'members' => ['paolo', 'vincenzo'], 'memberPhotos' => build_storybook_member_photos($pv, $photoLookup)];
+
+  $dated = array_values(array_filter($members, fn($m) => storybook_year($m['birth'] ?? null) !== null && !isset($covered[(string)$m['id']])));
+  usort($dated, fn($a, $b) => storybook_year($a['birth'] ?? null) <=> storybook_year($b['birth'] ?? null));
+  $groups = [];
+  foreach ($dated as $member) { $decade = (int)(floor(storybook_year($member['birth']) / 10) * 10); $groups[$decade][] = $member; }
+  $index = 0;
+  foreach ($groups as $decade => $group) {
+    $addCovered(array_column($group, 'id'));
+    $lines = array_slice(array_map(fn($m) => storybook_member_sentence($m, $memberById), $group), 0, 18);
+    $slides[] = ['id' => 'decada-' . $decade, 'title' => 'Generacion de ' . $decade, 'year' => (string)$decade, 'location' => 'Memoria familiar', 'tone' => 'generation', 'visual' => 'lineage', 'backgroundImage' => select_storybook_background($group, $placeLookup, $index), 'text' => storybook_era_intro((int)$decade, $group) . implode(' ', $lines), 'members' => array_column($group, 'id'), 'memberPhotos' => build_storybook_member_photos($group, $photoLookup)];
+    $index++;
+  }
+
+  $undated = array_values(array_filter($members, fn($m) => !isset($covered[(string)$m['id']])));
+  $chunks = array_chunk($undated, 8);
+  foreach ($chunks as $chunkIndex => $chunk) {
+    $addCovered(array_column($chunk, 'id'));
+    $lines = array_map(fn($m) => storybook_member_sentence($m, $memberById, 'undated'), $chunk);
+    $slides[] = ['id' => 'memoria-sin-fecha-' . ($chunkIndex + 1), 'title' => 'Ramas en la memoria', 'year' => null, 'location' => 'Archivo familiar', 'tone' => 'memory', 'visual' => 'archive', 'backgroundImage' => select_storybook_background($chunk, $placeLookup, $chunkIndex, 'registro-sin-fecha'), 'text' => 'Hay nombres que no entran por una fecha exacta, sino por el lugar que ocupan en la memoria. ' . implode(' ', $lines), 'members' => array_column($chunk, 'id'), 'memberPhotos' => build_storybook_member_photos($chunk, $photoLookup)];
+  }
+
+  $photoMembers = array_values(array_filter($members, fn($m) => resolve_storybook_photo($m, $photoLookup)));
+  $slides[] = ['id' => 'legado-vivo', 'title' => 'El legado sigue vivo', 'year' => 'Hoy', 'location' => 'Legado Sangiovanni', 'tone' => 'legacy', 'visual' => 'legacy', 'backgroundImage' => $bg['memory2'], 'archiveImage' => '/game/legado/archive/domenico-maria-rosa-clean.webp', 'archiveCaption' => 'El origen del legado', 'text' => 'La historia queda abierta como un libro vivo. Detras de cada nombre hay una rama, una casa, una partida, una llegada o una memoria que todavia conversa con las generaciones presentes. Mirar este recorrido es recordar de donde venimos y reconocer a quienes hicieron posible que el linaje siguiera creciendo. En conjunto, ' . count($members) . ' miembros, ' . count($heirs) . ' herederos o personas mencionadas, ' . count($family['unions']) . ' uniones y ' . count($documents) . ' documentos sostienen este legado familiar.', 'members' => array_column($photoMembers, 'id'), 'memberPhotos' => build_storybook_member_photos(array_slice($photoMembers, 0, 12), $photoLookup)];
+
+  $missing = array_values(array_filter(array_map(fn($m) => (string)$m['id'], $members), fn($id) => !isset($covered[$id])));
+  return ['slides' => $slides, 'scenes' => $slides, 'summary' => ['members_total' => count($members), 'covered_member_count' => count($members) - count($missing), 'missing_member_ids' => $missing, 'heirs_total' => count($heirs), 'documents_total' => count($documents)]];
+}
+
 function normalize_sienna_name($value): string {
   $text = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', (string)($value ?? ''));
   $text = strtolower($text ?: (string)($value ?? ''));
@@ -3595,6 +3816,7 @@ function ensure_schema(): void {
     ['Explicación de Herederos', '/sienna/explicacion-herederos', 'Explicación, simulación y auditoría de herederos'],
     ['Análisis de Dobles Linajes', '/sienna/dobles-linajes', 'Consola visual de auditoría y validación de dobles linajes'],
     ['Sienna contigo', '/sienna/asistente', 'Guía natural sobre pantallas, documentos, hallazgos y reparto'],
+    ['Narrativa del Legado Sangiovanni', '/sienna/legado-game', 'Storyteller cinematográfico del linaje Sangiovanni construido desde el árbol real'],
   ];
 
   foreach ($pages as [$name, $path, $description]) {
@@ -3608,6 +3830,7 @@ function ensure_schema(): void {
 
   sync_regular_user_page_access('/sienna/dobles-linajes');
   sync_regular_user_page_access('/sienna/asistente');
+  sync_regular_user_page_access('/sienna/legado-game');
 
   if (!column_exists('profiles', 'can_edit')) {
     db()->exec('ALTER TABLE profiles ADD COLUMN can_edit BOOLEAN NOT NULL DEFAULT FALSE AFTER is_approved');
@@ -4372,6 +4595,11 @@ try {
       ];
     });
     json_response($response);
+  }
+
+  if ($method === 'GET' && $path === '/sienna-storybook') {
+    require_user();
+    json_response(sienna_cache_remember('storybook', [], fn() => build_sienna_storybook(), 20));
   }
 
   if ($method === 'GET' && $path === '/sienna-calculation') {

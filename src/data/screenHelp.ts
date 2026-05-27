@@ -110,6 +110,37 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
       },
     ],
   },
+  'sienna-legado': {
+    title: 'Narrativa del legado',
+    intro:
+      'Experiencia documental del linaje Sangiovanni construida desde los miembros, relaciones, fechas, lugares y fotografías disponibles en el expediente.',
+    sections: [
+      {
+        title: 'Cómo verla',
+        items: [
+          'Use reproducir/pausar para controlar el ritmo de la historia.',
+          'Use las flechas para avanzar o retroceder una escena sin salir de la experiencia.',
+          'El mapa narrativo permite saltar a una escena específica sin agregar opciones al menú principal.',
+        ],
+      },
+      {
+        title: 'Qué muestra',
+        items: [
+          'Cada escena agrupa generaciones, nacimientos, ramas o momentos históricos sin convertir la historia en una tabla.',
+          'Las fotos circulares corresponden a miembros con imagen disponible; los fallecidos se marcan con lazo negro discreto.',
+          'Las imágenes de fondo son assets del storyteller y deben acompañar la narrativa, no competir con ella.',
+        ],
+      },
+      {
+        title: 'Lectura',
+        items: [
+          'El texto aparece letra por letra estilo typewriter y el tiempo de cada escena se ajusta según la cantidad de narrativa.',
+          'En celular, el texto se desplaza hacia arriba para no quedar tapado por las fotos.',
+          'Si detecta una identidad o escena incorrecta, valide el miembro exacto antes de modificar datos del expediente.',
+        ],
+      },
+    ],
+  },
   'admin-users': {
     title: 'Administración de usuarios',
     intro: 'Panel administrativo integral para controlar cuentas, permisos y auditar el uso operativo de la aplicación.',

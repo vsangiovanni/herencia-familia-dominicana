@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1792" height="1024" viewBox="0 0 1792 1024">
+  <defs>
+    <style>
+      .paper { fill: #f7f2e8; }
+      .ink { stroke: #151515; stroke-width: 4.2; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+      .ink-thin { stroke: #151515; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+      .red { fill: #a42222; }
+      .red-stroke { stroke: #a42222; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; fill: none; stroke-dasharray: 12 10; }
+      .title { font-family: Arial, Helvetica, sans-serif; font-size: 34px; font-weight: 900; letter-spacing: 1px; fill: #151515; }
+      .subtitle { font-family: Arial, Helvetica, sans-serif; font-size: 25px; font-weight: 800; fill: #151515; }
+      .small { font-family: Arial, Helvetica, sans-serif; font-size: 19px; font-weight: 700; fill: #151515; }
+      .tiny { font-family: Arial, Helvetica, sans-serif; font-size: 15px; font-weight: 700; fill: #151515; }
+      .panel { fill: rgba(255,255,255,0.23); stroke: #151515; stroke-width: 5; }
+      .shadow { filter: drop-shadow(4px 5px 0 rgba(0,0,0,.12)); }
+    </style>
+    <filter id="paperNoise">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/>
+      <feComponentTransfer>
+        <feFuncA type="table" tableValues="0 0.08"/>
+      </feComponentTransfer>
+    </filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#a42222"/>
+    </marker>
+  </defs>
+
+  <rect class="paper" width="1792" height="1024"/>
+  <rect width="1792" height="1024" filter="url(#paperNoise)" opacity=".55"/>
+  <rect x="10" y="10" width="1772" height="1004" fill="none" stroke="#151515" stroke-width="6"/>
+
+  <rect class="panel" x="24" y="24" width="568" height="464"/>
+  <rect class="panel" x="612" y="24" width="568" height="464"/>
+  <rect class="panel" x="1200" y="24" width="568" height="464"/>
+  <rect class="panel" x="24" y="512" width="568" height="488"/>
+  <rect class="panel" x="612" y="512" width="568" height="488"/>
+  <rect class="panel" x="1200" y="512" width="568" height="488"/>
+
+  <!-- Panel 1: Calabria -->
+  <text x="50" y="70" class="subtitle">EN LAS MONTAÑAS DE</text>
+  <text x="50" y="108" class="title red">SANTA DOMENICA TALAO,</text>
+  <text x="50" y="148" class="subtitle">CALABRIA, ITALIA...</text>
+  <path class="ink-thin" d="M84 344 C146 260 235 245 311 326 C392 218 481 254 548 336"/>
+  <path class="ink" d="M70 394 C146 366 193 333 263 353 C336 377 393 352 456 373 C504 389 546 374 574 396"/>
+  <path class="ink" d="M170 340 L170 298 L210 272 L250 298 L250 340"/>
+  <path class="ink" d="M205 340 V314 H228 V340"/>
+  <path class="ink-thin" d="M117 342 V315 M292 360 V326 M342 355 V314 M390 362 V332"/>
+  <rect x="64" y="390" width="202" height="68" rx="6" fill="#f7f2e8" stroke="#151515" stroke-width="4"/>
+  <text x="84" y="418" class="small">SANTA DOMENICA</text>
+  <text x="122" y="446" class="small">TALAO</text>
+  <path class="ink-thin" d="M440 76 C472 58 503 66 515 94 C535 86 566 98 567 127 C594 132 607 157 590 184"/>
+  <path class="ink-thin" d="M470 74 C486 124 474 152 447 187 C486 190 514 177 533 150 C535 185 558 206 586 214"/>
+  <circle cx="538" cy="170" r="9" fill="#a42222"/>
+  <text x="445" y="235" class="small">CALABRIA</text>
+
+  <!-- Panel 2: family origin -->
+  <text x="638" y="74" class="subtitle">EL MATRIMONIO QUE MIGRÓ:</text>
+  <text x="638" y="112" class="title">DOMENICO SANGIOVANNI</text>
+  <text x="638" y="150" class="title red">MARÍA ROSA GRISOLIA</text>
+  <circle cx="764" cy="290" r="58" class="ink"/>
+  <circle cx="965" cy="290" r="58" class="ink"/>
+  <path class="ink-thin" d="M724 282 C744 246 786 246 807 282 M925 282 C945 246 987 246 1008 282"/>
+  <path class="ink-thin" d="M719 350 C745 324 789 324 812 350 M920 350 C946 324 990 324 1013 350"/>
+  <text x="690" y="392" class="small">Domenico</text>
+  <text x="907" y="392" class="small">María Rosa</text>
+  <text x="650" y="440" class="small">Hijos varones que acompañan:</text>
+  <text x="943" y="440" class="small red">Paolo y Vincenzo</text>
+
+  <!-- Panel 3: migration decision -->
+  <text x="1228" y="74" class="subtitle">TOMARON LA DECISIÓN MÁS DIFÍCIL:</text>
+  <text x="1228" y="114" class="title red">EMIGRAR.</text>
+  <path class="ink" d="M1430 360 H1650 L1595 422 H1480 Z"/>
+  <path class="ink" d="M1532 360 V174"/>
+  <path class="ink" d="M1544 188 C1608 222 1643 284 1655 346 H1544 Z"/>
+  <path class="ink" d="M1518 202 C1460 240 1430 292 1424 346 H1518 Z"/>
+  <path class="ink-thin" d="M1260 420 C1322 392 1375 450 1436 420 S1548 386 1610 420 S1708 455 1750 413"/>
+  <path class="ink-thin" d="M1290 210 C1335 175 1385 176 1425 212 M1325 236 C1374 210 1411 218 1448 248"/>
+  <path class="ink-thin" d="M1268 365 C1308 316 1371 314 1413 365"/>
+  <text x="1256" y="288" class="small">Una rama queda en Italia:</text>
+  <text x="1256" y="320" class="small red">María Magdalena</text>
+
+  <!-- Panel 4: route map -->
+  <text x="50" y="562" class="subtitle">SU DESTINO:</text>
+  <text x="50" y="604" class="title red">PUERTO PLATA,</text>
+  <text x="50" y="642" class="title red">REP. DOMINICANA</text>
+  <path class="ink-thin" d="M96 846 C190 755 290 755 375 822"/>
+  <path class="ink-thin" d="M372 704 C450 650 510 686 550 740"/>
+  <path class="ink-thin" d="M100 708 C150 674 203 685 230 736 C260 700 318 699 354 744"/>
+  <path class="red-stroke" d="M194 760 C312 705 384 737 496 795" marker-end="url(#arrow)"/>
+  <path class="ink" d="M392 808 H520 L489 848 H424 Z"/>
+  <path class="ink" d="M456 807 V730"/>
+  <path class="ink-thin" d="M464 740 C500 760 516 785 520 806 H464 Z"/>
+  <text x="104" y="806" class="small">ITALIA</text>
+  <text x="344" y="690" class="small">OCÉANO</text>
+  <text x="344" y="720" class="small">ATLÁNTICO</text>
+
+  <!-- Panel 5: Puerto Plata -->
+  <text x="640" y="562" class="subtitle">DESPUÉS DE UN LARGO VIAJE,</text>
+  <text x="640" y="602" class="title">LLEGARON A</text>
+  <text x="640" y="642" class="title red">PUERTO PLATA.</text>
+  <path class="ink-thin" d="M650 836 C760 766 840 798 930 746 C1020 694 1080 728 1150 686"/>
+  <path class="ink" d="M684 884 H1120"/>
+  <path class="ink" d="M730 884 V790 H822 V884 M852 884 V736 H962 V884 M995 884 V805 H1085 V884"/>
+  <path class="ink-thin" d="M746 822 H790 M876 774 H930 M1018 834 H1064"/>
+  <path class="ink-thin" d="M1044 748 C1070 703 1103 699 1124 748 M1110 790 V708"/>
+  <text x="676" y="940" class="small">Nuevo hogar, nuevas generaciones.</text>
+
+  <!-- Panel 6: genealogy -->
+  <text x="1226" y="562" class="subtitle">EL ÁRBOL FAMILIAR CRECE</text>
+  <text x="1226" y="602" class="title red">CON NOMBRES</text>
+  <text x="1226" y="640" class="title red">REALES.</text>
+  <path class="ink" d="M1490 936 V750"/>
+  <path class="ink" d="M1490 804 C1400 800 1350 740 1290 710 M1490 808 C1585 800 1638 740 1700 710 M1490 868 C1400 880 1350 930 1295 960 M1490 868 C1580 880 1635 930 1690 960"/>
+  <circle cx="1490" cy="750" r="30" class="ink"/>
+  <circle cx="1290" cy="710" r="30" class="ink"/>
+  <circle cx="1700" cy="710" r="30" class="ink"/>
+  <circle cx="1295" cy="960" r="24" class="ink"/>
+  <circle cx="1690" cy="960" r="24" class="ink"/>
+  <text x="1364" y="760" class="tiny">Domenico + María Rosa</text>
+  <text x="1226" y="760" class="tiny red">María Magdalena</text>
+  <text x="1608" y="760" class="tiny red">Paolo / Vincenzo</text>
+  <text x="1228" y="990" class="tiny">Alessandro</text>
+  <text x="1556" y="990" class="tiny">Generaciones actuales</text>
+</svg>

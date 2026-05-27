@@ -14,6 +14,7 @@ import {
   Settings,
   Shield,
   Sparkles,
+  ScrollText,
   TreePine,
   Users,
 } from 'lucide-react';
@@ -38,6 +39,7 @@ const siennaLinks: SidebarLink[] = [
   { label: 'Explicación', path: '/sienna/explicacion', icon: BookOpen },
   { label: 'Filiación', path: '/sienna/filiacion', icon: Network },
   { label: 'Sienna', path: '/sienna/asistente', icon: Bot },
+  { label: 'Recuento Legado', path: '/sienna/legado-game', icon: ScrollText },
 ];
 
 const caseLinks: SidebarLink[] = [

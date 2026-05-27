@@ -3185,8 +3185,15 @@ async function ensureSchemaMigrations() {
      ON DUPLICATE KEY UPDATE name = VALUES(name), description = VALUES(description)`,
     { id: randomUUID() }
   );
+  await query(
+    `INSERT INTO pages (id, name, path, description)
+     VALUES (:id, 'Narrativa del Legado Sangiovanni', '/sienna/legado-game', 'Storyteller cinematográfico del linaje Sangiovanni construido desde el árbol real')
+     ON DUPLICATE KEY UPDATE name = VALUES(name), description = VALUES(description)`,
+    { id: randomUUID() }
+  );
   await syncRegularUserPageAccess('/sienna/dobles-linajes');
   await syncRegularUserPageAccess('/sienna/asistente');
+  await syncRegularUserPageAccess('/sienna/legado-game');
   await query(
     `INSERT INTO app_settings (setting_key, setting_value)
      VALUES ('lawyer_fee_percentage', '0')
@@ -3821,6 +3828,456 @@ app.get('/api/sienna-workspace', requireAuth, async (req, res) => {
       settings: await loadAppSettings(),
       snapshot: snapshotRows[0] || null,
     };
+  });
+  res.json(response);
+});
+
+const STORYBOOK_BACKGROUNDS = {
+  origin: '/game/legado/generated/storyteller/legado-puerta-sangiovanni-santa-domenica-escenario.png',
+  santaDomenica: '/game/legado/generated/storyteller/legado-santa-domenica-origen-documental.png',
+  farewell: '/game/legado/generated/legado-slide-02-despedida-casa-sangiovanni.png',
+  migration: '/game/legado/generated/legado-slide-02-migracion-barco.png',
+  arrival: '/game/legado/generated/storyteller/legado-puerto-plata-llegada-documental.png',
+  puertoPlata: '/game/legado/generated/storyteller/legado-puerto-plata-llegada-documental.png',
+  samana: '/game/legado/generated/storyteller/legado-samana-capitulo-familiar-documental.png',
+  santoDomingo: '/game/legado/generated/storyteller/legado-santo-domingo-consolidacion-familiar.png',
+  santoDomingo1930s: '/game/legado/generated/storyteller/legado-santo-domingo-generacion-1930s.png',
+  santoDomingo1950s: '/game/legado/generated/storyteller/legado-santo-domingo-generacion-1950s.png',
+  santoDomingo1960s: '/game/legado/generated/storyteller/legado-santo-domingo-generacion-1960s.png',
+  laRomana: '/game/legado/generated/storyteller/legado-la-romana-expansion-familiar.png',
+  ocoa: '/game/legado/generated/storyteller/legado-ocoa-memoria-familiar.png',
+  newYork: '/game/legado/generated/storyteller/legado-new-york-diaspora-familiar.png',
+  lineage: '/game/legado/santa-domenica-concept.png',
+  memoryArchive1: '/game/legado/generated/storyteller/legado-memoria-ramas-sin-fecha-01.png',
+  memoryArchive2: '/game/legado/generated/storyteller/legado-memoria-ramas-sin-fecha-02.png',
+  memoryArchive3: '/game/legado/generated/storyteller/legado-memoria-ramas-sin-fecha-03.png',
+  legacy: '/game/legado/generated/storyteller/legado-memoria-ramas-sin-fecha-02.png',
+};
+
+const STORYBOOK_ROTATION_BACKGROUNDS = [
+  STORYBOOK_BACKGROUNDS.origin,
+  STORYBOOK_BACKGROUNDS.santaDomenica,
+  STORYBOOK_BACKGROUNDS.puertoPlata,
+  STORYBOOK_BACKGROUNDS.samana,
+  STORYBOOK_BACKGROUNDS.santoDomingo,
+  STORYBOOK_BACKGROUNDS.laRomana,
+  STORYBOOK_BACKGROUNDS.ocoa,
+  STORYBOOK_BACKGROUNDS.newYork,
+  STORYBOOK_BACKGROUNDS.lineage,
+  STORYBOOK_BACKGROUNDS.legacy,
+];
+
+const STORYBOOK_MEMORY_BACKGROUNDS = [
+  STORYBOOK_BACKGROUNDS.memoryArchive1,
+  STORYBOOK_BACKGROUNDS.memoryArchive2,
+  STORYBOOK_BACKGROUNDS.memoryArchive3,
+];
+
+const storybookNormalize = (value) =>
+  String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+const extractStorybookYear = (value) => {
+  const match = String(value || '').match(/\b(18\d{2}|19\d{2}|20\d{2})\b/);
+  return match ? Number(match[1]) : null;
+};
+
+const storybookDuration = (text, base = 11500) =>
+  Math.max(base, Math.min(24000, base + String(text || '').length * 30));
+
+const describeMemberLineage = (member, parentsByChildId, memberById) => {
+  const parents = parentsByChildId.get(member.id) || [];
+  if (parents.length) {
+    const parentNames = parents
+      .map((link) => memberById.get(link.parent_member_id)?.name)
+      .filter(Boolean);
+    if (parentNames.length) return 'en el hogar de ' + parentNames.join(' y ');
+  }
+  if (member.parent_id && memberById.get(member.parent_id)) {
+    return 'en el linaje de ' + memberById.get(member.parent_id).name;
+  }
+  if (member.spouse_member_id && memberById.get(member.spouse_member_id)) {
+    return 'junto a ' + memberById.get(member.spouse_member_id).name;
+  }
+  if (member.spouse) return 'junto a ' + member.spouse;
+  return member.relationship_to_parent ? 'con un vinculo familiar conservado en la memoria' : 'como parte de la memoria familiar';
+};
+
+const storybookMemberSentence = (member, parentsByChildId, memberById, mode = 'dated') => {
+  const year = extractStorybookYear(member.birth);
+  const lineage = describeMemberLineage(member, parentsByChildId, memberById);
+  const deathYear = extractStorybookYear(member.death);
+  const birthText = year
+    ? 'En ' + year + ', ' + member.name + ' se suma a la historia familiar, ' + lineage
+    : mode === 'undated'
+      ? 'El nombre de ' + member.name + ' queda unido a esta rama, ' + lineage
+      : member.name + ' queda integrado a la memoria familiar, ' + lineage;
+  return birthText + (deathYear ? ', y su memoria queda marcada tambien por su partida en ' + deathYear : '') + '.';
+};
+
+const buildStorybookPhotoLookup = (heirs) => {
+  const byMemberId = new Map();
+  const byName = new Map();
+  heirs.forEach((heir) => {
+    if (!heir.photo_data) return;
+    if (heir.sienna_member_id) byMemberId.set(String(heir.sienna_member_id), heir.photo_data);
+    if (heir.heir_name) byName.set(storybookNormalize(heir.heir_name), heir.photo_data);
+  });
+  return { byMemberId, byName };
+};
+
+const STORYBOOK_LOCAL_MEMBER_PHOTOS = new Map([
+  ['paolo', '/game/legado/archive/extracted-faces/named/paolo-sangiovanni.jpg'],
+  ['vincenzo', '/game/legado/archive/extracted-faces/named/vincenzo-vicente-sangiovanni.jpg'],
+  ['vicente-sangiovanni-perez-1779294692767', '/game/legado/archive/extracted-faces/named/vicente-sangiovanni-perez.jpg'],
+]);
+
+const resolveStorybookPhoto = (member, photoLookup) =>
+  STORYBOOK_LOCAL_MEMBER_PHOTOS.get(String(member.id)) ||
+  photoLookup.byMemberId.get(String(member.id)) ||
+  photoLookup.byName.get(storybookNormalize(member.name)) ||
+  null;
+
+const buildStorybookPlaceLookup = (documents) => {
+  const byMemberId = new Map();
+  const byName = new Map();
+  const append = (map, key, place) => {
+    if (!key || !place) return;
+    const normalizedKey = String(key);
+    const current = map.get(normalizedKey) || [];
+    current.push(String(place));
+    map.set(normalizedKey, current);
+  };
+
+  documents.forEach((document) => {
+    const place = String(document.event_place || '').trim();
+    if (!place) return;
+    append(byMemberId, document.primary_member_id, place);
+    append(byMemberId, document.related_member_id, place);
+    append(byName, storybookNormalize(document.primary_person), place);
+    append(byName, storybookNormalize(document.related_heir_name), place);
+    append(byName, storybookNormalize(document.father_name), place);
+    append(byName, storybookNormalize(document.mother_name), place);
+  });
+
+  return { byMemberId, byName };
+};
+
+const getStorybookPlacesForMember = (member, placeLookup) => [
+  ...(placeLookup.byMemberId.get(String(member.id)) || []),
+  ...(placeLookup.byName.get(storybookNormalize(member.name)) || []),
+];
+
+const selectStorybookBackground = (group, placeLookup, indexSeed = 0, eventKind = 'nacimiento') => {
+  const placeText = group
+    .flatMap((member) => getStorybookPlacesForMember(member, placeLookup))
+    .join(' ')
+    .toLowerCase();
+  const years = group
+    .map((member) => extractStorybookYear(member.birth))
+    .filter(Boolean);
+  const minYear = years.length ? Math.min(...years) : Number(indexSeed) || null;
+
+  if (placeText.includes('santa domenica') || placeText.includes('calabria')) return STORYBOOK_BACKGROUNDS.santaDomenica;
+  if (placeText.includes('puerto plata')) return STORYBOOK_BACKGROUNDS.puertoPlata;
+  if (placeText.includes('samana') || placeText.includes('samaná')) return STORYBOOK_BACKGROUNDS.samana;
+  if (placeText.includes('santo domingo') || placeText.includes('sto.dgo')) {
+    if (minYear && minYear < 1940) return STORYBOOK_BACKGROUNDS.santoDomingo1930s;
+    if (minYear && minYear < 1960) return STORYBOOK_BACKGROUNDS.santoDomingo1950s;
+    if (minYear && minYear < 1970) return STORYBOOK_BACKGROUNDS.santoDomingo1960s;
+    return STORYBOOK_BACKGROUNDS.santoDomingo;
+  }
+  if (placeText.includes('la romana')) return STORYBOOK_BACKGROUNDS.laRomana;
+  if (placeText.includes('ocoa')) return STORYBOOK_BACKGROUNDS.ocoa;
+  if (placeText.includes('new york')) return STORYBOOK_BACKGROUNDS.newYork;
+  if (eventKind === 'registro-sin-fecha') return STORYBOOK_MEMORY_BACKGROUNDS[Math.abs(Number(indexSeed) || 0) % STORYBOOK_MEMORY_BACKGROUNDS.length];
+  if (minYear && minYear >= 1980) return STORYBOOK_MEMORY_BACKGROUNDS[minYear % STORYBOOK_MEMORY_BACKGROUNDS.length];
+  return STORYBOOK_ROTATION_BACKGROUNDS[indexSeed % STORYBOOK_ROTATION_BACKGROUNDS.length];
+};
+
+const storybookBirthEraKey = (year) => {
+  if (!year) return 'sin-fecha';
+  if (year < 1900) return 'raices-italianas';
+  if (year < 1929) return 'primeras-ramas-dominicanas';
+  if (year < 1940) return 'generacion-1929-1939';
+  if (year < 1960) return 'generacion-1950s';
+  if (year < 1965) return 'generacion-1960-1964';
+  if (year < 1970) return 'generacion-1965-1969';
+  if (year < 1980) return 'generacion-1970s';
+  return 'generacion-moderna';
+};
+
+const storybookEraTitle = (yearStart, yearEnd, group) => {
+  if (yearStart === yearEnd) return group.length === 1 ? group[0].name : 'Generacion de ' + yearStart;
+  if (yearStart < 1929) return 'Primeras ramas documentadas';
+  if (yearStart < 1940) return 'Generacion de ' + yearStart + '-' + yearEnd;
+  if (yearStart >= 1960 && yearEnd <= 1964) return 'Generacion 1960-1964';
+  if (yearStart >= 1965 && yearEnd <= 1969) return 'Generacion 1965-1969';
+  return 'Generacion de ' + yearStart + '-' + yearEnd;
+};
+
+const storybookEraIntro = (yearStart, yearEnd, group) => {
+  if (yearStart === yearEnd && group.length === 1) return 'La historia se detiene un momento en ' + yearStart + ', cuando una nueva vida se suma al camino familiar. ';
+  if (yearStart < 1929) {
+    return 'Antes de que la memoria se multiplicara en nuevas ciudades, estos nombres ayudan a sostener el puente entre las raices italianas y la vida que comenzaba a abrirse en America. ';
+  }
+  if (yearStart < 1940) {
+    return 'Con los anos treinta, el apellido empieza a echar raices mas profundas en tierra dominicana. Ya no se trata solo de la llegada: comienza la construccion de hogares, ramas y recuerdos propios. ';
+  }
+  if (yearStart < 1960) {
+    return 'A mediados del siglo XX, la familia entra en una etapa de expansion mas visible. Cada nacimiento trae una nueva manera de continuar aquello que Domenico y Maria Rosa iniciaron lejos de su pueblo. ';
+  }
+  if (yearStart < 1970) {
+    return 'Durante los anos sesenta, la historia familiar se vuelve mas amplia y cercana. Nuevos hijos, nuevos hogares y nuevas voces empiezan a formar esa red de primos, tios y abuelos que despues todos llamarian familia. ';
+  }
+  if (yearStart < 1980) {
+    return 'En los anos setenta, el legado ya no vive solo en los recuerdos de los mayores. Empieza a caminar en una generacion que recibe nombres, costumbres y relatos para llevarlos hacia adelante. ';
+  }
+  if (yearStart === yearEnd) return 'En ' + yearStart + ', otra vida se suma a esta historia que sigue creciendo. ';
+  return 'Entre ' + yearStart + ' y ' + yearEnd + ', la familia sigue abriendo caminos y dejando nuevas huellas para quienes vendrian despues. ';
+};
+
+const splitStorybookGroup = (group, maxSize = 6) => {
+  const chunks = [];
+  for (let index = 0; index < group.length; index += maxSize) chunks.push(group.slice(index, index + maxSize));
+  return chunks;
+};
+
+const buildStorybookMemberPhotos = (members, photoLookup) =>
+  members
+    .map((member) => ({
+      memberId: member.id,
+      name: member.name,
+      photoData: resolveStorybookPhoto(member, photoLookup),
+      deceased: Boolean(member.death),
+      birth: member.birth || null,
+      death: member.death || null,
+    }))
+    .filter((item) => item.photoData);
+
+function buildSiennaStorybookSlides({ family, heirs, documents }) {
+  const members = [...family.members].sort((a, b) => {
+    const yearA = extractStorybookYear(a.birth) || 9999;
+    const yearB = extractStorybookYear(b.birth) || 9999;
+    if (yearA !== yearB) return yearA - yearB;
+    return String(a.name).localeCompare(String(b.name), 'es');
+  });
+  const memberById = new Map(members.map((member) => [String(member.id), member]));
+  const parentsByChildId = new Map();
+  family.parent_links.forEach((link) => {
+    const list = parentsByChildId.get(String(link.child_member_id)) || [];
+    list.push(link);
+    parentsByChildId.set(String(link.child_member_id), list);
+  });
+  const photoLookup = buildStorybookPhotoLookup(heirs);
+  const placeLookup = buildStorybookPlaceLookup(documents);
+  const coveredMemberIds = new Set();
+
+  const staticSlides = [
+    {
+      id: 'calabria',
+      title: 'Calabria, Italia',
+      text: 'En un pueblo de Calabria, Santa Domenica Talao, la joven familia de Domenico Sangiovanni y Maria Rosa Grisolia tomaron una decision que cambiaria sus vidas y las generaciones venideras.',
+      location: 'Santa Domenica Talao, Calabria',
+      visual: 'calabria',
+      durationMs: 15000,
+      backgroundImage: STORYBOOK_BACKGROUNDS.santaDomenica,
+      archiveImage: '/game/legado/archive/domenico-maria-rosa-clean.webp',
+      archiveCaption: 'Domenico Sangiovanni y Maria Rosa Grisolia',
+      tone: 'origin',
+      members: ['domenico', 'maria-rosa-grisolia'].filter((id) => memberById.has(id)),
+      memberPhotos: [],
+      eventKind: 'origen',
+      assetPrompt: 'Retrato documental hiperrealista de Santa Domenica Talao en el siglo XIX, con Domenico Sangiovanni y Maria Rosa Grisolia integrados de forma honorable en la memoria familiar.',
+    },
+    {
+      id: 'migration',
+      title: 'La casa Sangiovanni',
+      text: 'La puerta familiar quedo como testigo silencioso del momento en que la historia empezo a dividirse entre dos orillas. Domenico y Maria Rosa saldrian con Paolo y Vincenzo; Maria Magdalena permaneceria en Italia, guardando en Santa Domenica una parte esencial del origen.',
+      location: 'Casa Sangiovanni, Santa Domenica Talao',
+      visual: 'migration',
+      durationMs: 17000,
+      backgroundImage: STORYBOOK_BACKGROUNDS.origin,
+      tone: 'migration',
+      members: ['domenico', 'maria-rosa-grisolia', 'paolo', 'vincenzo', 'maria-magdalena'].filter((id) => memberById.has(id)),
+      memberPhotos: [],
+      eventKind: 'despedida',
+      assetPrompt: 'Escena melancolica hiperrealista frente a la puerta original de la casa Sangiovanni en Santa Domenica Talao, familia despidiendose en la calle antes de emigrar.',
+    },
+    {
+      id: 'migration-ship',
+      title: 'La ruta hacia America',
+      text: 'El viaje hacia Puerto Plata no fue solamente un traslado. Fue una apuesta de familia, una despedida al mundo conocido y el comienzo de una memoria que aprenderia a vivir entre Italia y Republica Dominicana.',
+      location: 'Italia -> Puerto Plata',
+      visual: 'migration',
+      durationMs: 14500,
+      backgroundImage: STORYBOOK_BACKGROUNDS.migration,
+      tone: 'migration',
+      members: ['domenico', 'maria-rosa-grisolia', 'paolo', 'vincenzo'].filter((id) => memberById.has(id)),
+      memberPhotos: buildStorybookMemberPhotos(['domenico', 'maria-rosa-grisolia', 'paolo', 'vincenzo'].map((id) => memberById.get(id)).filter(Boolean), photoLookup),
+      eventKind: 'migracion',
+      assetPrompt: 'Familia italiana abordando un barco hacia America a finales del siglo XIX, Puerto Plata como destino, tono documental cinematografico.',
+    },
+    {
+      id: 'puerto-plata',
+      title: 'Puerto Plata recibe el legado',
+      text: 'Puerto Plata recibe aquella historia como quien recibe una semilla. Desde alli, las ramas de Paolo y Vincenzo empiezan a crecer, y con ellas nace una descendencia que todavia mira hacia atras para entender a quienes debe agradecer su camino.',
+      location: 'Puerto Plata, Republica Dominicana',
+      visual: 'puertoPlata',
+      durationMs: 14500,
+      backgroundImage: STORYBOOK_BACKGROUNDS.arrival,
+      archiveImage: '/game/legado/archive/paolo-vicente-sangiovanni-puerto-plata.jpg',
+      archiveCaption: 'Paolo Sangiovanni y Vincenzo/Vicente Sangiovanni',
+      tone: 'arrival',
+      members: ['paolo', 'vincenzo'].filter((id) => memberById.has(id)),
+      memberPhotos: [],
+      eventKind: 'llegada',
+      assetPrompt: 'Puerto de Puerto Plata historico recibiendo una familia inmigrante italiana, lenguaje visual premium documental, no ilustracion infantil.',
+    },
+    {
+      id: 'primeros-hogares',
+      title: 'Los primeros hogares',
+      text: 'Con el tiempo, Paolo y Vincenzo no solo llevaron un apellido: comenzaron a formar hogares. En esas uniones, la historia dejo de ser solamente una migracion y se convirtio en familia dominicana, con nuevas ramas destinadas a crecer.',
+      location: 'Puerto Plata, Republica Dominicana',
+      visual: 'puertoPlata',
+      durationMs: 14000,
+      backgroundImage: STORYBOOK_BACKGROUNDS.puertoPlata,
+      archiveImage: '/game/legado/archive/paolo-vicente-sangiovanni-matrimonios.jpg',
+      archiveCaption: 'Paolo Sangiovanni y Vincenzo/Vicente Sangiovanni al formar sus hogares',
+      tone: 'arrival',
+      members: ['paolo', 'vincenzo'].filter((id) => memberById.has(id)),
+      memberPhotos: [],
+      eventKind: 'matrimonios',
+      assetPrompt: 'Capitulo documental sobre Paolo y Vincenzo formando sus primeros hogares en Puerto Plata, con foto familiar integrada de manera honorable.',
+    },
+  ];
+  const slides = [...staticSlides];
+  staticSlides.forEach((slide) => slide.members?.forEach((id) => coveredMemberIds.add(String(id))));
+
+  const groupsByEra = new Map();
+  const undatedMembers = [];
+  members.forEach((member) => {
+    if (coveredMemberIds.has(String(member.id))) return;
+    const birthYear = extractStorybookYear(member.birth);
+    if (!birthYear) {
+      undatedMembers.push(member);
+      return;
+    }
+    const key = storybookBirthEraKey(birthYear);
+    const list = groupsByEra.get(key) || [];
+    list.push(member);
+    groupsByEra.set(key, list);
+  });
+
+  [...groupsByEra.values()]
+    .map((group) => group.sort((a, b) => (extractStorybookYear(a.birth) || 9999) - (extractStorybookYear(b.birth) || 9999) || String(a.name).localeCompare(String(b.name), 'es')))
+    .sort((left, right) => (extractStorybookYear(left[0]?.birth) || 9999) - (extractStorybookYear(right[0]?.birth) || 9999))
+    .forEach((eraGroup) => {
+      splitStorybookGroup(eraGroup, 6).forEach((group, chunkIndex) => {
+        const years = group.map((member) => extractStorybookYear(member.birth)).filter(Boolean);
+        const yearStart = Math.min(...years);
+        const yearEnd = Math.max(...years);
+        const peopleLines = group.map((member) => {
+          coveredMemberIds.add(String(member.id));
+          return storybookMemberSentence(member, parentsByChildId, memberById);
+        });
+        const photoMember = group.find((member) => resolveStorybookPhoto(member, photoLookup));
+        const text = storybookEraIntro(yearStart, yearEnd, group) + peopleLines.join(' ');
+        const title = storybookEraTitle(yearStart, yearEnd, group);
+
+        slides.push({
+          id: 'era-' + yearStart + '-' + yearEnd + '-' + storybookNormalize(group.map((member) => member.name).join('-')).slice(0, 44),
+          title,
+          text,
+          location: 'Memoria familiar',
+          visual: 'familyTree',
+          durationMs: storybookDuration(text, group.length > 1 ? 17000 : 12500),
+          backgroundImage: selectStorybookBackground(group, placeLookup, yearStart, 'nacimiento'),
+          archiveImage: photoMember ? resolveStorybookPhoto(photoMember, photoLookup) : undefined,
+          archiveCaption: photoMember?.name,
+          tone: 'lineage',
+          members: group.map((member) => member.id),
+          memberPhotos: buildStorybookMemberPhotos(group, photoLookup),
+          year: yearStart === yearEnd ? yearStart : yearStart + '-' + yearEnd,
+          eventKind: 'nacimiento',
+          assetPrompt: group.length === 1
+            ? 'Escena hiperrealista y documental para representar el nacimiento o entrada familiar de ' + group[0].name + ' en ' + yearStart + ', coherente con su epoca y rama.'
+            : 'Composicion hiperrealista estilo libro documental para la etapa ' + yearStart + '-' + yearEnd + ', integrando a ' + group.map((member) => member.name).join(', ') + ' sin omitir a nadie.',
+        });
+      });
+    });
+
+  for (let index = 0; index < undatedMembers.length; index += 8) {
+    const group = undatedMembers.slice(index, index + 8);
+    const peopleLines = group.map((member) => {
+      coveredMemberIds.add(String(member.id));
+      return storybookMemberSentence(member, parentsByChildId, memberById, 'undated');
+    });
+    const photoMember = group.find((member) => resolveStorybookPhoto(member, photoLookup));
+    const chapter = Math.floor(index / 8) + 1;
+    const text = 'Hay nombres que no entran por una fecha exacta, sino por el lugar que ocupan en la memoria. Son parte del tejido familiar: personas que conectan hogares, ramas y recuerdos, y que ayudan a entender mejor de donde venimos. ' + peopleLines.join(' ');
+    slides.push({
+      id: 'undated-' + chapter,
+      title: 'Ramas de memoria ' + chapter,
+      text,
+      location: 'Memoria familiar',
+      visual: 'familyTree',
+     durationMs: storybookDuration(text, 14500),
+      backgroundImage: selectStorybookBackground(group, placeLookup, index, 'registro-sin-fecha'),
+      archiveImage: photoMember ? resolveStorybookPhoto(photoMember, photoLookup) : undefined,
+      archiveCaption: photoMember?.name,
+      tone: 'lineage',
+      members: group.map((member) => member.id),
+      memberPhotos: buildStorybookMemberPhotos(group, photoLookup),
+      eventKind: 'registro-sin-fecha',
+      assetPrompt: 'Composicion documental hiperrealista para miembros con fecha pendiente: ' + group.map((member) => member.name).join(', ') + '.',
+    });
+  }
+
+  slides.push({
+    id: 'legacy',
+    title: 'Un libro familiar en movimiento',
+    text: 'La historia queda abierta como un libro vivo. Detras de cada nombre hay una rama, una casa, una partida, una llegada o una memoria que todavia conversa con las generaciones presentes. Mirar este recorrido es recordar de donde venimos y reconocer a quienes, con sus decisiones y sacrificios, hicieron posible que el linaje siguiera creciendo. En conjunto, ' + members.length + ' miembros, ' + heirs.length + ' herederos o personas mencionadas, ' + family.unions.length + ' uniones y ' + documents.length + ' documentos sostienen este legado familiar.',
+    location: 'Legado Sangiovanni',
+    visual: 'legacy',
+    durationMs: 15500,
+    backgroundImage: STORYBOOK_BACKGROUNDS.legacy,
+    archiveImage: '/game/legado/archive/domenico-maria-rosa-clean.webp',
+    archiveCaption: 'Domenico Sangiovanni y Maria Rosa Grisolia',
+    tone: 'memory',
+    members: [],
+    memberPhotos: buildStorybookMemberPhotos(members.filter((member) => resolveStorybookPhoto(member, photoLookup)).slice(0, 12), photoLookup),
+    eventKind: 'cierre',
+    assetPrompt: 'Cierre cinematografico tipo libro documental familiar, arbol genealogico elegante, documentos historicos y fotos integradas de forma honorable.',
+  });
+
+  return {
+    slides,
+    summary: {
+      member_count: members.length,
+      heir_count: heirs.length,
+      document_count: documents.length,
+      union_count: family.unions.length,
+      parent_link_count: family.parent_links.length,
+      covered_member_count: coveredMemberIds.size,
+      missing_member_ids: members.map((member) => member.id).filter((id) => !coveredMemberIds.has(String(id))),
+      generated_at: new Date().toISOString(),
+      source: 'api',
+    },
+  };
+}
+
+app.get('/api/sienna-storybook', requireAuth, async (req, res) => {
+  const includeMedia = req.query.includeMedia === '1';
+  const response = await getCachedSiennaResponse('storybook', { includeMedia }, async () => {
+    const family = await loadSiennaFamilyBundle();
+    const heirs = await loadConfirmedHeirs(includeMedia);
+    const documents = await loadEvidenceDocuments(false);
+    return buildSiennaStorybookSlides({ family, heirs, documents });
   });
   res.json(response);
 });

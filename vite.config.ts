@@ -29,6 +29,7 @@ export default defineConfig({
           if (id.includes("tesseract.js")) return "ocr";
           if (id.includes("html2canvas")) return "html2canvas";
           if (id.includes("jspdf")) return "jspdf";
+          if (id.includes("phaser")) return "game-engine";
           if (id.includes("recharts")) return "charts";
           if (id.includes("@radix-ui") || id.includes("lucide-react")) return "ui-kit";
           if (id.includes("react") || id.includes("react-dom")) return "react-vendor";

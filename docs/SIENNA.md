@@ -2,6 +2,19 @@
 
 Pantallas especializadas del expediente familiar (caso Alessandro y derivados).
 
+## Videojuego El Legado Sangiovanni
+
+Se abrio el canon de producto y arquitectura para una nueva seccion de juego narrativo cooperativo dentro de Sienna.
+
+- Documento: LEGADO_SANGIOVANNI_GAME.md.
+- Ruta local propuesta: /sienna/legado-game.
+- Primer origen canonico: Santa Domenica Talao, Italia, incluyendo casa/puerta Sangiovanni y la salida de Domenico y Maria Rosa con Paolo y Vincenzo hacia Puerto Plata.
+- La seccion debe ser aislada y protegida.
+- Solo puede consumir datos del backend/API en modo lectura.
+- Integra IA desde el inicio como narradora, guia de misiones, pistas y dialogos, siempre en modo read-only.
+- Nunca modifica arbol, expediente, documentos, herederos, calculos, convergencias, hallazgos ni settings.
+- El progreso del juego debe vivir separado del expediente real.
+
 ## Handoff operativo reciente
 
 Para retomar el estado actual del asistente conversacional Sienna despues de un reinicio o una conversacion nueva, leer primero:

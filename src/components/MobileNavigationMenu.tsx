@@ -42,7 +42,8 @@ const MobileNavigationMenu = () => {
     can('/sienna/miembros') ||
     can('/sienna/explicacion') ||
     can('/sienna/filiacion') ||
-    can('/sienna/asistente');
+    can('/sienna/asistente') ||
+    can('/sienna/legado-game');
   const showLegacy =
     can('/legacy/arbol-genealogico') ||
     can('/legacy/arbol-clasico') ||
@@ -105,6 +106,11 @@ const MobileNavigationMenu = () => {
           {can('/sienna/asistente') && (
             <DropdownMenuItem onClick={() => navigate('/sienna/asistente')}>
               Sienna
+            </DropdownMenuItem>
+          )}
+          {can('/sienna/legado-game') && (
+            <DropdownMenuItem onClick={() => navigate('/sienna/legado-game')}>
+              Recuento Legado
             </DropdownMenuItem>
           )}
           {can('/caso/determinacion-herederos') && (

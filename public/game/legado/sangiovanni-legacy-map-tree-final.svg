@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1792" height="1024" viewBox="0 0 1792 1024">
+  <defs>
+    <style>
+      .bg { fill: #f7f2e8; }
+      .ink { stroke: #151515; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+      .thin { stroke: #151515; stroke-width: 2.3; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+      .route { stroke: #a42222; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; fill: none; stroke-dasharray: 14 11; }
+      .node { fill: #f7f2e8; stroke: #151515; stroke-width: 3.2; }
+      .root { fill: #fff8ea; stroke: #a42222; stroke-width: 4; }
+      .title { font-family: Arial, Helvetica, sans-serif; font-size: 52px; font-weight: 900; fill: #151515; letter-spacing: 1px; }
+      .red { fill: #a42222; }
+      .sub { font-family: Arial, Helvetica, sans-serif; font-size: 25px; font-weight: 850; fill: #151515; }
+      .label { font-family: Arial, Helvetica, sans-serif; font-size: 18px; font-weight: 800; fill: #151515; }
+      .small { font-family: Arial, Helvetica, sans-serif; font-size: 14px; font-weight: 750; fill: #151515; }
+      .tiny { font-family: Arial, Helvetica, sans-serif; font-size: 12px; font-weight: 700; fill: #151515; }
+    </style>
+    <filter id="paperNoise">
+      <feTurbulence type="fractalNoise" baseFrequency="0.75" numOctaves="3" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/>
+      <feComponentTransfer>
+        <feFuncA type="table" tableValues="0 0.075"/>
+      </feComponentTransfer>
+    </filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#a42222"/>
+    </marker>
+  </defs>
+
+  <rect width="1792" height="1024" class="bg"/>
+  <rect width="1792" height="1024" filter="url(#paperNoise)" opacity=".55"/>
+  <rect x="14" y="14" width="1764" height="996" fill="none" stroke="#151515" stroke-width="7"/>
+
+  <text x="64" y="78" class="sub">LEGADO FAMILIAR</text>
+  <text x="64" y="135" class="title">LOS <tspan class="red">SANGIOVANNI</tspan></text>
+  <text x="64" y="176" class="sub">De Santa Domenica Talao, Calabria, Italia, hacia Puerto Plata, República Dominicana</text>
+
+  <!-- Top documentary map -->
+  <path class="thin" d="M92 384 C164 302 258 303 326 382 C418 240 552 277 612 384"/>
+  <path class="ink" d="M106 430 C190 390 260 404 334 392 C430 378 518 412 612 388"/>
+  <path class="ink" d="M218 378 V330 L274 294 L330 330 V378"/>
+  <path class="thin" d="M250 378 V350 H288 V378 M160 382 V345 M390 394 V352 M462 394 V360"/>
+  <rect x="112" y="424" width="260" height="74" rx="8" fill="#f7f2e8" stroke="#151515" stroke-width="4"/>
+  <text x="136" y="454" class="label">SANTA DOMENICA</text>
+  <text x="202" y="482" class="label">TALAO</text>
+
+  <!-- Italy / Calabria sketch -->
+  <path class="ink" d="M710 190 C756 152 808 165 829 210 C866 203 914 226 912 274 C948 290 964 334 930 372 C955 418 925 468 872 464 C846 505 782 500 760 456 C712 456 674 416 690 372 C648 344 656 286 704 270 C684 238 690 210 710 190"/>
+  <path class="thin" d="M744 188 C766 252 748 303 710 354 C765 360 817 332 840 288 C842 355 884 398 924 412"/>
+  <circle cx="844" cy="334" r="12" fill="#a42222"/>
+  <text x="772" y="526" class="label">Calabria</text>
+
+  <!-- Atlantic route -->
+  <path class="route" d="M858 346 C1012 282 1112 300 1226 380 S1432 486 1570 410" marker-end="url(#arrow)"/>
+  <text x="1036" y="288" class="sub">Ruta de migración</text>
+  <text x="1070" y="324" class="small">Domenico + María Rosa, con Paolo y Vincenzo</text>
+  <path class="ink" d="M1350 448 H1600 L1532 522 H1424 Z"/>
+  <path class="ink" d="M1480 448 V264"/>
+  <path class="ink" d="M1494 282 C1570 320 1606 382 1618 438 H1494 Z"/>
+  <path class="ink" d="M1460 300 C1396 334 1365 386 1358 438 H1460 Z"/>
+  <path class="thin" d="M1280 550 C1378 498 1464 604 1564 548 S1690 510 1740 558"/>
+  <text x="1380" y="594" class="sub red">Puerto Plata</text>
+
+  <path class="thin" d="M114 238 C174 206 250 218 304 252 M138 268 C206 236 270 250 328 288"/>
+  <path class="thin" d="M1618 220 C1662 196 1710 206 1740 240 M1630 254 C1680 236 1720 248 1752 282"/>
+
+  <!-- Divider -->
+  <path class="ink" d="M50 620 H1742"/>
+  <text x="64" y="664" class="sub">ÁRBOL GENEALÓGICO REAL DISPONIBLE EN HERENCIARD</text>
+
+  <!-- Family tree -->
+  <rect x="712" y="690" width="366" height="58" rx="12" class="root"/>
+  <text x="746" y="715" class="label">Domenico (Domingo) Sangiovanni</text>
+  <text x="786" y="740" class="small">+ María Rosa Grisolía</text>
+
+  <path class="ink" d="M895 748 V786 M895 786 H326 M895 786 H895 M895 786 H1464"/>
+
+  <rect x="150" y="802" width="352" height="54" rx="10" class="node"/>
+  <text x="190" y="825" class="label">María Magdalena Sangiovanni</text>
+  <text x="224" y="848" class="tiny">queda en Santa Domenica · madre de Alessandro</text>
+
+  <rect x="720" y="802" width="350" height="54" rx="10" class="node"/>
+  <text x="758" y="825" class="label">Vincenzo (Vicente) Sangiovanni</text>
+  <text x="792" y="848" class="tiny">rama dominicana · Puerto Plata</text>
+
+  <rect x="1296" y="802" width="336" height="54" rx="10" class="node"/>
+  <text x="1334" y="825" class="label">Paolo (Paulino) Sangiovanni</text>
+  <text x="1398" y="848" class="tiny">rama dominicana · Puerto Plata</text>
+
+  <path class="ink" d="M326 856 V892 M326 892 H326"/>
+  <rect x="188" y="904" width="276" height="48" rx="9" class="node"/>
+  <text x="214" y="933" class="small">Alessandro de Paola Sangiovanni</text>
+
+  <path class="ink" d="M895 856 V882 M895 882 H650 M895 882 H1140"/>
+  <rect x="502" y="900" width="296" height="48" rx="9" class="node"/>
+  <text x="530" y="920" class="small">María Rosa Sangiovanni Pérez</text>
+  <text x="570" y="940" class="tiny">Víctor Manuel · Rosa Julia · Perla Rosa</text>
+
+  <rect x="990" y="900" width="300" height="48" rx="9" class="node"/>
+  <text x="1015" y="920" class="small">Domingo Ramón Sangiovanni Pérez</text>
+  <text x="1038" y="940" class="tiny">María Amparo · José Vicente · Jocelyn · Mayra</text>
+
+  <path class="ink" d="M1464 856 V892"/>
+  <rect x="1328" y="904" width="272" height="48" rx="9" class="node"/>
+  <text x="1354" y="933" class="small">Pedro Pablo Sangiovanni Simo</text>
+
+  <text x="64" y="982" class="sub">Una rama queda en Italia. Otra cruza el océano. El legado continúa.</text>
+
+  <!-- Marker hand cue -->
+  <g transform="translate(1602 268) rotate(-18)">
+    <rect x="0" y="0" width="42" height="184" rx="20" fill="#151515"/>
+    <ellipse cx="18" cy="188" rx="58" ry="28" fill="#d8b18e" stroke="#151515" stroke-width="2"/>
+    <ellipse cx="-5" cy="52" rx="24" ry="14" fill="#f7f2e8" stroke="#151515" stroke-width="2"/>
+  </g>
+</svg>

@@ -11,6 +11,7 @@ export const siennaQueryKeys = {
   settings: ['app-settings'] as const,
   snapshot: ['sienna-calculation-snapshot-latest'] as const,
   workspace: (includeMedia = false) => ['sienna-workspace', { includeMedia }] as const,
+  storybook: (includeMedia = false) => ['sienna-storybook', { includeMedia }] as const,
   calculation: (estateAmount?: number | string, lawyerFeePercentage?: number | string) =>
     ['sienna-calculation', { estateAmount, lawyerFeePercentage }] as const,
   analysisSummary: ['sienna-analysis-summary'] as const,
@@ -55,6 +56,13 @@ export const useSiennaWorkspace = (includeMedia = false) =>
     staleTime: SIENNA_STALE_MS,
   });
 
+export const useSiennaStorybook = (includeMedia = true) =>
+  useQuery({
+    queryKey: siennaQueryKeys.storybook(includeMedia),
+    queryFn: () => api.getSiennaStorybook({ includeMedia }),
+    staleTime: SIENNA_STALE_MS,
+  });
+
 export const useSiennaCalculation = (estateAmount?: number | string, lawyerFeePercentage?: number | string) =>
   useQuery({
     queryKey: siennaQueryKeys.calculation(estateAmount, lawyerFeePercentage),
@@ -92,6 +100,7 @@ export const invalidateSiennaData = (queryClient: ReturnType<typeof useQueryClie
   queryClient.invalidateQueries({ queryKey: ['app-settings'] });
   queryClient.invalidateQueries({ queryKey: ['sienna-calculation-snapshot-latest'] });
   queryClient.invalidateQueries({ queryKey: ['sienna-workspace'] });
+  queryClient.invalidateQueries({ queryKey: ['sienna-storybook'] });
   queryClient.invalidateQueries({ queryKey: ['sienna-calculation'] });
   queryClient.invalidateQueries({ queryKey: ['sienna-analysis-summary'] });
   queryClient.invalidateQueries({ queryKey: ['sienna-findings'] });

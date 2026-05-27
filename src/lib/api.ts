@@ -294,6 +294,49 @@ export interface SiennaFamilyMember {
   updated_at?: string | null;
 }
 
+export type SiennaStorybookTone = 'origin' | 'migration' | 'arrival' | 'lineage' | 'memory';
+export type SiennaStorybookVisual = 'calabria' | 'migration' | 'puertoPlata' | 'familyTree' | 'legacy';
+
+export interface SiennaStorybookSlide {
+  id: string;
+  title: string;
+  text: string;
+  location: string;
+  visual: SiennaStorybookVisual;
+  durationMs: number;
+  backgroundImage: string;
+  archiveImage?: string | null;
+  archiveCaption?: string | null;
+  memberPhotos?: Array<{
+    memberId: string;
+    name: string;
+    photoData: string;
+    deceased: boolean;
+    birth?: string | null;
+    death?: string | null;
+  }>;
+  tone: SiennaStorybookTone;
+  members?: string[];
+  year?: number | string;
+  eventKind?: string;
+  assetPrompt?: string;
+}
+
+export interface SiennaStorybookResponse {
+  slides: SiennaStorybookSlide[];
+  summary: {
+    member_count: number;
+    heir_count: number;
+    document_count: number;
+    union_count: number;
+    parent_link_count: number;
+    covered_member_count: number;
+    missing_member_ids: string[];
+    generated_at: string;
+    source: string;
+  };
+}
+
 export type FamilyUnionType = "matrimonio" | "union_libre" | "otra";
 export type GenealogyConfidence = "alta" | "media" | "baja";
 export type ParentRole = "padre" | "madre" | "progenitor";
@@ -543,6 +586,8 @@ export const api = {
       settings: Record<string, string | number | boolean | SiennaCaseConfig | null>;
       snapshot: SiennaCalculationSnapshot | null;
     }>(`/api/sienna-workspace${options?.includeMedia ? "?includeMedia=1" : ""}`),
+  getSiennaStorybook: (options?: { includeMedia?: boolean }) =>
+    request<SiennaStorybookResponse>("/api/sienna-storybook" + (options?.includeMedia ? "?includeMedia=1" : "")),
   getSiennaCalculation: (options?: { estateAmount?: number | string; lawyerFeePercentage?: number | string }) => {
     const params = new URLSearchParams();
     if (options?.estateAmount !== undefined) params.set("estate_amount", String(options.estateAmount));
