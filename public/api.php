@@ -428,6 +428,9 @@ function storybook_photo_lookup(array $heirs): array {
   $byName = [];
   foreach ($heirs as $heir) {
     $photo = $heir['photo_data'] ?? null;
+    if (!$photo && !empty($heir['has_photo']) && !empty($heir['id'])) {
+      $photo = '/api/confirmed-heirs/' . rawurlencode((string)$heir['id']) . '/photo';
+    }
     if (!$photo) continue;
     if (!empty($heir['sienna_member_id'])) $byMemberId[(string)$heir['sienna_member_id']] = $photo;
     if (!empty($heir['heir_name'])) $byName[storybook_normalize($heir['heir_name'])] = $photo;
@@ -579,7 +582,7 @@ function storybook_era_intro(int $decade, array $group): string {
 function build_sienna_storybook(): array {
   $family = fetch_sienna_family_bundle();
   $members = $family['members'];
-  $heirs = fetch_confirmed_heirs(true);
+  $heirs = fetch_confirmed_heirs(false);
   $documents = fetch_evidence_documents(false);
   $memberById = storybook_member_by_id($members);
   $photoLookup = storybook_photo_lookup($heirs);
@@ -4517,6 +4520,30 @@ try {
     json_response(['heir' => $heir]);
   }
 
+  if (preg_match('#^/confirmed-heirs/([^/]+)/photo$#', $path, $m) && $method === 'GET') {
+    require_user();
+    $row = query_one(
+      'SELECT photo_data, photo_file_type FROM confirmed_heirs WHERE id = :id LIMIT 1',
+      ['id' => $m[1]]
+    );
+    $photo = trim((string)($row['photo_data'] ?? ''));
+    if ($photo === '') {
+      json_response(['message' => 'Foto no encontrada'], 404);
+    }
+    if (preg_match('#^data:([^;]+);base64,(.+)$#', $photo, $matches)) {
+      $binary = base64_decode($matches[2], true);
+      if ($binary === false) {
+        json_response(['message' => 'Foto inválida'], 500);
+      }
+      header_remove('Content-Type');
+      header('Content-Type: ' . ($matches[1] ?: ($row['photo_file_type'] ?: 'image/jpeg')));
+      header('Cache-Control: private, max-age=600');
+      echo $binary;
+      exit;
+    }
+    json_response(['message' => 'Formato de foto no soportado'], 415);
+  }
+
   if (preg_match('#^/confirmed-heirs/([^/]+)$#', $path, $m) && $method === 'PUT') {
     $user = require_user();
     require_editor($user);
@@ -4599,7 +4626,7 @@ try {
 
   if ($method === 'GET' && $path === '/sienna-storybook') {
     require_user();
-    json_response(sienna_cache_remember('storybook', [], fn() => build_sienna_storybook(), 20));
+    json_response(sienna_cache_remember('storybook', ['mediaMode' => 'urls'], fn() => build_sienna_storybook(), 20));
   }
 
   if ($method === 'GET' && $path === '/sienna-calculation') {

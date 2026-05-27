@@ -3658,6 +3658,17 @@ app.get('/api/confirmed-heirs/:id', requireAuth, async (req, res) => {
   res.json({ heir });
 });
 
+app.get('/api/confirmed-heirs/:id/photo', requireAuth, async (req, res) => {
+  const rows = await query('SELECT photo_data, photo_file_type FROM confirmed_heirs WHERE id = :id LIMIT 1', { id: req.params.id });
+  const photo = String(rows[0]?.photo_data || '').trim();
+  if (!photo) return res.status(404).json({ message: 'Foto no encontrada' });
+  const match = photo.match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) return res.status(415).json({ message: 'Formato de foto no soportado' });
+  res.setHeader('Content-Type', match[1] || rows[0]?.photo_file_type || 'image/jpeg');
+  res.setHeader('Cache-Control', 'private, max-age=600');
+  res.send(Buffer.from(match[2], 'base64'));
+});
+
 app.post('/api/confirmed-heirs/bulk-amounts', requireAuth, requireEditor, async (req, res) => {
   const items = Array.isArray(req.body?.items) ? req.body.items : [];
   for (const item of items) {
@@ -3923,9 +3934,10 @@ const buildStorybookPhotoLookup = (heirs) => {
   const byMemberId = new Map();
   const byName = new Map();
   heirs.forEach((heir) => {
-    if (!heir.photo_data) return;
-    if (heir.sienna_member_id) byMemberId.set(String(heir.sienna_member_id), heir.photo_data);
-    if (heir.heir_name) byName.set(storybookNormalize(heir.heir_name), heir.photo_data);
+    const photo = heir.photo_data || (heir.has_photo && heir.id ? '/api/confirmed-heirs/' + encodeURIComponent(String(heir.id)) + '/photo' : null);
+    if (!photo) return;
+    if (heir.sienna_member_id) byMemberId.set(String(heir.sienna_member_id), photo);
+    if (heir.heir_name) byName.set(storybookNormalize(heir.heir_name), photo);
   });
   return { byMemberId, byName };
 };
@@ -4272,10 +4284,9 @@ function buildSiennaStorybookSlides({ family, heirs, documents }) {
 }
 
 app.get('/api/sienna-storybook', requireAuth, async (req, res) => {
-  const includeMedia = req.query.includeMedia === '1';
-  const response = await getCachedSiennaResponse('storybook', { includeMedia }, async () => {
+  const response = await getCachedSiennaResponse('storybook', { mediaMode: 'urls' }, async () => {
     const family = await loadSiennaFamilyBundle();
-    const heirs = await loadConfirmedHeirs(includeMedia);
+    const heirs = await loadConfirmedHeirs(false);
     const documents = await loadEvidenceDocuments(false);
     return buildSiennaStorybookSlides({ family, heirs, documents });
   });
