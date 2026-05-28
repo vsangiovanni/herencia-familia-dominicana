@@ -3934,16 +3934,74 @@ const storybookMemberImportance = (member) => {
   return '';
 };
 
+const storybookVariantIndex = (seed, total) => {
+  const normalized = storybookNormalize(seed || '');
+  let hash = 0;
+  for (let index = 0; index < normalized.length; index += 1) {
+    hash = (hash * 31 + normalized.charCodeAt(index)) >>> 0;
+  }
+  return total ? hash % total : 0;
+};
+
+const storybookDatedMemberSentence = (member, year, lineage) => {
+  const name = member.name || 'esta persona';
+  const variants = [
+    'En ' + year + ', ' + name + ' se suma al camino familiar, ' + lineage + ', y su nombre queda como una voz propia dentro de esta rama',
+    'El ano ' + year + ' trae a ' + name + ' a la memoria de la familia, ' + lineage + ', agregando presencia y continuidad al relato compartido',
+    'Para ' + year + ', la familia ya guarda el nombre de ' + name + ', ' + lineage + ', como parte de esos hilos que hacen reconocible cada generacion',
+    name + ' aparece en la cronologia familiar en ' + year + ', ' + lineage + ', recordando que la historia tambien se construye con presencias cercanas y nombres queridos',
+    'En ' + year + ' se incorpora ' + name + ', ' + lineage + ', y con esa presencia la rama familiar gana otro rostro dentro del recuerdo comun',
+    'La memoria familiar conserva a ' + name + ' desde ' + year + ', ' + lineage + ', como una senal de continuidad entre hogares, afectos y generaciones',
+    'Al llegar ' + year + ', ' + name + ' queda unido a esta rama, ' + lineage + ', y su presencia ayuda a reconocer mejor el mapa afectivo de la familia',
+    year + ' deja en el recorrido familiar el nombre de ' + name + ', ' + lineage + ', como parte de una continuidad hecha de hogares, parentescos y recuerdos',
+    'Dentro de la linea familiar, ' + name + ' encuentra su lugar en ' + year + ', ' + lineage + ', sumando un matiz propio a la memoria que se cuenta',
+    'La cronologia familiar mira hacia ' + year + ' para nombrar a ' + name + ', ' + lineage + ', y darle espacio dentro de esta historia compartida',
+    'Con ' + name + ', nacido en ' + year + ', la rama familiar muestra otro punto de union, ' + lineage + ', dentro de una memoria que sigue tomando forma',
+    'El nombre de ' + name + ' queda asociado a ' + year + ', ' + lineage + ', como una presencia que acerca generaciones y completa parte del recorrido',
+    'En la memoria de ' + year + ' aparece ' + name + ', ' + lineage + ', aportando otro rostro al conjunto de vinculos que sostienen esta familia',
+    year + ' tambien pertenece a ' + name + ' dentro de este relato, ' + lineage + ', porque cada generacion se entiende mejor cuando se nombran sus personas',
+    'La familia reconoce en ' + name + ', desde ' + year + ', ' + lineage + ', una presencia que ayuda a ordenar afectos, ramas y continuidad',
+    'Cuando el recorrido llega a ' + year + ', surge el nombre de ' + name + ', ' + lineage + ', como parte de esas vidas que dan textura humana al arbol familiar',
+    name + ' entra en esta memoria con el ano ' + year + ', ' + lineage + ', y su lugar ayuda a que la rama no se cuente de manera incompleta',
+    'El relato familiar reserva para ' + name + ' el ano ' + year + ', ' + lineage + ', dejando claro que su nombre tambien sostiene esta continuidad',
+    'En torno a ' + year + ', ' + name + ' queda presente en el camino de la familia, ' + lineage + ', como un vinculo mas dentro de la historia que se conserva',
+    'La linea familiar avanza hasta ' + year + ' y encuentra a ' + name + ', ' + lineage + ', una presencia que merece ser nombrada con su propio lugar',
+  ];
+  return variants[storybookVariantIndex(member.id || name, variants.length)];
+};
+
+const storybookUndatedMemberSentence = (member, lineage) => {
+  const name = member.name || 'esta persona';
+  const variants = [
+    'En esta rama tambien se conserva el nombre de ' + name + ', ' + lineage + ', porque no toda presencia familiar necesita una fecha para sentirse importante',
+    name + ' permanece dentro del tejido familiar, ' + lineage + ', como uno de esos nombres que ayudan a entender de donde vienen las conexiones',
+    'La familia tambien guarda a ' + name + ', ' + lineage + ', dentro de esas memorias que completan hogares, vinculos y recorridos',
+    'Aunque el tiempo no siempre deja todos los detalles, ' + name + ' sigue presente en la memoria familiar, ' + lineage + ', ocupando su lugar en esta rama',
+    'El recorrido no estaria completo sin mencionar a ' + name + ', ' + lineage + ', una presencia que ayuda a darle forma humana al arbol familiar',
+    'El nombre de ' + name + ' se mantiene unido a esta rama, ' + lineage + ', como parte de los vinculos que la memoria familiar no debe dejar fuera',
+    name + ' aparece como una presencia necesaria dentro del arbol, ' + lineage + ', ayudando a que la familia pueda mirarse con mas claridad',
+    'La memoria familiar abre espacio para ' + name + ', ' + lineage + ', no por una fecha precisa, sino por el lugar que ocupa dentro de esta conexion',
+    'Tambien esta ' + name + ', ' + lineage + ', una de esas presencias que completan el recorrido cuando se mira la familia con atencion',
+    'En el conjunto de esta rama, ' + name + ' conserva su sitio, ' + lineage + ', como parte de la union que sostiene el relato familiar',
+    'Nombrar a ' + name + ' ayuda a cerrar mejor esta parte del camino, ' + lineage + ', porque cada vinculo suma sentido al mapa familiar',
+    'La historia familiar incluye a ' + name + ', ' + lineage + ', como una presencia que mantiene viva la continuidad entre nombres y hogares',
+    'Sin convertirlo en dato frio, el nombre de ' + name + ' queda aqui, ' + lineage + ', dentro de la memoria que la familia sigue ordenando',
+    name + ' tambien pertenece a este recorrido, ' + lineage + ', y su mencion ayuda a que la rama conserve una forma mas completa y humana',
+    'Entre los nombres que sostienen esta parte del arbol aparece ' + name + ', ' + lineage + ', como un vinculo que merece permanecer visible',
+  ];
+  return variants[storybookVariantIndex(member.id || name, variants.length)];
+};
+
 const storybookMemberSentence = (member, parentsByChildId, memberById, mode = 'dated') => {
   const year = extractStorybookYear(member.birth);
   const lineage = describeMemberLineage(member, parentsByChildId, memberById);
   const deathYear = extractStorybookYear(member.death);
   const importanceText = storybookMemberImportance(member);
   const birthText = year
-    ? 'En ' + year + ' llega ' + member.name + ', ' + lineage + ', y con esa vida nueva la historia familiar abre otra pagina'
+    ? storybookDatedMemberSentence(member, year, lineage)
     : mode === 'undated'
-      ? 'En esta rama tambien vive el nombre de ' + member.name + ', ' + lineage + ', como parte de las memorias que la familia conserva'
-      : member.name + ' forma parte de esta memoria familiar, ' + lineage + ', ayudando a completar el recorrido del linaje';
+      ? storybookUndatedMemberSentence(member, lineage)
+      : storybookUndatedMemberSentence(member, lineage);
   return birthText + '.'
     + (deathYear ? ' Su recuerdo tambien permanece unido al ano ' + deathYear + '.' : '')
     + (importanceText ? ' ' + importanceText : '');
@@ -4064,7 +4122,7 @@ const storybookEraTitle = (yearStart, yearEnd, group) => {
 };
 
 const storybookEraIntro = (yearStart, yearEnd, group) => {
-  if (yearStart === yearEnd && group.length === 1) return 'La historia se detiene un momento en ' + yearStart + ', cuando una nueva vida abre otra pagina del camino familiar. ';
+  if (yearStart === yearEnd && group.length === 1) return 'La historia se acerca por un momento a ' + yearStart + ', para mirar con mas calma una presencia concreta dentro del camino familiar. ';
   if (yearStart < 1929) {
     return 'Antes de que la memoria se multiplicara en nuevas ciudades, estos nombres ayudan a sostener el puente entre las raices italianas y la vida que comenzaba a abrirse en America. ';
   }
@@ -4080,7 +4138,7 @@ const storybookEraIntro = (yearStart, yearEnd, group) => {
   if (yearStart < 1980) {
     return 'En los anos setenta, la memoria familiar ya no vive solo en los recuerdos de los mayores. Empieza a caminar en una generacion que recibe nombres, costumbres y relatos para llevarlos hacia adelante. ';
   }
-  if (yearStart === yearEnd) return 'En ' + yearStart + ', otra vida llega a esta historia que sigue creciendo. ';
+  if (yearStart === yearEnd) return 'En ' + yearStart + ', la memoria familiar se concentra en un nombre que merece ser contado con pausa propia. ';
   return 'Entre ' + yearStart + ' y ' + yearEnd + ', la familia sigue abriendo caminos y dejando nuevas huellas para quienes vendrian despues. ';
 };
 
@@ -4108,7 +4166,7 @@ const splitStorybookGroup = (group, maxSize = 6) => {
 
 const STORYBOOK_DECEASED_MEMBER_IDS = new Set(['domenico', 'maria-rosa-grisolia']);
 const STORYBOOK_AI_NARRATIVE_CACHE = new Map();
-const STORYBOOK_AI_NARRATIVE_PROMPT_VERSION = '2026-05-27-v4-memoria-familiar';
+const STORYBOOK_AI_NARRATIVE_PROMPT_VERSION = '2026-05-28-v6-parafrasis-sin-repeticion';
 const STORYBOOK_AI_MODEL = process.env.STORYBOOK_OPENAI_MODEL || 'gpt-5-nano';
 
 const sanitizeFamilyMemoryNarrative = (value) =>
@@ -4150,6 +4208,44 @@ const buildStorybookMemberPhotos = (members, photoLookup) =>
       death: member.death || null,
     }))
     .filter((item) => item.photoData);
+
+const storybookDocumentSortRank = (document) => {
+  const text = storybookNormalize([
+    document.title,
+    document.document_type,
+    document.primary_person,
+    document.related_heir_name,
+  ].filter(Boolean).join(' '));
+
+  if (/domenico|domingo|maria-rosa-grisolia|maria-rosa|paolo|paolino|paulino|vincenzo|vicente/.test(text)) return 10;
+  if (/alessandro/.test(text)) return 20;
+  if (/nacimiento|nascita/.test(text)) return 30;
+  if (/defuncion|defuncio|deceso|decesso|fallec/.test(text)) return 40;
+  if (/matrimonio|matrimoni/.test(text)) return 50;
+  return 90;
+};
+
+const buildStorybookDocumentThumbnails = (documents, limit = 18) =>
+  [...documents]
+    .filter((document) => document?.id)
+    .sort((a, b) => {
+      const rankDiff = storybookDocumentSortRank(a) - storybookDocumentSortRank(b);
+      if (rankDiff !== 0) return rankDiff;
+      const yearA = extractStorybookYear(a.event_date) || 9999;
+      const yearB = extractStorybookYear(b.event_date) || 9999;
+      if (yearA !== yearB) return yearA - yearB;
+      return String(a.title || '').localeCompare(String(b.title || ''), 'es');
+    })
+    .slice(0, limit)
+    .map((document) => ({
+      id: String(document.id),
+      title: document.title || document.document_type || 'Documento familiar',
+      documentType: document.document_type || null,
+      personName: document.primary_person || document.related_heir_name || document.title || null,
+      imageData: null,
+      fileType: document.file_type || null,
+      fileUrl: document.file_data ? '/api/evidence-documents/' + encodeURIComponent(String(document.id)) + '/file' : null,
+    }));
 
 const buildStorybookGenerationLookup = (members, parentLinks) => {
   const memberIds = new Set(members.map((member) => String(member.id)));
@@ -4318,17 +4414,23 @@ async function generateStorybookSlideNarrative(packet) {
           role: 'system',
           content: [
             'Eres narrador de una memoria familiar Sangiovanni.',
-            'Escribe en espanol, con tono historico, humano, elegante y cinematografico.',
-            'Usa solamente los datos del paquete. No inventes fechas, lugares, parentescos, migraciones ni fallecimientos.',
+            'Tu tarea NO es inventar una escena nueva: debes reescribir/parafrasear el texto_actual del slide, conservando exactamente el mismo concepto narrativo.',
+            'El titulo, ubicacion, periodo, tipo_evento y texto_actual son el ancla principal. El texto final debe sentirse claramente conectado con ese titulo.',
+            'Puedes mejorar ritmo, calidez y detalle humano, pero no cambies el tema de la pagina ni muevas el foco hacia otro evento.',
+            'Usa solamente los datos del paquete. No inventes fechas, lugares, parentescos, migraciones, negocios, personalidades, anecdotas ni fallecimientos.',
+            'Si el titulo dice una cosa y el texto_actual dice otra, prioriza texto_actual y manten el texto final coherente con ambos lo mejor posible.',
             'Si falta un dato, no lo menciones como ausencia tecnica. Integra a la persona por su hogar, rama o vinculo real.',
             'Evita sonar a informe. No uses frases como "los registros indican", "los registros ubican", "documentado", "evidencia", "expediente", "base de datos", "sin fecha exacta" o "no hay datos".',
+            'Evita frases repetidas o mecanicas. No uses "con esa vida nueva", "abre otra pagina" ni variaciones de esa formula.',
+            'No repitas una misma frase, apertura, cierre ni formula para referirte a miembros. Si dos slides tienen datos parecidos, cambia estructura, verbo y ritmo.',
+            'Cuando falten detalles de una persona, escribe una frase humana distinta apoyada en su nombre, rama, hogar, presencia familiar o continuidad, sin inventar hechos biograficos.',
             'Prohibido mencionar o insinuar herencia, herederos, sucesion, reparto, bienes, patrimonio, derechos legales, reclamos o cualquier tema juridico/economico.',
             'No uses la palabra "legado" como sustituto de herencia. Prefiere "memoria familiar", "recuerdo familiar", "historia familiar", "raices" o "linaje" cuando encaje naturalmente.',
             'Cuenta la escena como una voz familiar: cercana, orgullosa, natural y motivadora, como alguien narrando a sus descendientes de donde vienen.',
-            'Menciona todos los miembros del slide de forma natural, sin convertir el texto en tabla.',
+            'Menciona todos los miembros del slide de forma natural, sin convertir el texto en tabla, solo si el texto_actual ya los incluye o si pertenecen a la pagina.',
             'Si el slide habla de reconstruccion presente, conserva la idea de que Victor impulsa la investigacion, Bernardo aporta esfuerzo y apoyo, y Gina participa como apoyo familiar importante.',
             'Escribe 2 a 4 frases completas, entre 90 y 150 palabras, y termina siempre con punto.',
-            'Mantén coherencia con el texto actual si su direccion narrativa es buena.',
+            'Mantén la secuencia, significado y datos centrales del texto_actual. Debe decir lo mismo en mejores palabras, no otra historia.',
             'Devuelve solamente el texto narrativo final, sin markdown, sin titulo y sin explicaciones.',
           ].join('\n'),
         },
@@ -4717,7 +4819,7 @@ function buildSiennaStorybookSlides({ family, heirs, documents }) {
   ].filter(Boolean);
 
   if (modernPreservers.length) {
-    const text = 'Generaciones despues, algunos descendientes decidieron reconstruir la historia que el tiempo casi habia olvidado. Victor Manuel Martin Sangiovanni Rodriguez impulso la investigacion y la recuperacion historica; Bernardo Martin Lizardo Sangiovanni aporto esfuerzo y apoyo en el proceso; y Gina Mora Sangiovanni tambien formo parte importante de ese trabajo compartido y del apoyo familiar. Esta memoria no sobrevivio sola: volvio a tomar forma porque hubo manos, emociones y voluntad para unir las piezas de la historia Sangiovanni.';
+    const text = 'Generaciones despues, Victor Manuel Martin Sangiovanni Rodriguez impulso una investigacion hecha con paciencia: buscar actas, reunir documentos y ordenar datos historicos que estaban dispersos. Bernardo Martin Lizardo Sangiovanni aporto esfuerzo y apoyo en el proceso, y Gina Mora Sangiovanni tambien formo parte importante de ese trabajo compartido. La memoria Sangiovanni volvio a tomar forma porque alguien decidio buscar pruebas, nombres y piezas hasta volver a unirlas.';
     slides.push({
       id: 'puente-presente',
       title: 'El puente del presente',
@@ -4731,6 +4833,7 @@ function buildSiennaStorybookSlides({ family, heirs, documents }) {
       tone: 'memory',
       members: modernPreservers.map((member) => member.id),
       memberPhotos: buildStorybookMemberPhotos(modernPreservers, photoLookup),
+      documentThumbnails: buildStorybookDocumentThumbnails(documents),
       year: 'Presente',
       eventKind: 'reconstruccion-presente',
       assetPrompt: 'Escena cinematografica y emocional de descendientes modernos reconstruyendo una memoria familiar con documentos, fotos y recuerdos compartidos, puente entre pasado y presente.',
@@ -4773,10 +4876,10 @@ function buildSiennaStorybookSlides({ family, heirs, documents }) {
 
 app.get('/api/sienna-storybook', requireAuth, async (req, res) => {
   const aiNarrative = req.query.aiNarrative === '1';
-  const response = await getCachedSiennaResponse('storybook', { mediaMode: 'urls', aiNarrative }, async () => {
+  const response = await getCachedSiennaResponse('storybook', { mediaMode: 'urls', aiNarrative, view: 'puente-documentos-flyby-v2' }, async () => {
     const family = await loadSiennaFamilyBundle();
     const heirs = await loadConfirmedHeirs(false);
-    const documents = await loadEvidenceDocuments(false);
+    const documents = await loadEvidenceDocuments(true);
     const storybook = buildSiennaStorybookSlides({ family, heirs, documents });
     if (!aiNarrative) return sanitizeStorybookResponseNarrative(storybook);
     return sanitizeStorybookResponseNarrative(await applyAiNarrativeToStorybook(storybook, { family, heirs, documents }));
@@ -5099,6 +5202,22 @@ app.delete('/api/sienna-family-members/:id', requireAuth, requireEditor, async (
 
 app.get('/api/evidence-documents', requireAuth, async (req, res) => {
   res.json({ documents: await loadEvidenceDocuments(req.query.includeMedia === '1') });
+});
+
+app.get('/api/evidence-documents/:id/file', requireAuth, async (req, res) => {
+  const rows = await query('SELECT file_name, file_type, file_data FROM evidence_documents WHERE id = :id LIMIT 1', { id: req.params.id });
+  const document = rows[0];
+  const fileData = String(document?.file_data || '');
+  const match = fileData.match(/^data:([^;]+);base64,(.+)$/);
+  if (!document || !match) {
+    return res.status(404).json({ message: 'Archivo no encontrado' });
+  }
+
+  const filename = String(document.file_name || req.params.id || 'documento').replace(/[\r\n"]/g, '');
+  res.setHeader('Content-Type', match[1] || document.file_type || 'application/octet-stream');
+  res.setHeader('Content-Disposition', 'inline; filename="' + filename + '"');
+  res.setHeader('Cache-Control', 'private, max-age=900');
+  res.send(Buffer.from(match[2], 'base64'));
 });
 
 app.get('/api/evidence-documents/:id', requireAuth, async (req, res) => {

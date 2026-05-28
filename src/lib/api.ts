@@ -325,6 +325,15 @@ export interface SiennaStorybookSlide {
     treePosition?: string | null;
     photoData?: string | null;
   }>;
+  documentThumbnails?: Array<{
+    id: string;
+    title: string;
+    documentType?: string | null;
+    personName?: string | null;
+    imageData?: string | null;
+    fileType?: string | null;
+    fileUrl?: string | null;
+  }>;
   tone: SiennaStorybookTone;
   members?: string[];
   year?: number | string;

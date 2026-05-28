@@ -488,6 +488,49 @@ function build_storybook_member_photos(array $members, array $photoLookup): arra
   return $items;
 }
 
+function storybook_document_sort_rank(array $doc): int {
+  $text = storybook_normalize(implode(' ', array_filter([
+    $doc['title'] ?? '',
+    $doc['document_type'] ?? '',
+    $doc['primary_person'] ?? '',
+    $doc['related_heir_name'] ?? '',
+  ])));
+  if (preg_match('/domenico|domingo|maria-rosa-grisolia|maria-rosa|paolo|paolino|paulino|vincenzo|vicente/', $text)) return 10;
+  if (preg_match('/alessandro/', $text)) return 20;
+  if (preg_match('/nacimiento|nascita/', $text)) return 30;
+  if (preg_match('/defuncion|defuncio|deceso|decesso|fallec/', $text)) return 40;
+  if (preg_match('/matrimonio|matrimoni/', $text)) return 50;
+  return 90;
+}
+
+function build_storybook_document_thumbnails(array $documents, int $limit = 18): array {
+  usort($documents, function ($a, $b) {
+    $rankDiff = storybook_document_sort_rank($a) <=> storybook_document_sort_rank($b);
+    if ($rankDiff !== 0) return $rankDiff;
+    $yearA = storybook_year($a['event_date'] ?? null) ?? 9999;
+    $yearB = storybook_year($b['event_date'] ?? null) ?? 9999;
+    if ($yearA !== $yearB) return $yearA <=> $yearB;
+    return strcmp((string)($a['title'] ?? ''), (string)($b['title'] ?? ''));
+  });
+  $items = [];
+  foreach ($documents as $doc) {
+    if (count($items) >= $limit) break;
+    $fileType = (string)($doc['file_type'] ?? '');
+    $fileData = (string)($doc['file_data'] ?? '');
+    if (($doc['id'] ?? '') === '') continue;
+    $items[] = [
+      'id' => (string)$doc['id'],
+      'title' => $doc['title'] ?? $doc['document_type'] ?? 'Documento familiar',
+      'documentType' => $doc['document_type'] ?? null,
+      'personName' => $doc['primary_person'] ?? $doc['related_heir_name'] ?? $doc['title'] ?? null,
+      'imageData' => null,
+      'fileType' => $doc['file_type'] ?? null,
+      'fileUrl' => $fileData !== '' ? '/api/evidence-documents/' . rawurlencode((string)$doc['id']) . '/file' : null,
+    ];
+  }
+  return $items;
+}
+
 function build_storybook_generation_lookup(array $members, array $parentLinks): array {
   $memberIds = [];
   foreach ($members as $member) $memberIds[(string)($member['id'] ?? '')] = true;
@@ -658,11 +701,9 @@ function storybook_member_sentence(array $member, array $memberById, string $mod
     $importanceText = 'Jocelyn no aparece solo como un nombre mas: su presencia recuerda la fuerza de la rama de Jose Vicente Sangiovanni Gesualdo dentro de la linea de Vincenzo/Vicente.';
   }
   if ($year) {
-    $text = 'En ' . $year . ' llega ' . ($member['name'] ?? '') . ', ' . $lineage . ', y con esa vida nueva la historia familiar abre otra pagina';
+    $text = storybook_dated_member_sentence($member, $year, $lineage);
   } else {
-    $text = $mode === 'undated'
-      ? 'En esta rama tambien vive el nombre de ' . ($member['name'] ?? '') . ', ' . $lineage . ', como parte de las memorias que la familia conserva'
-      : ($member['name'] ?? '') . ' forma parte de esta memoria familiar, ' . $lineage . ', ayudando a completar el recorrido del linaje';
+    $text = storybook_undated_member_sentence($member, $lineage);
   }
   return $text . '.' . ($deathYear ? ' Su recuerdo tambien permanece unido al ano ' . $deathYear . '.' : '') . ($importanceText ? ' ' . $importanceText : '');
 }
@@ -698,11 +739,70 @@ function storybook_memory_intro(int $index): string {
   return $intros[$index] ?? 'El libro familiar tambien guarda estas presencias, necesarias para que el recorrido no deje fuera a quienes forman parte del linaje. ';
 }
 
+function storybook_variant_index(string $seed, int $total): int {
+  $normalized = storybook_normalize($seed);
+  $hash = 0;
+  $length = strlen($normalized);
+  for ($index = 0; $index < $length; $index++) {
+    $hash = (($hash * 31) + ord($normalized[$index])) & 0x7fffffff;
+  }
+  return $total > 0 ? $hash % $total : 0;
+}
+
+function storybook_dated_member_sentence(array $member, int $year, string $lineage): string {
+  $name = (string)($member['name'] ?? 'esta persona');
+  $variants = [
+    'En ' . $year . ', ' . $name . ' se suma al camino familiar, ' . $lineage . ', y su nombre queda como una voz propia dentro de esta rama',
+    'El ano ' . $year . ' trae a ' . $name . ' a la memoria de la familia, ' . $lineage . ', agregando presencia y continuidad al relato compartido',
+    'Para ' . $year . ', la familia ya guarda el nombre de ' . $name . ', ' . $lineage . ', como parte de esos hilos que hacen reconocible cada generacion',
+    $name . ' aparece en la cronologia familiar en ' . $year . ', ' . $lineage . ', recordando que la historia tambien se construye con presencias cercanas y nombres queridos',
+    'En ' . $year . ' se incorpora ' . $name . ', ' . $lineage . ', y con esa presencia la rama familiar gana otro rostro dentro del recuerdo comun',
+    'La memoria familiar conserva a ' . $name . ' desde ' . $year . ', ' . $lineage . ', como una senal de continuidad entre hogares, afectos y generaciones',
+    'Al llegar ' . $year . ', ' . $name . ' queda unido a esta rama, ' . $lineage . ', y su presencia ayuda a reconocer mejor el mapa afectivo de la familia',
+    $year . ' deja en el recorrido familiar el nombre de ' . $name . ', ' . $lineage . ', como parte de una continuidad hecha de hogares, parentescos y recuerdos',
+    'Dentro de la linea familiar, ' . $name . ' encuentra su lugar en ' . $year . ', ' . $lineage . ', sumando un matiz propio a la memoria que se cuenta',
+    'La cronologia familiar mira hacia ' . $year . ' para nombrar a ' . $name . ', ' . $lineage . ', y darle espacio dentro de esta historia compartida',
+    'Con ' . $name . ', nacido en ' . $year . ', la rama familiar muestra otro punto de union, ' . $lineage . ', dentro de una memoria que sigue tomando forma',
+    'El nombre de ' . $name . ' queda asociado a ' . $year . ', ' . $lineage . ', como una presencia que acerca generaciones y completa parte del recorrido',
+    'En la memoria de ' . $year . ' aparece ' . $name . ', ' . $lineage . ', aportando otro rostro al conjunto de vinculos que sostienen esta familia',
+    $year . ' tambien pertenece a ' . $name . ' dentro de este relato, ' . $lineage . ', porque cada generacion se entiende mejor cuando se nombran sus personas',
+    'La familia reconoce en ' . $name . ', desde ' . $year . ', ' . $lineage . ', una presencia que ayuda a ordenar afectos, ramas y continuidad',
+    'Cuando el recorrido llega a ' . $year . ', surge el nombre de ' . $name . ', ' . $lineage . ', como parte de esas vidas que dan textura humana al arbol familiar',
+    $name . ' entra en esta memoria con el ano ' . $year . ', ' . $lineage . ', y su lugar ayuda a que la rama no se cuente de manera incompleta',
+    'El relato familiar reserva para ' . $name . ' el ano ' . $year . ', ' . $lineage . ', dejando claro que su nombre tambien sostiene esta continuidad',
+    'En torno a ' . $year . ', ' . $name . ' queda presente en el camino de la familia, ' . $lineage . ', como un vinculo mas dentro de la historia que se conserva',
+    'La linea familiar avanza hasta ' . $year . ' y encuentra a ' . $name . ', ' . $lineage . ', una presencia que merece ser nombrada con su propio lugar',
+  ];
+  return $variants[storybook_variant_index((string)($member['id'] ?? $name), count($variants))];
+}
+
+function storybook_undated_member_sentence(array $member, string $lineage): string {
+  $name = (string)($member['name'] ?? 'esta persona');
+  $variants = [
+    'En esta rama tambien se conserva el nombre de ' . $name . ', ' . $lineage . ', porque no toda presencia familiar necesita una fecha para sentirse importante',
+    $name . ' permanece dentro del tejido familiar, ' . $lineage . ', como uno de esos nombres que ayudan a entender de donde vienen las conexiones',
+    'La familia tambien guarda a ' . $name . ', ' . $lineage . ', dentro de esas memorias que completan hogares, vinculos y recorridos',
+    'Aunque el tiempo no siempre deja todos los detalles, ' . $name . ' sigue presente en la memoria familiar, ' . $lineage . ', ocupando su lugar en esta rama',
+    'El recorrido no estaria completo sin mencionar a ' . $name . ', ' . $lineage . ', una presencia que ayuda a darle forma humana al arbol familiar',
+    'El nombre de ' . $name . ' se mantiene unido a esta rama, ' . $lineage . ', como parte de los vinculos que la memoria familiar no debe dejar fuera',
+    $name . ' aparece como una presencia necesaria dentro del arbol, ' . $lineage . ', ayudando a que la familia pueda mirarse con mas claridad',
+    'La memoria familiar abre espacio para ' . $name . ', ' . $lineage . ', no por una fecha precisa, sino por el lugar que ocupa dentro de esta conexion',
+    'Tambien esta ' . $name . ', ' . $lineage . ', una de esas presencias que completan el recorrido cuando se mira la familia con atencion',
+    'En el conjunto de esta rama, ' . $name . ' conserva su sitio, ' . $lineage . ', como parte de la union que sostiene el relato familiar',
+    'Nombrar a ' . $name . ' ayuda a cerrar mejor esta parte del camino, ' . $lineage . ', porque cada vinculo suma sentido al mapa familiar',
+    'La historia familiar incluye a ' . $name . ', ' . $lineage . ', como una presencia que mantiene viva la continuidad entre nombres y hogares',
+    'Sin convertirlo en dato frio, el nombre de ' . $name . ' queda aqui, ' . $lineage . ', dentro de la memoria que la familia sigue ordenando',
+    $name . ' tambien pertenece a este recorrido, ' . $lineage . ', y su mencion ayuda a que la rama conserve una forma mas completa y humana',
+    'Entre los nombres que sostienen esta parte del arbol aparece ' . $name . ', ' . $lineage . ', como un vinculo que merece permanecer visible',
+  ];
+  return $variants[storybook_variant_index((string)($member['id'] ?? $name), count($variants))];
+}
+
 function build_sienna_storybook(): array {
   $family = fetch_sienna_family_bundle();
   $members = $family['members'];
   $heirs = fetch_confirmed_heirs(false);
-  $documents = fetch_evidence_documents(false);
+  $documents = fetch_evidence_documents(true);
   $memberById = storybook_member_by_id($members);
   $memberByName = [];
   foreach ($members as $member) {
@@ -768,8 +868,8 @@ function build_sienna_storybook(): array {
     $memberByName[storybook_normalize('Gina Mora Sangiovanni')] ?? null,
   ]));
   if (count($modernPreservers) > 0) {
-    $text = 'Generaciones despues, algunos descendientes decidieron reconstruir la historia que el tiempo casi habia olvidado. Victor Manuel Martin Sangiovanni Rodriguez impulso la investigacion y la recuperacion historica; Bernardo Martin Lizardo Sangiovanni aporto esfuerzo y apoyo en el proceso; y Gina Mora Sangiovanni tambien formo parte importante de ese trabajo compartido y del apoyo familiar. Esta memoria no sobrevivio sola: volvio a tomar forma porque hubo manos, emociones y voluntad para unir las piezas de la historia Sangiovanni.';
-    $slides[] = ['id' => 'puente-presente', 'title' => 'El puente del presente', 'year' => 'Presente', 'location' => 'Memoria familiar actual', 'tone' => 'memory', 'visual' => 'familyTree', 'backgroundImage' => $bg['memory2'], 'text' => $text, 'members' => array_column($modernPreservers, 'id'), 'memberPhotos' => build_storybook_member_photos($modernPreservers, $photoLookup)];
+    $text = 'Generaciones despues, Victor Manuel Martin Sangiovanni Rodriguez impulso una investigacion hecha con paciencia: buscar actas, reunir documentos y ordenar datos historicos que estaban dispersos. Bernardo Martin Lizardo Sangiovanni aporto esfuerzo y apoyo en el proceso, y Gina Mora Sangiovanni tambien formo parte importante de ese trabajo compartido. La memoria Sangiovanni volvio a tomar forma porque alguien decidio buscar pruebas, nombres y piezas hasta volver a unirlas.';
+    $slides[] = ['id' => 'puente-presente', 'title' => 'El puente del presente', 'year' => 'Presente', 'location' => 'Memoria familiar actual', 'tone' => 'memory', 'visual' => 'familyTree', 'backgroundImage' => $bg['memory2'], 'text' => $text, 'members' => array_column($modernPreservers, 'id'), 'memberPhotos' => build_storybook_member_photos($modernPreservers, $photoLookup), 'documentThumbnails' => build_storybook_document_thumbnails($documents)];
   }
 
   $photoMembers = array_values(array_filter($members, fn($m) => resolve_storybook_photo($m, $photoLookup)));
@@ -941,13 +1041,19 @@ function apply_ai_narrative_to_storybook(array $storybook): array {
         'role' => 'system',
         'content' => implode("\n", [
           'Eres narrador de una memoria familiar Sangiovanni.',
-          'Reescribe cada slide en espanol con tono historico, humano, elegante, cinematografico y natural.',
-          'Usa solamente los datos de cada slide. No inventes fechas, lugares, parentescos, negocios ni fallecimientos.',
+          'Tu tarea NO es inventar una escena nueva: debes reescribir/parafrasear el texto_actual de cada slide, conservando exactamente el mismo concepto narrativo.',
+          'El titulo, ubicacion, periodo, tono y texto_actual son el ancla principal. El texto final debe sentirse claramente conectado con ese titulo.',
+          'Puedes mejorar ritmo, calidez y detalle humano, pero no cambies el tema de la pagina ni muevas el foco hacia otro evento.',
+          'Usa solamente los datos de cada slide. No inventes fechas, lugares, parentescos, migraciones, negocios, personalidades, anecdotas ni fallecimientos.',
+          'Si el titulo dice una cosa y el texto_actual dice otra, prioriza texto_actual y manten el texto final coherente con ambos lo mejor posible.',
           'Evita sonar a informe. No uses frases como "los registros indican", "documentado", "expediente", "base de datos", "sin fecha exacta" o "no hay datos".',
+          'Evita frases repetidas o mecanicas. No uses "con esa vida nueva", "abre otra pagina" ni variaciones de esa formula.',
+          'No repitas una misma frase, apertura, cierre ni formula para referirte a miembros. Si dos slides tienen datos parecidos, cambia estructura, verbo y ritmo.',
+          'Cuando falten detalles de una persona, escribe una frase humana distinta apoyada en su nombre, rama, hogar, presencia familiar o continuidad, sin inventar hechos biograficos.',
           'Prohibido mencionar o insinuar herencia, herederos, sucesion, reparto, bienes, patrimonio, derechos legales, reclamos o cualquier tema juridico/economico.',
           'No uses la palabra "legado". Usa memoria familiar, recuerdo familiar, historia familiar, raices o union familiar.',
           'Cuenta como una voz familiar orgullosa y motivadora, como alguien narrando a sus descendientes de donde vienen.',
-          'Mantén los nombres importantes y el sentido historico del texto actual.',
+          'Mantén la secuencia, significado, nombres importantes y datos centrales del texto_actual. Debe decir lo mismo en mejores palabras, no otra historia.',
           'Cada texto debe tener 2 a 4 frases, entre 70 y 135 palabras, y terminar con punto.',
           'Devuelve solo JSON valido con esta forma: {"slides":[{"id":"...","text":"..."}]}.',
         ]),
@@ -5009,7 +5115,7 @@ try {
       'mediaMode' => 'urls',
       'aiNarrative' => $aiNarrative ? '1' : '0',
       'model' => env_value('OPENAI_MODEL') ?: sienna_ai_default_model(),
-      'prompt' => '2026-05-27-php-v1',
+      'prompt' => '2026-05-28-php-v5-puente-documentos-flyby',
     ], function () use ($aiNarrative) {
       $storybook = build_sienna_storybook();
       return sanitize_storybook_response_narrative($aiNarrative ? apply_ai_narrative_to_storybook($storybook) : $storybook);
@@ -5322,6 +5428,21 @@ try {
   if ($method === 'GET' && $path === '/evidence-documents') {
     require_user();
     json_response(['documents' => fetch_evidence_documents(wants_media())]);
+  }
+
+  if (preg_match('#^/evidence-documents/([^/]+)/file$#', $path, $m) && $method === 'GET') {
+    require_user();
+    $doc = query_one('SELECT file_name, file_type, file_data FROM evidence_documents WHERE id = :id LIMIT 1', ['id' => $m[1]]);
+    $fileData = (string)($doc['file_data'] ?? '');
+    if (!$doc || !preg_match('/^data:([^;]+);base64,(.+)$/', $fileData, $matches)) {
+      json_response(['message' => 'Archivo no encontrado'], 404);
+    }
+    header_remove('Content-Type');
+    header('Content-Type: ' . ($matches[1] ?: ($doc['file_type'] ?: 'application/octet-stream')));
+    header('Content-Disposition: inline; filename="' . str_replace(['"', "\r", "\n"], '', (string)($doc['file_name'] ?? $m[1] ?? 'documento')) . '"');
+    header('Cache-Control: private, max-age=900');
+    echo base64_decode($matches[2]);
+    exit;
   }
 
   if (preg_match('#^/evidence-documents/([^/]+)$#', $path, $m) && $method === 'GET') {

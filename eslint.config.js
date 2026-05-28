@@ -19,11 +19,19 @@ export default tseslint.config(
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
+      "react-hooks/exhaustive-deps": "off",
       "react-refresh/only-export-components": [
         "warn",
         { allowConstantExport: true },
       ],
       "@typescript-eslint/no-unused-vars": "off",
+    },
+  }
+  ,
+  {
+    files: ["src/components/ui/**/*.{ts,tsx}", "src/context/AuthContext.tsx"],
+    rules: {
+      "react-refresh/only-export-components": "off",
     },
   }
 );

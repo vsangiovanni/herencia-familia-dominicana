@@ -119,6 +119,87 @@ const MemberPhotoCollage = ({ photos }: { photos: NonNullable<LegadoStoryScene['
   );
 };
 
+const DocumentCardFallback = () => (
+  <div className="flex h-full w-full flex-col justify-between bg-[#efe4ce] p-2 text-[#1e1710]">
+    <div className="space-y-1">
+      <div className="h-1.5 w-8 rounded-full bg-[#8b5e34]/45" />
+      <div className="h-1.5 w-10 rounded-full bg-[#8b5e34]/30" />
+    </div>
+    <div className="space-y-1">
+      <div className="h-px w-full bg-[#8b5e34]/28" />
+      <div className="h-px w-4/5 bg-[#8b5e34]/24" />
+      <div className="h-px w-3/5 bg-[#8b5e34]/20" />
+    </div>
+    <div className="text-center font-serif text-[0.72rem] font-black uppercase tracking-[0.08em] text-[#8b5e34]/80">
+      Acta
+    </div>
+  </div>
+);
+
+const DocumentThumbnailCarousel = ({ documents }: { documents: NonNullable<LegadoStoryScene['documentThumbnails']> }) => {
+  const visibleDocuments = documents.slice(0, 18);
+  if (!visibleDocuments.length) return null;
+
+  const trackClassName = 'legacy-document-carousel flex gap-3';
+  const formatDocumentType = (value?: string | null) => {
+    const normalized = (value || '').toLowerCase();
+    if (normalized.includes('nacimiento') || normalized.includes('nascita')) return 'Nacimiento';
+    if (normalized.includes('defunc') || normalized.includes('deceso') || normalized.includes('decesso')) return 'Defuncion';
+    if (normalized.includes('matrimonio')) return 'Matrimonio';
+    return value || 'Documento';
+  };
+
+  return (
+    <motion.div
+      className="pointer-events-none absolute bottom-[3.8rem] left-0 right-0 z-40 h-[8.6rem] overflow-hidden md:bottom-[4rem] md:h-[10.5rem]"
+      initial={{ opacity: 0, filter: 'blur(5px)' }}
+      animate={{ opacity: 1, filter: 'blur(0px)' }}
+      transition={{ duration: 0.9, delay: 0.65, ease: 'easeOut' }}
+    >
+      <div className="absolute inset-y-0 left-0 right-0 overflow-hidden [mask-image:linear-gradient(90deg,transparent_0%,black_12%,black_88%,transparent_100%)]">
+        <div className={trackClassName}>
+          {visibleDocuments.map((document, index) => (
+            <div
+              key={document.id + '-' + index}
+              className="w-[4.8rem] shrink-0 overflow-hidden rounded-sm bg-[#f7ead0]/92 shadow-[0_14px_34px_rgba(0,0,0,0.42)] md:w-[6.2rem]"
+            >
+              <div className="aspect-[3/4] bg-[#e7dcc9]">
+                {document.fileType?.startsWith('application/pdf') && document.fileUrl ? (
+                  <object
+                    data={document.fileUrl + '#page=1&toolbar=0&navpanes=0&scrollbar=0&view=FitH'}
+                    type="application/pdf"
+                    aria-label={document.title}
+                    className="h-full w-full bg-[#efe4ce]"
+                  >
+                    <DocumentCardFallback />
+                  </object>
+                ) : document.fileUrl || document.imageData ? (
+                  <img
+                    src={document.fileUrl || document.imageData || ''}
+                    alt={document.title}
+                    className="h-full w-full object-cover sepia-[0.12] contrast-[1.02] saturate-[0.86]"
+                    draggable={false}
+                  />
+                ) : (
+                  <DocumentCardFallback />
+                )}
+              </div>
+              <div className="bg-[#120d08]/92 px-1.5 py-1">
+                <p className="truncate text-[0.5rem] font-black uppercase tracking-normal text-[#fff7e6] md:text-[0.58rem]">
+                  {document.personName || document.title}
+                </p>
+                <p className="truncate text-[0.48rem] font-semibold text-[#f8e5bd]/70 md:text-[0.54rem]">
+                  {formatDocumentType(document.documentType)}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
 const LineageThread = ({ scene }: { scene: LegadoStoryScene }) => {
   if (scene.memberPhotos?.length) return null;
 
@@ -294,6 +375,7 @@ const LegacyCredits = ({
           </p>
           {members.map((member, index) => {
             const isImportant = member.memberId === 'alessandro' || member.memberId === 'jocelyn';
+            const photoEntryX = index % 2 === 0 ? '-48vw' : '48vw';
             return (
             <motion.div
               key={member.memberId + '-' + index}
@@ -305,9 +387,9 @@ const LegacyCredits = ({
               {member.photoData ? (
                 <motion.div
                   className={`h-11 w-11 shrink-0 overflow-hidden rounded-full border-2 bg-[#f7ead0] shadow-[0_10px_26px_rgba(0,0,0,0.42)] md:h-16 md:w-16 ${isImportant ? 'border-[#fff7e6] ring-2 ring-[#f8e5bd]/80' : 'border-[#f8e5bd]/78'}`}
-                  initial={{ opacity: 0, x: -44, scale: 0.82, filter: 'blur(4px)' }}
+                  initial={{ opacity: 0, x: photoEntryX, scale: 0.82, filter: 'blur(4px)' }}
                   animate={{ opacity: 1, x: 0, scale: 1, filter: 'blur(0px)' }}
-                  transition={{ duration: 0.85, delay: getCreditDockSeconds(index, durationSeconds), ease: 'easeOut' }}
+                  transition={{ duration: 1.25, delay: getCreditDockSeconds(index, durationSeconds), ease: [0.16, 1, 0.3, 1] }}
                 >
                   <img
                     src={member.photoData}
@@ -627,17 +709,17 @@ const LegadoSangiovanniGame = () => {
   };
 
   const goToPrevious = () => {
-    setPlaying(false);
+    setPlaying(true);
     setSceneIndex((current) => Math.max(0, current - 1));
   };
 
   const goToNext = () => {
-    setPlaying(false);
+    setPlaying(true);
     setSceneIndex((current) => Math.min(scenes.length - 1, current + 1));
   };
 
   const goToScene = (index: number) => {
-    setPlaying(false);
+    setPlaying(true);
     setSceneIndex(index);
     setMapOpen(false);
   };
@@ -672,6 +754,16 @@ const LegadoSangiovanniGame = () => {
 
         .legacy-credit-roll {
           animation: legacy-credit-roll var(--credit-duration) linear forwards;
+        }
+
+        @keyframes legacy-document-carousel {
+          from { transform: translateX(100vw); }
+          to { transform: translateX(-100%); }
+        }
+
+        .legacy-document-carousel {
+          width: max-content;
+          animation: legacy-document-carousel 42s linear infinite;
         }
 
         @media (min-width: 768px) {
@@ -725,6 +817,9 @@ const LegadoSangiovanniGame = () => {
             )}
             <LineageThread scene={scene} />
             <NarrativeText scene={scene} playing={playing} hideBody={showLegacyCredits} wide={!scene.memberPhotos?.length} />
+            {!showLegacyCredits && scene.id === 'puente-presente' && scene.documentThumbnails?.length ? (
+              <DocumentThumbnailCarousel documents={scene.documentThumbnails} />
+            ) : null}
             <AnimatePresence>
               {showLegacyCredits && scene.creditMembers?.length ? (
                 <LegacyCredits

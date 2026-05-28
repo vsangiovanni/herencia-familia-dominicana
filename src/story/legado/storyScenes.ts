@@ -29,6 +29,15 @@ export type LegadoStoryScene = {
     photoData?: string | null;
     importance?: string | null;
   }>;
+  documentThumbnails?: Array<{
+    id: string;
+    title: string;
+    documentType?: string | null;
+    personName?: string | null;
+    imageData?: string | null;
+    fileType?: string | null;
+    fileUrl?: string | null;
+  }>;
   tone: 'origin' | 'migration' | 'arrival' | 'lineage' | 'memory';
   members?: string[];
   year?: number | string;
