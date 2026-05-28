@@ -695,8 +695,16 @@ function storybook_member_sentence(array $member, array $memberById, string $mod
   $id = (string)($member['id'] ?? '');
   $normalizedName = storybook_normalize($member['name'] ?? '');
   $importanceText = '';
-  if ($id === 'alessandro' || $normalizedName === 'alessandro-de-paola-sangiovanni') {
-    $importanceText = 'Su nombre ocupa un lugar central en este legado: alrededor de Alessandro de Paola Sangiovanni la familia vuelve a mirar sus ramas, sus memorias y el camino que la trajo hasta aqui.';
+  if ($id === 'domenico' || str_contains($normalizedName, 'domenico-sangiovanni') || str_contains($normalizedName, 'domingo-sangiovanni')) {
+    $importanceText = 'Domenico no queda aqui como un apellido lejano: su oficio, su viaje y su presencia en Samana ayudan a entender donde empezo a tomar forma esta raiz dominicana.';
+  } elseif ($id === 'maria-rosa-grisolia' || str_contains($normalizedName, 'maria-rosa-grisolia')) {
+    $importanceText = 'Maria Rosa Grisolia sostiene una parte silenciosa del origen: junto a Domenico, su nombre mantiene unida la casa calabresa desde donde la familia mira hacia America.';
+  } elseif ($id === 'paolo' || str_contains($normalizedName, 'paolo') || str_contains($normalizedName, 'paulino')) {
+    $importanceText = 'Paolo, tambien recordado como Paulino, representa una rama que no solo echo raices: su paso por el comercio, el hielo y el cine habla de trabajo, ciudad y comunidad.';
+  } elseif ($id === 'vincenzo' || str_contains($normalizedName, 'vincenzo') || str_contains($normalizedName, 'vicente')) {
+    $importanceText = 'Vincenzo, luego recordado como Vicente, ayuda a tender el puente entre el origen italiano y las ramas dominicanas que siguieron multiplicando el apellido.';
+  } elseif ($id === 'alessandro' || $normalizedName === 'alessandro-de-paola-sangiovanni') {
+    $importanceText = 'Su nombre ocupa un lugar central en esta memoria familiar: alrededor de Alessandro de Paola Sangiovanni la familia vuelve a mirar sus ramas, sus memorias y el camino que la trajo hasta aqui.';
   } elseif ($id === 'jocelyn' || $normalizedName === 'jocelyn-del-jesus-sangiovanni-baez') {
     $importanceText = 'Jocelyn no aparece solo como un nombre mas: su presencia recuerda la fuerza de la rama de Jose Vicente Sangiovanni Gesualdo dentro de la linea de Vincenzo/Vicente.';
   }
@@ -861,6 +869,9 @@ function build_sienna_storybook(): array {
     $lines = array_map(fn($m) => storybook_member_sentence($m, $memberById, 'undated'), $chunk);
     $slides[] = ['id' => 'memoria-sin-fecha-' . ($chunkIndex + 1), 'title' => storybook_memory_title($chunkIndex), 'year' => null, 'location' => 'Archivo familiar', 'tone' => 'memory', 'visual' => 'archive', 'backgroundImage' => select_storybook_background($chunk, $placeLookup, $chunkIndex, 'registro-sin-fecha'), 'text' => storybook_memory_intro($chunkIndex) . implode(' ', $lines), 'members' => array_column($chunk, 'id'), 'memberPhotos' => build_storybook_member_photos($chunk, $photoLookup)];
   }
+
+  $whyItMattersText = 'Una familia empieza a perderse cuando sus nombres dejan de decirse. Por eso este recorrido no es solo una sucesion de fechas: es una forma de volver a mirar casas, viajes, actas, oficios y decisiones que hicieron posible que los nuestros llegaran hasta aqui. Cada documento recuperado y cada nombre colocado en su lugar evita que la memoria se vuelva silencio.';
+  $slides[] = ['id' => 'por-que-importa', 'title' => 'Por que esto importa', 'year' => null, 'location' => 'Memoria familiar', 'tone' => 'memory', 'visual' => 'familyTree', 'backgroundImage' => $bg['memory3'], 'archiveImage' => '/game/legado/archive/domenico-maria-rosa-clean.webp', 'archiveCaption' => 'Origen familiar documentado', 'text' => $whyItMattersText, 'members' => [], 'eventKind' => 'sentido-memoria'];
 
   $modernPreservers = array_values(array_filter([
     $memberById['victor-manuel-martin'] ?? $memberByName[storybook_normalize('Victor Manuel Martin Sangiovanni Rodriguez')] ?? null,
@@ -5115,7 +5126,7 @@ try {
       'mediaMode' => 'urls',
       'aiNarrative' => $aiNarrative ? '1' : '0',
       'model' => env_value('OPENAI_MODEL') ?: sienna_ai_default_model(),
-      'prompt' => '2026-05-28-php-v5-puente-documentos-flyby',
+      'prompt' => '2026-05-28-php-v6-memoria-viva',
     ], function () use ($aiNarrative) {
       $storybook = build_sienna_storybook();
       return sanitize_storybook_response_narrative($aiNarrative ? apply_ai_narrative_to_storybook($storybook) : $storybook);

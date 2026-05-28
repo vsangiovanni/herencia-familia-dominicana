@@ -3925,6 +3925,18 @@ const describeMemberLineage = (member, parentsByChildId, memberById) => {
 const storybookMemberImportance = (member) => {
   const id = String(member?.id || '');
   const normalizedName = storybookNormalize(member?.name || '');
+  if (id === 'domenico' || normalizedName.includes('domenico-sangiovanni') || normalizedName.includes('domingo-sangiovanni')) {
+    return 'Domenico no queda aqui como un apellido lejano: su oficio, su viaje y su presencia en Samana ayudan a entender donde empezo a tomar forma esta raiz dominicana.';
+  }
+  if (id === 'maria-rosa-grisolia' || normalizedName.includes('maria-rosa-grisolia')) {
+    return 'Maria Rosa Grisolia sostiene una parte silenciosa del origen: junto a Domenico, su nombre mantiene unida la casa calabresa desde donde la familia mira hacia America.';
+  }
+  if (id === 'paolo' || normalizedName.includes('paolo') || normalizedName.includes('paulino')) {
+    return 'Paolo, tambien recordado como Paulino, representa una rama que no solo echo raices: su paso por el comercio, el hielo y el cine habla de trabajo, ciudad y comunidad.';
+  }
+  if (id === 'vincenzo' || normalizedName.includes('vincenzo') || normalizedName.includes('vicente')) {
+    return 'Vincenzo, luego recordado como Vicente, ayuda a tender el puente entre el origen italiano y las ramas dominicanas que siguieron multiplicando el apellido.';
+  }
   if (id === 'alessandro' || normalizedName === 'alessandro-de-paola-sangiovanni') {
     return 'Su nombre ocupa un lugar central en esta memoria familiar: alrededor de Alessandro de Paola Sangiovanni la familia vuelve a mirar sus ramas, sus recuerdos y el camino que la trajo hasta aqui.';
   }
@@ -4812,6 +4824,23 @@ function buildSiennaStorybookSlides({ family, heirs, documents }) {
     });
   }
 
+  const whyItMattersText = 'Una familia empieza a perderse cuando sus nombres dejan de decirse. Por eso este recorrido no es solo una sucesion de fechas: es una forma de volver a mirar casas, viajes, actas, oficios y decisiones que hicieron posible que los nuestros llegaran hasta aqui. Cada documento recuperado y cada nombre colocado en su lugar evita que la memoria se vuelva silencio.';
+  slides.push({
+    id: 'por-que-importa',
+    title: 'Por que esto importa',
+    text: whyItMattersText,
+    location: 'Memoria familiar',
+    visual: 'familyTree',
+    durationMs: storybookDuration(whyItMattersText, 14500),
+    backgroundImage: STORYBOOK_BACKGROUNDS.memoryArchive3,
+    archiveImage: '/game/legado/archive/domenico-maria-rosa-clean.webp',
+    archiveCaption: 'Origen familiar documentado',
+    tone: 'memory',
+    members: [],
+    eventKind: 'sentido-memoria',
+    assetPrompt: 'Escena documental emotiva de una mesa familiar con actas antiguas, fotos, nombres escritos y luz calida, simbolizando por que recordar una familia importa.',
+  });
+
   const modernPreservers = [
     memberById.get('victor-manuel-martin') || memberByNormalizedName.get(storybookNormalize('Víctor Manuel Martín Sangiovanni Rodríguez')),
     memberByNormalizedName.get(storybookNormalize('Bernardo Martín Lizardo Sangiovanni')),
@@ -4876,7 +4905,7 @@ function buildSiennaStorybookSlides({ family, heirs, documents }) {
 
 app.get('/api/sienna-storybook', requireAuth, async (req, res) => {
   const aiNarrative = req.query.aiNarrative === '1';
-  const response = await getCachedSiennaResponse('storybook', { mediaMode: 'urls', aiNarrative, view: 'puente-documentos-flyby-v2' }, async () => {
+  const response = await getCachedSiennaResponse('storybook', { mediaMode: 'urls', aiNarrative, view: 'memoria-viva-v3' }, async () => {
     const family = await loadSiennaFamilyBundle();
     const heirs = await loadConfirmedHeirs(false);
     const documents = await loadEvidenceDocuments(true);
