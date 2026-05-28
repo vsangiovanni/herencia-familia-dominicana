@@ -10,6 +10,9 @@ export type EstateAmountBreakdown = {
 
 const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
+export const calculateHeirAmount = (sharePercent: number | string | null | undefined, distributableAmount: number) =>
+  roundMoney(Math.max(0, Number(distributableAmount || 0)) * (Math.max(0, Number(sharePercent || 0)) / 100));
+
 /** Bruto − honorarios de abogados (% sobre bruto) = neto repartible. Usado en árbol y explicación. */
 export const resolveEstateAmounts = (
   grossInput: number | string | null | undefined,

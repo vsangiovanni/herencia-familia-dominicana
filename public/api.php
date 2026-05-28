@@ -443,11 +443,20 @@ function storybook_photo_lookup(array $heirs): array {
 
 function storybook_local_member_photos(): array {
   return [
+    'alessandro' => '/game/legado/archive/member-photos/prod-sync/alessandro.png',
+    'domingo-ramon-sangiovanni-perez-1779220685351' => '/game/legado/archive/member-photos/prod-sync/domingo-ramon-sangiovanni-perez-1779220685351.png',
+    'gilda-altagracia-sangiovanni-gesualdo-1779238018002' => '/game/legado/archive/member-photos/prod-sync/gilda-altagracia-sangiovanni-gesualdo-1779238018002.png',
+    'irma-mercedes-sangiovanni-gesualdo-1779245439725' => '/game/legado/archive/member-photos/prod-sync/irma-mercedes-sangiovanni-gesualdo-1779245439725.png',
+    'javier-de-jesus-marquez-sangiovanni-1779247232889' => '/game/legado/archive/member-photos/prod-sync/javier-de-jesus-marquez-sangiovanni-1779247232889.png',
+    'jose-luis-de-jesus-marquez-sangiovanni-1779247298999' => '/game/legado/archive/member-photos/prod-sync/jose-luis-de-jesus-marquez-sangiovanni-1779247298999.jpg',
+    'jose-vicente' => '/game/legado/archive/member-photos/prod-sync/jose-vicente.png',
+    'maria-amparo-sangiovanni-gesualdo-1779300884233' => '/game/legado/archive/member-photos/prod-sync/maria-amparo-sangiovanni-gesualdo-1779300884233.png',
+    'paolo' => '/game/legado/archive/member-photos/prod-sync/paolo.png',
+    'vincenzo' => '/game/legado/archive/member-photos/prod-sync/vincenzo.png',
+    'yolanda-providencia-sangiovanni-gesualdo-1779220777309' => '/game/legado/archive/member-photos/prod-sync/yolanda-providencia-sangiovanni-gesualdo-1779220777309.png',
     'domenico' => '/game/legado/archive/domenico-sangiovanni-portrait.webp',
     'maria-rosa' => '/game/legado/archive/member-photos/maria-rosa-sangiovanni-perez.jpg',
     'maria-rosa-grisolia' => '/game/legado/archive/maria-rosa-grisolia-portrait.webp',
-    'paolo' => '/game/legado/archive/extracted-faces/named/paolo-sangiovanni.jpg',
-    'vincenzo' => '/game/legado/archive/extracted-faces/named/vincenzo-vicente-sangiovanni.jpg',
     'victor-manuel' => '/game/legado/archive/member-photos/victor-manuel-sangiovanni-sangiovanni.jpg',
     'vicente-sangiovanni-perez-1779294692767' => '/game/legado/archive/extracted-faces/named/vicente-sangiovanni-perez.jpg',
   ];
@@ -809,7 +818,7 @@ function sanitize_storybook_response_narrative(array $storybook): array {
 }
 
 function storybook_closing_dedication_fallback(): string {
-  return 'Gracias, Alessandro de Paola Sangiovanni y Joseline Sangiovanni: una raiz ancestral y un gesto generoso nos reunieron como familia.';
+  return 'Gracias, Alessandro de Paola Sangiovanni y Jocelyn del Jesús Sangiovanni Báez: una raiz ancestral y un gesto generoso nos reunieron como familia.';
 }
 
 function normalize_storybook_closing_dedication(string $text): string {
@@ -817,7 +826,7 @@ function normalize_storybook_closing_dedication(string $text): string {
   $text = sanitize_family_memory_narrative($text);
   $text = trim(preg_replace('/\s+/u', ' ', $text));
   if ($text === '') return $fallback;
-  if (stripos($text, 'Alessandro de Paola Sangiovanni') === false || stripos($text, 'Joseline Sangiovanni') === false) {
+  if (stripos($text, 'Alessandro de Paola Sangiovanni') === false || stripos($text, 'Jocelyn del Jesús Sangiovanni Báez') === false) {
     return $fallback;
   }
   if (mb_strlen($text, 'UTF-8') > 190 || preg_match_all('/[.!?]/u', $text) > 1) {
@@ -847,10 +856,10 @@ function generate_storybook_closing_dedication($nonce = null): array {
           'Eres una voz familiar narrando el cierre emocional de la memoria Sangiovanni.',
           'Escribe en espanol natural, familiar, elegante y conmovedor.',
           'Genera una sola frase final, sin markdown ni titulo.',
-          'Debe mencionar exactamente a Alessandro de Paola Sangiovanni y a Joseline Sangiovanni.',
+          'Debe mencionar exactamente a Alessandro de Paola Sangiovanni y a Jocelyn del Jesús Sangiovanni Báez.',
           'Debe expresar gratitud profunda, emocion y union familiar.',
           'Alessandro representa la raiz ancestral que, sin saberlo, conecto generaciones.',
-          'Joseline representa el gesto generoso que volvio a reunir a ramas familiares que no se conocian.',
+          'Jocelyn representa el gesto generoso que volvio a reunir a ramas familiares que no se conocian.',
           'Prohibido mencionar o insinuar herencia, herederos, sucesion, reparto, bienes, patrimonio, derechos legales, reclamos o cualquier tema juridico/economico.',
           'No uses la palabra "legado". Usa memoria familiar, recuerdo familiar, historia familiar, raices o union familiar.',
           'Maximo 24 palabras. Una sola frase. Debe ser impactante, breve y de corazon.',
@@ -860,7 +869,7 @@ function generate_storybook_closing_dedication($nonce = null): array {
         'role' => 'user',
         'content' => json_encode([
           'objetivo' => 'Dedicatoria final posterior a los creditos de la memoria familiar Sangiovanni.',
-          'personas' => ['Alessandro de Paola Sangiovanni', 'Joseline Sangiovanni'],
+          'personas' => ['Alessandro de Paola Sangiovanni', 'Jocelyn del Jesús Sangiovanni Báez'],
           'nonce' => $nonce ?: gmdate('c'),
         ], JSON_UNESCAPED_UNICODE),
       ],

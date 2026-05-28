@@ -1056,3 +1056,51 @@ Transicion Italia a Puerto Plata:
 ## Decision vigente
 
 Se puede comenzar el desarrollo local del vertical slice despues de esta documentacion. La primera implementacion debe priorizar aislamiento, seguridad, IA read-only integrada al gameplay, sensacion de juego real y fidelidad al concepto visual enviado por Victor.
+
+## Ronda narrativa y creditos - 2026-05-28
+
+Alcance aprobado por Victor:
+
+- Trabajar primero en local y luego desplegar a Hostinger/GitHub.
+- No modificar DB, datos de produccion, migraciones ni \`.env\`.
+- Mantener \`ai=0\` como narrativa base valida, pero permitir variacion aleatoria para usuarios normales.
+
+Cambios aplicados:
+
+- La ruta \`/sienna/juego\` ahora elige aleatoriamente narrativa base o narrativa AI cuando la URL no trae parametro \`ai\`.
+- \`?ai=0\` fuerza narrativa base deterministica.
+- \`?ai=1\` fuerza narrativa AI.
+- La mencion especial final exige el nombre correcto \`Jocelyn del Jesús Sangiovanni Báez\`.
+- La mencion especial mantiene tambien a \`Alessandro de Paola Sangiovanni\`.
+- La constelacion de fotos al final de los creditos queda montada hasta que el usuario cambie de escena o salga de la pantalla.
+- El efecto de constelacion se ajusto para que las fotos se enciendan en golpes breves y fases distintas, simulando destellos aleatorios en vez de un fade suave.
+- Se sincronizaron localmente fotos de miembros existentes en produccion para el storyteller, sin escribir en produccion.
+
+Fotos sincronizadas desde produccion como assets locales:
+
+- \`alessandro\` -> \`/game/legado/archive/member-photos/prod-sync/alessandro.png\`
+- \`paolo\` -> \`/game/legado/archive/member-photos/prod-sync/paolo.png\`
+- \`vincenzo\` -> \`/game/legado/archive/member-photos/prod-sync/vincenzo.png\`
+- \`jose-vicente\` -> \`/game/legado/archive/member-photos/prod-sync/jose-vicente.png\`
+- \`domingo-ramon-sangiovanni-perez-1779220685351\`
+- \`gilda-altagracia-sangiovanni-gesualdo-1779238018002\`
+- \`irma-mercedes-sangiovanni-gesualdo-1779245439725\`
+- \`javier-de-jesus-marquez-sangiovanni-1779247232889\`
+- \`jose-luis-de-jesus-marquez-sangiovanni-1779247298999\`
+- \`maria-amparo-sangiovanni-gesualdo-1779300884233\`
+- \`yolanda-providencia-sangiovanni-gesualdo-1779220777309\`
+
+Notas de fuente:
+
+- Produccion fue consultada en modo solo lectura.
+- Alessandro se tomo de \`confirmed_heirs\`, archivo original \`39736.png\`.
+- Maria Rosa Grisolia en local y produccion aun pueden venir de fuentes distintas: local tiene el miembro canonico \`maria-rosa-grisolia\`; produccion tenia una fila adicional \`maria-rosa-grisolia-di-vanna-1779890134349\` con \`40362.png\`. No se hizo union ni cambio de datos porque eso implicaria decision de datos/DB.
+
+Validacion local:
+
+\`\`\`sh
+pnpm run dev:up
+node --check server/index.js
+php -l public/api.php
+pnpm run build
+\`\`\`

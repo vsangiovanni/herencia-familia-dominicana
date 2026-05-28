@@ -30,6 +30,13 @@ const STORYTELLER_MUSIC_TRACKS = [
 const STORYTELLER_MUSIC_VOLUME = 0.72;
 const STORYTELLER_CROSSFADE_SECONDS = 8;
 
+const resolveAiNarrativeMode = () => {
+  const aiParam = new URLSearchParams(window.location.search).get('ai');
+  if (aiParam === '0') return false;
+  if (aiParam === '1') return true;
+  return Math.random() >= 0.5;
+};
+
 const splitNarrativeLines = (text: string) =>
   text
     .split(/(?<=\.)\s+/)
@@ -188,34 +195,45 @@ const getPhotoSparkleStyle = (index: number, total: number): React.CSSProperties
   };
 };
 
+const getPhotoSparkleTiming = (index: number, total: number) => {
+  const duration = 5.2 + (((index * 17 + total * 3) % 11) * 0.38);
+  const phase = ((index * 41 + total * 13) % 100) / 100;
+
+  return {
+    duration,
+    delay: -(duration * phase),
+  };
+};
+
 const LegacyPhotoConstellation = ({ members }: { members: NonNullable<LegadoStoryScene['creditMembers']> }) => {
   const photoMembers = members.filter((member) => member.photoData);
   if (!photoMembers.length) return null;
-
-  const cycleSeconds = Math.max(12, Math.min(34, photoMembers.length * 0.88));
 
   return (
     <div className="absolute inset-x-[3vw] bottom-[4vh] top-[12vh] z-[36] overflow-hidden md:inset-x-[5vw] md:top-[12vh]">
       <p className="absolute left-1/2 top-0 z-10 -translate-x-1/2 text-center text-[0.62rem] font-black uppercase tracking-[0.28em] text-[#f8e5bd]/70 md:text-xs">
         Rostros de la familia
       </p>
-      {photoMembers.map((member, index) => (
+      {photoMembers.map((member, index) => {
+        const sparkleTiming = getPhotoSparkleTiming(index, photoMembers.length);
+
+        return (
         <motion.div
           key={'legacy-photo-spark-' + member.memberId + '-' + index}
           className="absolute grid place-items-center"
           style={getPhotoSparkleStyle(index, photoMembers.length)}
-          initial={{ opacity: 0, scale: 0.3, filter: 'blur(12px)' }}
+          initial={{ opacity: 0, scale: 0.82, filter: 'blur(1px)' }}
           animate={{
-            opacity: [0, 0, 0.96, 0.16, 0.88, 0],
-            scale: [0.35, 0.72, 1.08, 0.9, 1, 0.58],
-            filter: ['blur(14px)', 'blur(7px)', 'blur(0px)', 'blur(1.5px)', 'blur(0px)', 'blur(10px)'],
+            opacity: [0, 0, 0.96, 0.1, 0, 0.82, 0.08, 0, 0.92, 0],
+            scale: [0.82, 0.82, 1.08, 0.92, 0.82, 1.03, 0.9, 0.82, 1.06, 0.82],
+            filter: ['blur(1px)', 'blur(1px)', 'blur(0px)', 'blur(0px)', 'blur(1px)', 'blur(0px)', 'blur(0px)', 'blur(1px)', 'blur(0px)', 'blur(1px)'],
           }}
           transition={{
-            duration: cycleSeconds,
-            delay: (index % 7) * 0.46 + Math.floor(index / 7) * 0.18,
-            times: [0, 0.035, 0.11, 0.18, 0.28, 0.42],
+            duration: sparkleTiming.duration,
+            delay: sparkleTiming.delay,
+            times: [0, 0.18, 0.205, 0.24, 0.42, 0.45, 0.49, 0.72, 0.75, 1],
             repeat: Infinity,
-            ease: 'easeInOut',
+            ease: 'linear',
           }}
         >
           <div className="absolute inset-[-32%] rounded-full bg-[#f8e5bd]/18 blur-xl" />
@@ -228,7 +246,8 @@ const LegacyPhotoConstellation = ({ members }: { members: NonNullable<LegadoStor
             />
           </div>
         </motion.div>
-      ))}
+        );
+      })}
     </div>
   );
 };
@@ -331,7 +350,7 @@ const LegacyCredits = ({
           </motion.div>
         ) : null}
       </AnimatePresence>
-      {showDedication && dedication?.text ? <LegacyPhotoConstellation members={members} /> : null}
+      {showDedication ? <LegacyPhotoConstellation members={members} /> : null}
     </motion.div>
   );
 };
@@ -351,7 +370,7 @@ const LegadoSangiovanniGame = () => {
   const activeMusicRef = useRef<0 | 1>(0);
   const musicFadeFrameRef = useRef<number | null>(null);
   const musicFadeRunningRef = useRef(false);
-  const aiNarrative = useMemo(() => new URLSearchParams(window.location.search).get('ai') !== '0', []);
+  const aiNarrative = useMemo(resolveAiNarrativeMode, []);
   const forceCredits = useMemo(() => new URLSearchParams(window.location.search).get('credits') === '1', []);
   const fastCredits = useMemo(() => new URLSearchParams(window.location.search).get('fast') === '1', []);
   const { data: storybook, isFetching: storybookFetching } = useSiennaStorybook(true, aiNarrative);

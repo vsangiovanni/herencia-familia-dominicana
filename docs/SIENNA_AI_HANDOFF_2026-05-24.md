@@ -497,6 +497,21 @@ Antes de reiniciar la PC, estado conocido:
 - No hay una tarea de deploy pendiente.
 - Pendiente real: QA visual/manual posterior al reinicio, principalmente Documentos Probatorios en movil y flujo de guardar foto desde tabla unificada.
 
+## Actualizacion narrativa Legado - 2026-05-28
+
+- Victor aprobo desplegar a Hostinger y GitHub esta ronda, con restriccion explicita: no tocar DB, datos de produccion, migraciones ni \`.env\`.
+- Narrativa base \`ai=0\` fue aprobada por Victor.
+- \`/sienna/juego\` ahora elige aleatoriamente entre narrativa base y AI cuando no recibe parametro \`ai\`.
+- \`?ai=0\` y \`?ai=1\` siguen disponibles para QA y pruebas forzadas.
+- Cierre de creditos:
+  - La constelacion de fotos permanece hasta cambio de escena o salida de pantalla.
+  - El destello se ajusto a encendidos breves y desfasados para simular constelacion, no fade.
+  - La mencion especial final usa exactamente \`Jocelyn del Jesús Sangiovanni Báez\`.
+- Fotos locales del storyteller se sincronizaron desde produccion por lectura de \`confirmed_heirs\`, escribiendo solo assets locales bajo \`public/game/legado/archive/member-photos/prod-sync/\`.
+- Produccion fue consultada en modo lectura; no se hicieron cambios remotos de DB/datos.
+- Alessandro usa la foto del miembro en produccion (\`39736.png\`) como asset local \`/game/legado/archive/member-photos/prod-sync/alessandro.png\`.
+- Se detecto que Maria Rosa Grisolia tiene fuentes distintas local/produccion: local usa \`maria-rosa-grisolia\`, mientras produccion expone \`maria-rosa-grisolia-di-vanna-1779890134349\` con \`40362.png\`. No se cambio porque requiere decision de datos.
+
 ## UI release posterior - tablas y documentos (2026-05-24 noche)
 
 Cambios locales documentados y preparados para GitHub/Hostinger:
