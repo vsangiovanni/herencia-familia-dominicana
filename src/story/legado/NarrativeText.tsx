@@ -9,11 +9,11 @@ const splitNarrativeLines = (text: string) =>
     .filter(Boolean);
 
 const getTypewriterCharMs = (length: number) => {
-  if (length > 900) return 26;
-  if (length > 650) return 29;
-  if (length > 420) return 33;
-  if (length > 240) return 38;
-  return 44;
+  if (length > 900) return 34;
+  if (length > 650) return 38;
+  if (length > 420) return 43;
+  if (length > 240) return 48;
+  return 55;
 };
 
 const IMPORTANT_MEMBER_NAMES = [
@@ -48,36 +48,48 @@ const renderHighlightedNarrative = (text: string) =>
 
 const NarrativeText = ({
   scene,
+  playing = true,
   hideBody = false,
   wide = false,
 }: {
   scene: LegadoStoryScene;
+  playing?: boolean;
   hideBody?: boolean;
   wide?: boolean;
 }) => {
   const typedSource = useMemo(() => splitNarrativeLines(scene.text).join('\n'), [scene.text]);
   const [typedText, setTypedText] = useState('');
+  const typedIndexRef = useRef(0);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    typedIndexRef.current = 0;
     setTypedText('');
-    let index = 0;
+  }, [scene.id, typedSource]);
+
+  useEffect(() => {
+    if (!playing || typedIndexRef.current >= typedSource.length) return;
+
     let interval: number | undefined;
-    const initialDelay = window.setTimeout(() => {
+    const startTyping = () => {
       interval = window.setInterval(() => {
-        index += 1;
-        setTypedText(typedSource.slice(0, index));
-        if (index >= typedSource.length) {
+        typedIndexRef.current += 1;
+        setTypedText(typedSource.slice(0, typedIndexRef.current));
+        if (typedIndexRef.current >= typedSource.length && interval) {
           window.clearInterval(interval);
         }
       }, getTypewriterCharMs(typedSource.length));
-    }, 720);
+    };
+
+    const initialDelay = typedIndexRef.current === 0
+      ? window.setTimeout(startTyping, 720)
+      : window.setTimeout(startTyping, 0);
 
     return () => {
       window.clearTimeout(initialDelay);
       if (interval) window.clearInterval(interval);
     };
-  }, [scene.id, typedSource]);
+  }, [playing, scene.id, typedSource]);
 
   useEffect(() => {
     if (!scrollRef.current) return;
@@ -110,6 +122,7 @@ const NarrativeText = ({
     />
     <motion.div
       ref={scrollRef}
+      data-legado-control="true"
       className={`pointer-events-auto mt-4 max-h-[61vh] touch-pan-y overflow-y-auto overscroll-contain pr-2 [mask-image:none] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden md:mt-5 md:max-h-[calc(100vh-21rem)] md:pr-0 xl:max-h-[calc(100vh-23rem)] ${wide ? 'max-w-[86vw] md:max-w-4xl' : 'max-w-[68vw] md:max-w-2xl'}`}
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: hideBody ? 0 : 1, y: 0, filter: hideBody ? 'blur(7px)' : 'blur(0px)' }}

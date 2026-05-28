@@ -9,11 +9,11 @@ import { legadoStoryScenes } from '@/story/legado/storyScenes';
 
 const TYPEWRITER_INITIAL_DELAY_MS = 720;
 const getTypewriterCharMs = (length: number) => {
-  if (length > 900) return 26;
-  if (length > 650) return 29;
-  if (length > 420) return 33;
-  if (length > 240) return 38;
-  return 44;
+  if (length > 900) return 34;
+  if (length > 650) return 38;
+  if (length > 420) return 43;
+  if (length > 240) return 48;
+  return 55;
 };
 const getAfterTypewriterHoldMs = (length: number) => {
   if (length > 900) return 6500;
@@ -29,6 +29,11 @@ const STORYTELLER_MUSIC_TRACKS = [
 ] as const;
 const STORYTELLER_MUSIC_VOLUME = 0.72;
 const STORYTELLER_CROSSFADE_SECONDS = 8;
+
+type WakeLockSentinelLike = {
+  release: () => Promise<void>;
+  addEventListener?: (type: 'release', listener: () => void) => void;
+};
 
 const resolveAiNarrativeMode = () => {
   const aiParam = new URLSearchParams(window.location.search).get('ai');
@@ -370,6 +375,7 @@ const LegadoSangiovanniGame = () => {
   const activeMusicRef = useRef<0 | 1>(0);
   const musicFadeFrameRef = useRef<number | null>(null);
   const musicFadeRunningRef = useRef(false);
+  const wakeLockRef = useRef<WakeLockSentinelLike | null>(null);
   const aiNarrative = useMemo(resolveAiNarrativeMode, []);
   const forceCredits = useMemo(() => new URLSearchParams(window.location.search).get('credits') === '1', []);
   const fastCredits = useMemo(() => new URLSearchParams(window.location.search).get('fast') === '1', []);
@@ -462,6 +468,52 @@ const LegadoSangiovanniGame = () => {
   }, [showNanoDedication, showLegacyDedicationText, fastCredits]);
 
   useEffect(() => {
+    const wakeLockApi = (navigator as Navigator & {
+      wakeLock?: { request: (type: 'screen') => Promise<WakeLockSentinelLike> };
+    }).wakeLock;
+    if (!wakeLockApi) return;
+
+    let cancelled = false;
+
+    const releaseWakeLock = () => {
+      const lock = wakeLockRef.current;
+      wakeLockRef.current = null;
+      if (lock) void lock.release().catch(() => undefined);
+    };
+
+    const requestWakeLock = async () => {
+      try {
+        releaseWakeLock();
+        const lock = await wakeLockApi.request('screen');
+        if (cancelled || !playing) {
+          void lock.release().catch(() => undefined);
+          return;
+        }
+        wakeLockRef.current = lock;
+      } catch {
+        wakeLockRef.current = null;
+      }
+    };
+
+    if (playing) {
+      void requestWakeLock();
+    } else {
+      releaseWakeLock();
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && playing) void requestWakeLock();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      releaseWakeLock();
+    };
+  }, [playing]);
+
+  useEffect(() => {
     const audios = [primaryMusicRef.current, secondaryMusicRef.current] as const;
     const cancelFade = () => {
       if (musicFadeFrameRef.current) window.cancelAnimationFrame(musicFadeFrameRef.current);
@@ -525,7 +577,7 @@ const LegadoSangiovanniGame = () => {
       audio.addEventListener('ended', handleEnded);
     });
 
-    if (!musicEnabled) {
+    if (!musicEnabled || !playing) {
       cancelFade();
       audios.forEach((audio) => audio?.pause());
       return () => {
@@ -545,7 +597,7 @@ const LegadoSangiovanniGame = () => {
         audio?.removeEventListener('ended', handleEnded);
       });
     };
-  }, [musicEnabled]);
+  }, [musicEnabled, playing]);
 
   useEffect(() => {
     return () => {
@@ -556,6 +608,13 @@ const LegadoSangiovanniGame = () => {
   }, []);
 
   const toggleMusic = () => setMusicEnabled((value) => !value);
+  const togglePlaying = () => setPlaying((value) => !value);
+
+  const handleStagePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('[data-legado-control="true"]')) return;
+    togglePlaying();
+  };
 
   const advance = () => {
     if (isFinished) {
@@ -625,7 +684,7 @@ const LegadoSangiovanniGame = () => {
       <audio ref={primaryMusicRef} src={STORYTELLER_MUSIC_TRACKS[0]} preload="auto" />
       <audio ref={secondaryMusicRef} src={STORYTELLER_MUSIC_TRACKS[1]} preload="auto" />
 
-      <div className="relative h-full w-full overflow-hidden bg-[#080706]">
+      <div className="relative h-full w-full overflow-hidden bg-[#080706]" onPointerUp={handleStagePointerUp}>
 
         <AnimatePresence initial={false}>
           <motion.section
@@ -665,7 +724,7 @@ const LegadoSangiovanniGame = () => {
               />
             )}
             <LineageThread scene={scene} />
-            <NarrativeText scene={scene} hideBody={showLegacyCredits} wide={!scene.memberPhotos?.length} />
+            <NarrativeText scene={scene} playing={playing} hideBody={showLegacyCredits} wide={!scene.memberPhotos?.length} />
             <AnimatePresence>
               {showLegacyCredits && scene.creditMembers?.length ? (
                 <LegacyCredits
@@ -690,7 +749,7 @@ const LegadoSangiovanniGame = () => {
           />
         </div>
 
-        <div className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] z-50 flex items-center gap-2 opacity-95 transition-opacity hover:opacity-100 focus-within:opacity-100">
+        <div data-legado-control="true" className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] z-50 flex items-center gap-2 opacity-95 transition-opacity hover:opacity-100 focus-within:opacity-100">
           <button
             type="button"
             onClick={() => navigate('/dashboard')}
@@ -711,7 +770,7 @@ const LegadoSangiovanniGame = () => {
           </button>
           <button
             type="button"
-            onClick={() => setPlaying((value) => !value)}
+            onClick={togglePlaying}
             className="grid h-10 w-10 place-items-center rounded-full border-2 shadow-[0_14px_40px_rgba(0,0,0,0.32)] backdrop-blur transition"
             style={hasNanoActive ? {
               backgroundColor: '#10b981',
@@ -730,7 +789,7 @@ const LegadoSangiovanniGame = () => {
           </button>
         </div>
 
-        <div className="absolute bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-50 flex items-center gap-2 opacity-35 transition-opacity hover:opacity-95">
+        <div data-legado-control="true" className="absolute bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-50 flex items-center gap-2 opacity-35 transition-opacity hover:opacity-95">
           <button
             type="button"
             onClick={goToPrevious}
@@ -751,7 +810,7 @@ const LegadoSangiovanniGame = () => {
           </button>
         </div>
 
-        <div className="absolute bottom-[max(1rem,env(safe-area-inset-bottom))] left-4 z-50">
+        <div data-legado-control="true" className="absolute bottom-[max(1rem,env(safe-area-inset-bottom))] left-4 z-50">
           <button
             type="button"
             onClick={() => setMapOpen((value) => !value)}
