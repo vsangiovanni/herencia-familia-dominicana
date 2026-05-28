@@ -704,6 +704,10 @@ function build_sienna_storybook(): array {
   $heirs = fetch_confirmed_heirs(false);
   $documents = fetch_evidence_documents(false);
   $memberById = storybook_member_by_id($members);
+  $memberByName = [];
+  foreach ($members as $member) {
+    $memberByName[storybook_normalize($member['name'] ?? '')] = $member;
+  }
   if (!isset($memberById['maria-rosa-grisolia'])) {
     $memberById['maria-rosa-grisolia'] = [
       'id' => 'maria-rosa-grisolia',
@@ -756,6 +760,16 @@ function build_sienna_storybook(): array {
     $addCovered(array_column($chunk, 'id'));
     $lines = array_map(fn($m) => storybook_member_sentence($m, $memberById, 'undated'), $chunk);
     $slides[] = ['id' => 'memoria-sin-fecha-' . ($chunkIndex + 1), 'title' => storybook_memory_title($chunkIndex), 'year' => null, 'location' => 'Archivo familiar', 'tone' => 'memory', 'visual' => 'archive', 'backgroundImage' => select_storybook_background($chunk, $placeLookup, $chunkIndex, 'registro-sin-fecha'), 'text' => storybook_memory_intro($chunkIndex) . implode(' ', $lines), 'members' => array_column($chunk, 'id'), 'memberPhotos' => build_storybook_member_photos($chunk, $photoLookup)];
+  }
+
+  $modernPreservers = array_values(array_filter([
+    $memberById['victor-manuel-martin'] ?? $memberByName[storybook_normalize('Victor Manuel Martin Sangiovanni Rodriguez')] ?? null,
+    $memberByName[storybook_normalize('Bernardo Martin Lizardo Sangiovanni')] ?? null,
+    $memberByName[storybook_normalize('Gina Mora Sangiovanni')] ?? null,
+  ]));
+  if (count($modernPreservers) > 0) {
+    $text = 'Generaciones despues, algunos descendientes decidieron reconstruir la historia que el tiempo casi habia olvidado. Victor Manuel Martin Sangiovanni Rodriguez impulso la investigacion y la recuperacion historica; Bernardo Martin Lizardo Sangiovanni aporto esfuerzo y apoyo en el proceso; y Gina Mora Sangiovanni tambien formo parte importante de ese trabajo compartido y del apoyo familiar. Esta memoria no sobrevivio sola: volvio a tomar forma porque hubo manos, emociones y voluntad para unir las piezas de la historia Sangiovanni.';
+    $slides[] = ['id' => 'puente-presente', 'title' => 'El puente del presente', 'year' => 'Presente', 'location' => 'Memoria familiar actual', 'tone' => 'memory', 'visual' => 'familyTree', 'backgroundImage' => $bg['memory2'], 'text' => $text, 'members' => array_column($modernPreservers, 'id'), 'memberPhotos' => build_storybook_member_photos($modernPreservers, $photoLookup)];
   }
 
   $photoMembers = array_values(array_filter($members, fn($m) => resolve_storybook_photo($m, $photoLookup)));
