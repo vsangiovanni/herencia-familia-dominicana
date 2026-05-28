@@ -7,6 +7,15 @@ deploy-build.log
 BUILD_LOG.txt
 mysql-check.txt
 vite-start.txt
+BUILD_CHECK.txt
+.*.pid
+deploy-log.txt
+dev-*.out
+health-prod.json
+prod-*.html
+prod-*.js
+sienna-audit*.json
+sienna-sort-normalization.json
 *.zip
 npm-debug.log*
 yarn-debug.log*
@@ -20,12 +29,26 @@ __pycache__/
 dist
 dist-ssr
 .env
+.env.prod.working
 .deploy_hostinger/
 backup_supabase/
+backups/
 _migration_safety/
 _migration_work/
 *.local
 public/game/legado/references/video-santa-domenica/
+tmp/
+dist_with_env*/
+
+# Local one-off deployment/check scripts and artifacts
+_*.sh
+scripts/_*
+scripts/preview-inheritance-status-sync.cjs
+calculo-filiacion.bundle.js
+calculo-filiacion.prod.html
+admin
+wsl-touch.txt
+public/game/legado/audio/legado-fondo-victor.mp4
 
 # Editor directories and files
 .vscode/*
