@@ -98,6 +98,45 @@ Documentacion detallada de la iteracion:
 
 - `docs/LEGADO_SANGIOVANNI_STORYTELLER_HANDOFF_2026-05-26.md`
 
+## Estado operativo 2026-05-27 noche
+
+Deploy confirmado en produccion:
+
+- Commit GitHub: `630de7c` (`Polish legacy finale and narrative scrolling`).
+- Produccion: `https://herenciard.vmsencf.com/sienna/legado-game`.
+- Build activo verificado:
+  - `/assets/index-BLXndUy2.js`
+  - `/assets/index-B2UL79wP.css`
+  - `/assets/LegadoSangiovanniGame-sCSq9LB1.js`
+- Validaciones post-deploy:
+  - `/` referencia los hashes nuevos.
+  - `/api/health` responde 200 JSON.
+  - `/sienna/legado-game` responde 200 HTML.
+  - JS/CSS principales y chunk del juego responden 200 con content-type correcto.
+  - Assets inexistentes bajo `/assets/*` responden 404 para evitar pantalla blanca por fallback HTML.
+- No se tocaron DB, datos de produccion, `.env` ni migraciones.
+
+Cambios funcionales vigentes:
+
+- La narrativa larga permite scroll natural dentro del bloque de texto, sin barra visible ni slider.
+- La dedicatoria final especial dura 8 segundos; luego desaparece el texto, pero la constelacion de fotos sigue activa.
+- La constelacion final aparece dispersa por casi toda la escena y sigue hasta que el usuario pause o cambie de escena.
+- La mencion especial debe ser breve, emotiva y familiar, sin mencionar ni insinuar herencia, dinero, reclamos o temas legales.
+- La mencion especial usa a `Alessandro de Paola Sangiovanni` y `Joseline Sangiovanni`.
+- Si la respuesta IA falla o no cumple reglas, el fallback es:
+  `Gracias, Alessandro de Paola Sangiovanni y Joseline Sangiovanni: una raiz ancestral y un gesto generoso nos reunieron como familia.`
+- El boton Play superior solo debe ponerse verde cuando la dedicatoria/narrativa IA esta pensando o trabajando; vuelve a blanco al terminar.
+- Las fechas debajo de los nombres en creditos deben mostrarse completas.
+- Las fotos del inicio del slide final no deben solaparse con los creditos; el cierre visual principal es la constelacion posterior.
+
+Reglas de continuidad tras reinicio:
+
+- Leer primero este documento y `docs/PRODUCTION_WHITE_SCREEN_RUNBOOK.md`.
+- Si se vuelve a desplegar, subir assets primero y `index.html` siempre al final.
+- Si FTP falla, no subir `index.html` hasta confirmar que todos los assets nuevos existen en produccion.
+- Usar Hostinger MCP para confirmar dominio/root cuando haya duda; para archivos puntuales, FTP controlado sigue siendo valido si MCP de deploy falla.
+- Nunca modificar datos productivos, DB, `.env` o migraciones para ajustes visuales/narrativos.
+
 
 ## Regla principal
 

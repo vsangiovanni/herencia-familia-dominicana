@@ -92,3 +92,20 @@ If the flash/blank screen returns:
 6. Ask the tester to open with `?reload=1` only after production assets are confirmed.
 
 Do not touch production data, database, `.env`, or migrations for this issue.
+
+## 2026-05-27 Deploy Note
+
+Latest verified production build:
+
+- Commit: `630de7c` (`Polish legacy finale and narrative scrolling`)
+- Main JS: `/assets/index-BLXndUy2.js`
+- Main CSS: `/assets/index-B2UL79wP.css`
+- Storybook chunk: `/assets/LegadoSangiovanniGame-sCSq9LB1.js`
+- Production checks after deploy:
+  - `/` returned 200 and referenced the latest hashes above.
+  - `/api/health` returned 200 JSON.
+  - `/sienna/legado-game` returned 200 HTML.
+  - Main JS/CSS and the storybook chunk returned 200 with JS/CSS content types.
+  - A missing asset under `/assets/__missing_verify__.js` returned 404.
+
+Operational note: FTP was intermittent during this deploy. The safe response is to keep production on the old `index.html` until all new assets are confirmed, then upload `index.html` last. Do not force `index.html` early.
