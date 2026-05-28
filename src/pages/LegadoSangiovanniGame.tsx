@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronLeft, ChevronRight, Home, Map, Pause, Play, Volume2, VolumeX, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -8,6 +8,7 @@ import type { LegadoStoryScene } from '@/story/legado/storyScenes';
 import { legadoStoryScenes } from '@/story/legado/storyScenes';
 
 const TYPEWRITER_INITIAL_DELAY_MS = 720;
+const AFTER_TYPEWRITER_ADVANCE_DELAY_MS = 2000;
 const getTypewriterCharMs = (length: number) => {
   if (length > 900) return 34;
   if (length > 650) return 38;
@@ -265,6 +266,8 @@ const formatCreditDates = (member: NonNullable<LegadoStoryScene['creditMembers']
 const getCreditDockSeconds = (creditIndex: number, durationSeconds: number) =>
   Math.min(creditIndex * 0.95, durationSeconds - 4);
 
+const CREDIT_PHOTO_AFTER_NAME_DELAY_SECONDS = 0.95;
+
 const getCreditRollDurationSeconds = (memberCount: number) =>
   Math.max(46, Math.min(92, memberCount * 1.15));
 
@@ -376,20 +379,21 @@ const LegacyCredits = ({
           {members.map((member, index) => {
             const isImportant = member.memberId === 'alessandro' || member.memberId === 'jocelyn';
             const photoEntryX = index % 2 === 0 ? '-48vw' : '48vw';
+            const creditDockDelay = getCreditDockSeconds(index, durationSeconds);
             return (
             <motion.div
               key={member.memberId + '-' + index}
               className={`flex w-full max-w-4xl items-center justify-center gap-3 border-b pb-2 text-center md:gap-5 ${isImportant ? 'border-[#f8e5bd]/42 bg-[#f8e5bd]/10 px-2 py-2 shadow-[0_0_34px_rgba(248,229,189,0.14)]' : 'border-[#f8e5bd]/10'}`}
               initial={{ opacity: 0, y: 12, filter: 'blur(3px)' }}
               animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-              transition={{ duration: 0.9, delay: getCreditDockSeconds(index, durationSeconds), ease: 'easeOut' }}
+              transition={{ duration: 0.9, delay: creditDockDelay, ease: 'easeOut' }}
             >
               {member.photoData ? (
                 <motion.div
                   className={`h-11 w-11 shrink-0 overflow-hidden rounded-full border-2 bg-[#f7ead0] shadow-[0_10px_26px_rgba(0,0,0,0.42)] md:h-16 md:w-16 ${isImportant ? 'border-[#fff7e6] ring-2 ring-[#f8e5bd]/80' : 'border-[#f8e5bd]/78'}`}
                   initial={{ opacity: 0, x: photoEntryX, scale: 0.82, filter: 'blur(4px)' }}
                   animate={{ opacity: 1, x: 0, scale: 1, filter: 'blur(0px)' }}
-                  transition={{ duration: 1.25, delay: getCreditDockSeconds(index, durationSeconds), ease: [0.16, 1, 0.3, 1] }}
+                  transition={{ duration: 1.25, delay: creditDockDelay + CREDIT_PHOTO_AFTER_NAME_DELAY_SECONDS, ease: [0.16, 1, 0.3, 1] }}
                 >
                   <img
                     src={member.photoData}
@@ -451,6 +455,7 @@ const LegadoSangiovanniGame = () => {
   const [showLegacyCredits, setShowLegacyCredits] = useState(false);
   const [showLegacyDedication, setShowLegacyDedication] = useState(false);
   const [showLegacyDedicationText, setShowLegacyDedicationText] = useState(false);
+  const [typewriterComplete, setTypewriterComplete] = useState(false);
   const [dedicationNonce, setDedicationNonce] = useState<string | number>();
   const primaryMusicRef = useRef<HTMLAudioElement | null>(null);
   const secondaryMusicRef = useRef<HTMLAudioElement | null>(null);
@@ -478,6 +483,7 @@ const LegadoSangiovanniGame = () => {
     () => ((sceneIndex + 1) / scenes.length) * 100,
     [sceneIndex, scenes.length]
   );
+  const handleTypewriterComplete = useCallback(() => setTypewriterComplete(true), []);
   const cameraMove = useMemo(() => {
     const direction = sceneIndex % 2 === 0 ? 1 : -1;
     return {
@@ -498,14 +504,18 @@ const LegadoSangiovanniGame = () => {
   }, [forceCredits, scenes.length]);
 
   useEffect(() => {
-    if (!playing || isFinished) return;
+    setTypewriterComplete(false);
+  }, [scene.id, scene.text]);
+
+  useEffect(() => {
+    if (!playing || !typewriterComplete || isFinished) return;
 
     const timer = window.setTimeout(() => {
       setSceneIndex((current) => Math.min(scenes.length - 1, current + 1));
-    }, scenePlaybackMs);
+    }, AFTER_TYPEWRITER_ADVANCE_DELAY_MS);
 
     return () => window.clearTimeout(timer);
-  }, [playing, scenePlaybackMs, sceneIndex, isFinished, scenes.length]);
+  }, [playing, typewriterComplete, sceneIndex, isFinished, scenes.length]);
 
   useEffect(() => {
     setShowLegacyCredits(false);
@@ -514,17 +524,22 @@ const LegadoSangiovanniGame = () => {
     setDedicationNonce(undefined);
     if (!hasLegacyCredits) return;
     setDedicationNonce(scene.id + '-' + Date.now());
+  }, [scene.id, hasLegacyCredits]);
+
+  useEffect(() => {
+    if (!hasLegacyCredits) return;
     if (forceCredits || fastCredits) {
       setShowLegacyCredits(true);
       return;
     }
+    if (!typewriterComplete) return;
 
     const timer = window.setTimeout(() => {
       setShowLegacyCredits(true);
-    }, getTypedNarrativeMs(scene) + 2800);
+    }, 2800);
 
     return () => window.clearTimeout(timer);
-  }, [scene, hasLegacyCredits, forceCredits, fastCredits]);
+  }, [typewriterComplete, hasLegacyCredits, forceCredits, fastCredits]);
 
   useEffect(() => {
     setShowLegacyDedication(false);
@@ -816,7 +831,13 @@ const LegadoSangiovanniGame = () => {
               />
             )}
             <LineageThread scene={scene} />
-            <NarrativeText scene={scene} playing={playing} hideBody={showLegacyCredits} wide={!scene.memberPhotos?.length} />
+            <NarrativeText
+              scene={scene}
+              playing={playing}
+              hideBody={showLegacyCredits}
+              wide={!scene.memberPhotos?.length}
+              onTypewriterComplete={handleTypewriterComplete}
+            />
             {!showLegacyCredits && scene.id === 'puente-presente' && scene.documentThumbnails?.length ? (
               <DocumentThumbnailCarousel documents={scene.documentThumbnails} />
             ) : null}

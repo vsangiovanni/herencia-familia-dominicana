@@ -51,24 +51,34 @@ const NarrativeText = ({
   playing = true,
   hideBody = false,
   wide = false,
+  onTypewriterComplete,
 }: {
   scene: LegadoStoryScene;
   playing?: boolean;
   hideBody?: boolean;
   wide?: boolean;
+  onTypewriterComplete?: () => void;
 }) => {
   const typedSource = useMemo(() => splitNarrativeLines(scene.text).join('\n'), [scene.text]);
   const [typedText, setTypedText] = useState('');
   const typedIndexRef = useRef(0);
+  const completionReportedRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const reservesDocumentCarousel = scene.id === 'puente-presente' && Boolean(scene.documentThumbnails?.length);
 
   useEffect(() => {
     typedIndexRef.current = 0;
+    completionReportedRef.current = false;
     setTypedText('');
   }, [scene.id, typedSource]);
 
   useEffect(() => {
+    if (!typedSource.length && !completionReportedRef.current) {
+      completionReportedRef.current = true;
+      onTypewriterComplete?.();
+      return;
+    }
+
     if (!playing || typedIndexRef.current >= typedSource.length) return;
 
     let interval: number | undefined;
@@ -78,6 +88,10 @@ const NarrativeText = ({
         setTypedText(typedSource.slice(0, typedIndexRef.current));
         if (typedIndexRef.current >= typedSource.length && interval) {
           window.clearInterval(interval);
+          if (!completionReportedRef.current) {
+            completionReportedRef.current = true;
+            onTypewriterComplete?.();
+          }
         }
       }, getTypewriterCharMs(typedSource.length));
     };
@@ -90,7 +104,7 @@ const NarrativeText = ({
       window.clearTimeout(initialDelay);
       if (interval) window.clearInterval(interval);
     };
-  }, [playing, scene.id, typedSource]);
+  }, [playing, scene.id, typedSource, onTypewriterComplete]);
 
   useEffect(() => {
     if (!scrollRef.current) return;

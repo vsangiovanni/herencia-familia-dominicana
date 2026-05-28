@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Bot, LockKeyhole, RefreshCcw, Route, Send, ShieldCheck } from 'lucide-react';
+import { Bot, LockKeyhole, RefreshCcw, Route, Send, ShieldCheck, UserRound } from 'lucide-react';
 import PageHelp from '@/components/PageHelp';
 import SiennaPageLayout from '@/components/sienna/SiennaPageLayout';
 import { Button } from '@/components/ui/button';
@@ -242,17 +242,17 @@ const AsistenteIA = () => {
 
   return (
     <div className="min-h-dvh overflow-x-hidden bg-[#F6F2E8] dark:bg-background">
-      <SiennaPageLayout>
-        <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div>
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-legal-gold/35 bg-[#FFF6D8] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[#0A1020]">
+      <SiennaPageLayout className="flex min-h-dvh flex-col py-2 sm:py-4 lg:py-6">
+        <div className="mb-3 flex shrink-0 flex-col gap-3 px-1 md:mb-4 md:flex-row md:items-start md:justify-between">
+          <div className="min-w-0">
+            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-legal-gold/35 bg-[#FFF6D8] px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-wide text-[#0A1020] sm:text-xs">
               <Bot className="h-3.5 w-3.5 text-legal-gold" />
               Sienna contigo
             </div>
-            <h1 className="font-serif text-2xl font-bold text-legal-blue dark:text-[#F5F7FA] sm:text-3xl">
+            <h1 className="font-serif text-xl font-bold leading-tight text-legal-blue dark:text-[#F5F7FA] sm:text-3xl">
               {personalization.isLinkedMember ? `${personalization.firstName}, hablemos de tu expediente` : 'Hablemos del expediente'}
             </h1>
-            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-gray-700 dark:text-muted-foreground">
+            <p className="mt-1.5 max-w-3xl text-xs leading-relaxed text-gray-700 dark:text-muted-foreground sm:text-sm">
               {personalization.isLinkedMember
                 ? `Puedo guiarte tomando como referencia tu ficha familiar: ${personalization.memberLabel}. Siempre te explico y te llevo al lugar correcto, sin cambiar nada.`
                 : 'Puedo ayudarte a entender el reparto, el árbol, los documentos y los hallazgos, siempre guiándote sin cambiar nada del expediente.'}
@@ -261,22 +261,24 @@ const AsistenteIA = () => {
           <PageHelp helpKey="sienna-asistente" />
         </div>
 
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <Card className="legacy-surface overflow-hidden">
-            <CardContent className="flex h-[calc(100dvh-15rem)] min-h-[420px] min-w-0 flex-col p-3 sm:h-[calc(100dvh-12rem)] sm:min-h-[560px] sm:p-5 xl:h-[calc(100dvh-6rem)] xl:max-h-[820px]">
+        <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[minmax(0,1fr)_20rem]">
+          <Card className="legacy-surface flex min-h-0 overflow-hidden rounded-none border-x-0 sm:rounded-md sm:border-x">
+            <CardContent className="flex h-[calc(100dvh-12.5rem)] min-h-[30rem] min-w-0 flex-1 flex-col p-0 sm:h-[calc(100dvh-12rem)] xl:h-[calc(100dvh-8rem)] xl:max-h-[52rem]">
               {(messages.length > 0 || hasStoredContext) && (
-                <div className="mb-3 flex justify-end">
-                  <Button type="button" variant="outline" size="sm" className="btn-secondary" onClick={clearConversation}>
+                <div className="flex shrink-0 justify-end border-b border-legal-blue/10 bg-white/55 px-3 py-2 dark:border-white/10 dark:bg-[#0F1726]/80 sm:px-4">
+                  <Button type="button" variant="outline" size="sm" className="btn-secondary h-8 text-xs" onClick={clearConversation}>
                     <RefreshCcw className="mr-1.5 h-3.5 w-3.5" />
                     Nueva conversación
                   </Button>
                 </div>
               )}
-              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain rounded-md border border-legal-blue/10 bg-white/55 p-3 dark:border-white/10 dark:bg-[#0F1726]/70">
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain bg-[#FBF8EF] px-3 py-4 dark:bg-[#0F1726] sm:px-5">
                 {messages.length === 0 ? (
                   <div className="grid h-full place-items-center text-center text-sm text-gray-600 dark:text-muted-foreground">
-                    <div>
-	                      <Bot className="mx-auto mb-3 h-10 w-10 text-legal-gold" />
+                    <div className="max-w-sm rounded-md border border-legal-gold/20 bg-white/65 px-5 py-6 shadow-sm dark:border-white/10 dark:bg-[#162033]/72">
+	                      <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full bg-legal-gold/15 text-legal-gold">
+                          <Bot className="h-6 w-6" />
+                        </div>
 	                      {personalization.isLinkedMember
 	                        ? `${personalization.firstName}, pregúntame por tu rama familiar, tus documentos o una ruta del expediente.`
 	                        : 'Escríbeme con tus palabras lo que quieres entender del expediente.'}
@@ -286,13 +288,23 @@ const AsistenteIA = () => {
                   messages.filter((message) => message.role !== 'assistant' || message.content).map((message, index) => (
                     <div
                       key={index}
-                      className={message.role === 'user' ? 'ml-auto min-w-0 max-w-[88%] sm:max-w-[82%]' : 'mr-auto min-w-0 max-w-[94%] sm:max-w-[92%]'}
+                      className={`flex min-w-0 items-end gap-2 ${message.role === 'user' ? 'ml-auto max-w-[94%] flex-row-reverse sm:max-w-[82%]' : 'mr-auto max-w-[96%] sm:max-w-[88%]'}`}
                     >
                       <div
                         className={
                           message.role === 'user'
-                            ? 'whitespace-pre-wrap break-words rounded-md bg-legal-blue px-4 py-3 text-sm leading-relaxed text-white'
-                            : 'whitespace-pre-wrap break-words rounded-md border border-legal-gold/25 bg-[#FFFDF7] px-4 py-3 text-sm leading-relaxed text-[#1B2430] dark:bg-[#162033] dark:text-[#F5F7FA]'
+                            ? 'mb-1 hidden h-8 w-8 shrink-0 place-items-center rounded-full bg-legal-blue text-white sm:grid'
+                            : 'mb-1 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-legal-gold/18 text-legal-gold'
+                        }
+                      >
+                        {message.role === 'user' ? <UserRound className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+                      </div>
+                      <div className="min-w-0">
+                      <div
+                        className={
+                          message.role === 'user'
+                            ? 'whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-legal-blue px-4 py-3 text-sm leading-relaxed text-white shadow-sm'
+                            : 'whitespace-pre-wrap break-words rounded-2xl rounded-bl-md border border-legal-gold/20 bg-[#FFFDF7] px-4 py-3 text-sm leading-relaxed text-[#1B2430] shadow-sm dark:bg-[#162033] dark:text-[#F5F7FA]'
                         }
                       >
                         {message.role === 'assistant' ? renderAnswer(message.content) : message.content}
@@ -309,31 +321,38 @@ const AsistenteIA = () => {
                           ))}
                         </div>
                       ) : null}
+                      </div>
                     </div>
                   ))
                 )}
                 {isSending && !messages[messages.length - 1]?.content && (
-                  <div className="mr-auto max-w-[92%] rounded-md border border-legal-gold/25 bg-[#FFFDF7] px-4 py-3 text-sm text-gray-600 shadow-sm dark:bg-[#162033] dark:text-muted-foreground">
-                    <span className="inline-flex items-center gap-2">
-                      <span>{thinkingMessage}</span>
-                      <span className="sienna-chat-dots" aria-hidden="true">
-                        <span />
-                        <span />
-                        <span />
+                  <div className="mr-auto flex max-w-[96%] items-end gap-2 sm:max-w-[88%]">
+                    <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-legal-gold/18 text-legal-gold">
+                      <Bot className="h-4 w-4" />
+                    </div>
+                    <div className="rounded-2xl rounded-bl-md border border-legal-gold/20 bg-[#FFFDF7] px-4 py-3 text-sm text-gray-600 shadow-sm dark:bg-[#162033] dark:text-muted-foreground">
+                      <span className="inline-flex items-center gap-2">
+                        <span>{thinkingMessage}</span>
+                        <span className="sienna-chat-dots" aria-hidden="true">
+                          <span />
+                          <span />
+                          <span />
+                        </span>
                       </span>
-                    </span>
+                    </div>
                   </div>
                 )}
                 <div ref={messagesEndRef} />
               </div>
 
-              {error && <p className="mt-3 text-sm font-medium text-red-600">{error}</p>}
-              <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+              {error && <p className="shrink-0 px-3 pt-2 text-sm font-medium text-red-600 sm:px-4">{error}</p>}
+              <div className="shrink-0 border-t border-legal-blue/10 bg-[#FFFDF7]/96 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] dark:border-white/10 dark:bg-[#111A2A]/96 sm:p-3">
+                <div className="flex items-end gap-2">
                 <Textarea
                   value={question}
                   onChange={(event) => setQuestion(event.target.value)}
                   placeholder="Escribe tu pregunta sobre el expediente..."
-                  className="min-h-[64px] flex-1 resize-none"
+                  className="max-h-32 min-h-[48px] flex-1 resize-none rounded-2xl border-legal-blue/15 bg-white px-4 py-3 text-base sm:min-h-[56px] sm:text-sm"
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
                       event.preventDefault();
@@ -341,20 +360,20 @@ const AsistenteIA = () => {
                     }
                   }}
                 />
-                <Button className="btn-primary sm:w-36" disabled={!canSend} onClick={() => void ask()}>
-                  <Send className="mr-2 h-4 w-4" />
-                  Enviar
+                <Button className="btn-primary grid h-12 w-12 shrink-0 place-items-center rounded-full p-0 sm:w-14" disabled={!canSend} onClick={() => void ask()} aria-label="Enviar">
+                  <Send className="h-4 w-4" />
                 </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
 
-          <div className="space-y-4">
+          <div className="hidden space-y-3 xl:block">
             <Card className="legacy-surface">
-              <CardContent className="p-5">
+              <CardContent className="p-4">
                 <div className="flex items-center gap-3">
                   <ShieldCheck className="h-5 w-5 text-legal-gold" />
-                  <h2 className="font-serif text-xl font-bold text-legal-blue dark:text-[#F5F7FA]">Cuidado del expediente</h2>
+                  <h2 className="font-serif text-lg font-bold text-legal-blue dark:text-[#F5F7FA]">Cuidado del expediente</h2>
                 </div>
                 <ul className="mt-4 space-y-3 text-sm leading-relaxed text-gray-700 dark:text-muted-foreground">
                   <li>No cambio nada por ti.</li>
@@ -365,10 +384,10 @@ const AsistenteIA = () => {
               </CardContent>
             </Card>
             <Card className="legacy-surface">
-              <CardContent className="p-5">
+              <CardContent className="p-4">
                 <div className="flex items-center gap-3">
                   <LockKeyhole className="h-5 w-5 text-legal-gold" />
-                  <h2 className="font-serif text-xl font-bold text-legal-blue dark:text-[#F5F7FA]">Cómo te acompaño</h2>
+                  <h2 className="font-serif text-lg font-bold text-legal-blue dark:text-[#F5F7FA]">Cómo te acompaño</h2>
                 </div>
                 <p className="mt-3 text-sm leading-relaxed text-gray-700 dark:text-muted-foreground">
                   Estoy aquí para ayudarte a leer el expediente con claridad, sin tomar decisiones ni hacer cambios por cuenta propia.

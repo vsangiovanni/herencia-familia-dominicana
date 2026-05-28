@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, EvidenceDocument, SiennaCalculationSnapshot } from '@/lib/api';
 
 export const SIENNA_STALE_MS = 90_000;
+const SIENNA_STORYBOOK_VERSION = 'memoria-viva-v4';
 
 export const siennaQueryKeys = {
   family: ['sienna-family'] as const,
@@ -11,7 +12,7 @@ export const siennaQueryKeys = {
   settings: ['app-settings'] as const,
   snapshot: ['sienna-calculation-snapshot-latest'] as const,
   workspace: (includeMedia = false) => ['sienna-workspace', { includeMedia }] as const,
-  storybook: (includeMedia = false, aiNarrative = false) => ['sienna-storybook', { includeMedia, aiNarrative }] as const,
+  storybook: (includeMedia = false, aiNarrative = false) => ['sienna-storybook', { includeMedia, aiNarrative, version: SIENNA_STORYBOOK_VERSION }] as const,
   storybookDedication: (nonce?: string | number) => ['sienna-storybook-dedication', { nonce }] as const,
   calculation: (estateAmount?: number | string, lawyerFeePercentage?: number | string) =>
     ['sienna-calculation', { estateAmount, lawyerFeePercentage }] as const,
