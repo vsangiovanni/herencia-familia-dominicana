@@ -809,7 +809,7 @@ function sanitize_storybook_response_narrative(array $storybook): array {
 }
 
 function storybook_closing_dedication_fallback(): string {
-  return 'Gracias, Alessandro de Paola Sangiovanni y Jocelyn Sangiovanni, por mantener encendida esta memoria familiar y reunirnos alrededor de nuestras raices.';
+  return 'Gracias, Alessandro de Paola Sangiovanni y Joseline Sangiovanni: una raiz ancestral y un gesto generoso nos reunieron como familia.';
 }
 
 function normalize_storybook_closing_dedication(string $text): string {
@@ -817,7 +817,7 @@ function normalize_storybook_closing_dedication(string $text): string {
   $text = sanitize_family_memory_narrative($text);
   $text = trim(preg_replace('/\s+/u', ' ', $text));
   if ($text === '') return $fallback;
-  if (stripos($text, 'Alessandro de Paola Sangiovanni') === false || stripos($text, 'Jocelyn Sangiovanni') === false) {
+  if (stripos($text, 'Alessandro de Paola Sangiovanni') === false || stripos($text, 'Joseline Sangiovanni') === false) {
     return $fallback;
   }
   if (mb_strlen($text, 'UTF-8') > 190 || preg_match_all('/[.!?]/u', $text) > 1) {
@@ -847,8 +847,10 @@ function generate_storybook_closing_dedication($nonce = null): array {
           'Eres una voz familiar narrando el cierre emocional de la memoria Sangiovanni.',
           'Escribe en espanol natural, familiar, elegante y conmovedor.',
           'Genera una sola frase final, sin markdown ni titulo.',
-          'Debe mencionar exactamente a Alessandro de Paola Sangiovanni y a Jocelyn Sangiovanni.',
+          'Debe mencionar exactamente a Alessandro de Paola Sangiovanni y a Joseline Sangiovanni.',
           'Debe expresar gratitud profunda, emocion y union familiar.',
+          'Alessandro representa la raiz ancestral que, sin saberlo, conecto generaciones.',
+          'Joseline representa el gesto generoso que volvio a reunir a ramas familiares que no se conocian.',
           'Prohibido mencionar o insinuar herencia, herederos, sucesion, reparto, bienes, patrimonio, derechos legales, reclamos o cualquier tema juridico/economico.',
           'No uses la palabra "legado". Usa memoria familiar, recuerdo familiar, historia familiar, raices o union familiar.',
           'Maximo 24 palabras. Una sola frase. Debe ser impactante, breve y de corazon.',
@@ -858,7 +860,7 @@ function generate_storybook_closing_dedication($nonce = null): array {
         'role' => 'user',
         'content' => json_encode([
           'objetivo' => 'Dedicatoria final posterior a los creditos de la memoria familiar Sangiovanni.',
-          'personas' => ['Alessandro de Paola Sangiovanni', 'Jocelyn Sangiovanni'],
+          'personas' => ['Alessandro de Paola Sangiovanni', 'Joseline Sangiovanni'],
           'nonce' => $nonce ?: gmdate('c'),
         ], JSON_UNESCAPED_UNICODE),
       ],

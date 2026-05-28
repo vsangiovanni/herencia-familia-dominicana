@@ -110,7 +110,7 @@ const NarrativeText = ({
     />
     <motion.div
       ref={scrollRef}
-      className={`mt-4 max-h-[61vh] overflow-hidden pr-2 [mask-image:none] md:mt-5 md:max-h-[calc(100vh-21rem)] md:overflow-hidden md:pr-0 xl:max-h-[calc(100vh-23rem)] ${wide ? 'max-w-[86vw] md:max-w-4xl' : 'max-w-[68vw] md:max-w-2xl'}`}
+      className={`pointer-events-auto mt-4 max-h-[61vh] touch-pan-y overflow-y-auto overscroll-contain pr-2 [mask-image:none] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden md:mt-5 md:max-h-[calc(100vh-21rem)] md:pr-0 xl:max-h-[calc(100vh-23rem)] ${wide ? 'max-w-[86vw] md:max-w-4xl' : 'max-w-[68vw] md:max-w-2xl'}`}
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: hideBody ? 0 : 1, y: 0, filter: hideBody ? 'blur(7px)' : 'blur(0px)' }}
       transition={{ duration: hideBody ? 1.15 : 0.8, delay: hideBody ? 0 : 0.55, ease: 'easeOut' }}

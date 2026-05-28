@@ -4354,11 +4354,11 @@ async function generateStorybookSlideNarrative(packet) {
 async function generateStorybookClosingDedication({ nonce }) {
   const apiKey = process.env.OPENAI_API_KEY;
   const model = STORYBOOK_AI_MODEL;
-  const fallbackText = 'Gracias, Alessandro de Paola Sangiovanni y Jocelyn Sangiovanni, por mantener encendida esta memoria familiar y reunirnos alrededor de nuestras raices.';
+  const fallbackText = 'Gracias, Alessandro de Paola Sangiovanni y Joseline Sangiovanni: una raiz ancestral y un gesto generoso nos reunieron como familia.';
   const normalizeDedication = (value) => {
     let text = sanitizeFamilyMemoryNarrative(String(value || '')).replace(/\s+/g, ' ').trim();
     if (!text) return fallbackText;
-    if (!text.includes('Alessandro de Paola Sangiovanni') || !text.includes('Jocelyn Sangiovanni')) return fallbackText;
+    if (!text.includes('Alessandro de Paola Sangiovanni') || !text.includes('Joseline Sangiovanni')) return fallbackText;
     const sentenceCount = (text.match(/[.!?]/g) || []).length;
     if (text.length > 190 || sentenceCount > 1) return fallbackText;
     if (!/[.!?]$/.test(text)) text += '.';
@@ -4387,8 +4387,10 @@ async function generateStorybookClosingDedication({ nonce }) {
             'Eres una voz familiar narrando el cierre emocional de la memoria Sangiovanni.',
             'Escribe en espanol natural, familiar, elegante y conmovedor.',
             'Genera una sola frase final, sin markdown ni titulo.',
-            'Debe mencionar exactamente a Alessandro de Paola Sangiovanni y a Jocelyn Sangiovanni.',
+            'Debe mencionar exactamente a Alessandro de Paola Sangiovanni y a Joseline Sangiovanni.',
             'Debe expresar gratitud profunda, emocion y union familiar.',
+            'Alessandro representa la raiz ancestral que, sin saberlo, conecto generaciones.',
+            'Joseline representa el gesto generoso que volvio a reunir a ramas familiares que no se conocian.',
             'Prohibido mencionar o insinuar herencia, herederos, sucesion, reparto, bienes, patrimonio, derechos legales, reclamos o cualquier tema juridico/economico.',
             'No uses la palabra "legado". Usa memoria familiar, recuerdo familiar, historia familiar, raices o union familiar.',
             'Evita palabras frias o raras como "salvedad"; debe sentirse humano, claro y emotivo.',
@@ -4400,7 +4402,7 @@ async function generateStorybookClosingDedication({ nonce }) {
           role: 'user',
           content: JSON.stringify({
             objetivo: 'Dedicatoria final posterior a los creditos de la memoria familiar Sangiovanni.',
-            personas: ['Alessandro de Paola Sangiovanni', 'Jocelyn Sangiovanni'],
+            personas: ['Alessandro de Paola Sangiovanni', 'Joseline Sangiovanni'],
             nonce: nonce || new Date().toISOString(),
           }),
         },
@@ -4783,11 +4785,7 @@ app.get('/api/sienna-storybook-dedication', requireAuth, async (req, res) => {
     });
   } catch {
     res.json({
-      text: [
-        'Este cierre tambien honra a Alessandro de Paola Sangiovanni y a Jocelyn Sangiovanni, porque esta memoria familiar no llego hasta aqui por casualidad.',
-        'En gran parte, este recuerdo compartido y esta reagrupacion familiar pudieron tomar forma por su presencia, su impulso y su manera de mantener viva la union.',
-        'Gracias a ellos, la historia encontro nuevas manos para cuidarla, nuevos ojos para reconocerla y un camino mas claro para seguir reuniendo a la familia alrededor de lo que somos.'
-      ].join(' '),
+      text: 'Gracias, Alessandro de Paola Sangiovanni y Joseline Sangiovanni: una raiz ancestral y un gesto generoso nos reunieron como familia.',
       mode: 'fallback-error',
       model: STORYBOOK_AI_MODEL,
       generated_at: new Date().toISOString(),

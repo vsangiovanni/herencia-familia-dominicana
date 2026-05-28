@@ -176,13 +176,13 @@ const getCreditRollDurationSeconds = (memberCount: number) =>
   Math.max(46, Math.min(92, memberCount * 1.15));
 
 const getPhotoSparkleStyle = (index: number, total: number): React.CSSProperties => {
-  const xBase = 8 + ((index * 37 + total * 11) % 82);
-  const yBase = 12 + ((index * 53 + total * 7) % 70);
-  const size = 44 + ((index * 17) % 28);
+  const xBase = 5 + ((index * 37 + total * 11) % 90);
+  const yBase = 6 + ((index * 53 + total * 7) % 86);
+  const size = 38 + ((index * 17) % 30);
 
   return {
-    left: Math.max(6, Math.min(90, xBase)) + '%',
-    top: Math.max(8, Math.min(82, yBase)) + '%',
+    left: Math.max(4, Math.min(92, xBase)) + '%',
+    top: Math.max(6, Math.min(88, yBase)) + '%',
     width: size,
     height: size,
   };
@@ -192,11 +192,11 @@ const LegacyPhotoConstellation = ({ members }: { members: NonNullable<LegadoStor
   const photoMembers = members.filter((member) => member.photoData);
   if (!photoMembers.length) return null;
 
-  const cycleSeconds = Math.max(18, Math.min(52, photoMembers.length * 1.35));
+  const cycleSeconds = Math.max(12, Math.min(34, photoMembers.length * 0.88));
 
   return (
-    <div className="absolute inset-x-[4vw] bottom-[4vh] top-[50vh] z-[36] overflow-hidden md:inset-x-[8vw] md:top-[49vh]">
-      <p className="absolute left-1/2 top-0 z-10 -translate-x-1/2 text-center text-[0.62rem] font-black uppercase tracking-[0.28em] text-[#f8e5bd]/78 md:text-xs">
+    <div className="absolute inset-x-[3vw] bottom-[4vh] top-[12vh] z-[36] overflow-hidden md:inset-x-[5vw] md:top-[12vh]">
+      <p className="absolute left-1/2 top-0 z-10 -translate-x-1/2 text-center text-[0.62rem] font-black uppercase tracking-[0.28em] text-[#f8e5bd]/70 md:text-xs">
         Rostros de la familia
       </p>
       {photoMembers.map((member, index) => (
@@ -207,19 +207,19 @@ const LegacyPhotoConstellation = ({ members }: { members: NonNullable<LegadoStor
           initial={{ opacity: 0, scale: 0.3, filter: 'blur(12px)' }}
           animate={{
             opacity: [0, 0, 0.96, 0.16, 0.88, 0],
-            scale: [0.35, 0.72, 1.16, 0.92, 1.03, 0.58],
+            scale: [0.35, 0.72, 1.08, 0.9, 1, 0.58],
             filter: ['blur(14px)', 'blur(7px)', 'blur(0px)', 'blur(1.5px)', 'blur(0px)', 'blur(10px)'],
           }}
           transition={{
             duration: cycleSeconds,
-            delay: index * 1.28,
-            times: [0, 0.02, 0.045, 0.068, 0.092, 0.13],
+            delay: (index % 7) * 0.46 + Math.floor(index / 7) * 0.18,
+            times: [0, 0.035, 0.11, 0.18, 0.28, 0.42],
             repeat: Infinity,
             ease: 'easeInOut',
           }}
         >
           <div className="absolute inset-[-32%] rounded-full bg-[#f8e5bd]/18 blur-xl" />
-          <div className="relative h-full w-full overflow-hidden rounded-full border-2 border-[#f8e5bd]/82 bg-[#f7ead0] shadow-[0_0_36px_rgba(248,229,189,0.48),0_14px_34px_rgba(0,0,0,0.48)]">
+          <div className="relative h-full w-full overflow-hidden rounded-full border border-[#f8e5bd]/76 bg-[#f7ead0] shadow-[0_0_32px_rgba(248,229,189,0.42),0_14px_34px_rgba(0,0,0,0.46)]">
             <img
               src={member.photoData || ''}
               alt={member.name}
@@ -237,10 +237,12 @@ const LegacyCredits = ({
   members,
   dedication,
   showDedication,
+  showDedicationText,
 }: {
   members: NonNullable<LegadoStoryScene['creditMembers']>;
   dedication?: { text: string; mode: string } | null;
   showDedication: boolean;
+  showDedicationText: boolean;
 }) => {
   const durationSeconds = getCreditRollDurationSeconds(members.length);
   const isNanoDedication = dedication?.mode === 'openai';
@@ -311,7 +313,7 @@ const LegacyCredits = ({
         </div>
       </div>
       <AnimatePresence>
-        {showDedication ? (
+        {showDedication && showDedicationText ? (
           <motion.div
             className={'absolute left-1/2 top-1/2 z-[38] w-[min(34rem,86vw)] rounded-[0.45rem] border px-4 py-4 text-center shadow-[0_24px_80px_rgba(0,0,0,0.52)] backdrop-blur-md md:top-[22vh] md:w-[min(48rem,82vw)] md:px-10 md:py-7 ' + dedicationFrameClass}
             style={{ x: '-50%', y: '-50%' }}
@@ -342,6 +344,7 @@ const LegadoSangiovanniGame = () => {
   const [mapOpen, setMapOpen] = useState(false);
   const [showLegacyCredits, setShowLegacyCredits] = useState(false);
   const [showLegacyDedication, setShowLegacyDedication] = useState(false);
+  const [showLegacyDedicationText, setShowLegacyDedicationText] = useState(false);
   const [dedicationNonce, setDedicationNonce] = useState<string | number>();
   const primaryMusicRef = useRef<HTMLAudioElement | null>(null);
   const secondaryMusicRef = useRef<HTMLAudioElement | null>(null);
@@ -400,6 +403,7 @@ const LegadoSangiovanniGame = () => {
   useEffect(() => {
     setShowLegacyCredits(false);
     setShowLegacyDedication(false);
+    setShowLegacyDedicationText(false);
     setDedicationNonce(undefined);
     if (!hasLegacyCredits) return;
     setDedicationNonce(scene.id + '-' + Date.now());
@@ -417,14 +421,26 @@ const LegadoSangiovanniGame = () => {
 
   useEffect(() => {
     setShowLegacyDedication(false);
+    setShowLegacyDedicationText(false);
     if (!showLegacyCredits || !hasLegacyCredits || !scene.creditMembers?.length) return;
 
     const timer = window.setTimeout(() => {
       setShowLegacyDedication(true);
+      setShowLegacyDedicationText(true);
     }, fastCredits ? 2600 : Math.max(8000, getCreditRollDurationSeconds(scene.creditMembers.length) * 1000 - 6500));
 
     return () => window.clearTimeout(timer);
   }, [showLegacyCredits, hasLegacyCredits, scene.id, scene.creditMembers?.length, fastCredits]);
+
+  useEffect(() => {
+    if (!showNanoDedication || !showLegacyDedicationText) return;
+
+    const timer = window.setTimeout(() => {
+      setShowLegacyDedicationText(false);
+    }, fastCredits ? 3200 : 8000);
+
+    return () => window.clearTimeout(timer);
+  }, [showNanoDedication, showLegacyDedicationText, fastCredits]);
 
   useEffect(() => {
     const audios = [primaryMusicRef.current, secondaryMusicRef.current] as const;
@@ -637,6 +653,7 @@ const LegadoSangiovanniGame = () => {
                   members={scene.creditMembers}
                   dedication={legacyDedication || null}
                   showDedication={showNanoDedication}
+                  showDedicationText={showLegacyDedicationText}
                 />
               ) : null}
             </AnimatePresence>
@@ -756,15 +773,6 @@ const LegadoSangiovanniGame = () => {
             </motion.div>
           )}
         </AnimatePresence>
-
-        {isFinished && (
-          <button
-            type="button"
-            onClick={advance}
-            className="absolute inset-0 z-10 cursor-default"
-            aria-label="Reiniciar historia"
-          />
-        )}
 
         <div className="pointer-events-none absolute bottom-5 left-20 z-40 hidden w-40 overflow-hidden rounded-full bg-[#f7ead0]/12 md:block">
           <div className="h-1.5 rounded-full bg-[#991b1b]" style={{ width: `${totalProgress}%` }} />
