@@ -52,7 +52,7 @@ const Hallazgos = () => {
   const queryClient = useQueryClient();
   const { canEdit } = useAuth();
   const { data: workspace, isLoading, isFetching, refetch } = useSiennaWorkspace(false);
-  const { data: heirsData } = useConfirmedHeirs(true);
+  const { data: heirsData } = useConfirmedHeirs(false);
   const photoLookup = useMemo(
     () => buildMemberPhotoLookup(heirsData?.heirs ?? []),
     [heirsData?.heirs]

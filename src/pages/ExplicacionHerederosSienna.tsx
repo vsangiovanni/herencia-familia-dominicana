@@ -33,6 +33,7 @@ import {
 } from '@/lib/siennaHeirExplain';
 import { buildInheritancePlanFromApiRows } from '@/lib/siennaCalculation';
 import { buildSiennaDocumentSupportHref } from '@/lib/siennaSupportLinks';
+import { resolveConfirmedHeirPhotoData } from '@/lib/memberPhotos';
 import {
   AlertTriangle,
   BookOpen,
@@ -132,7 +133,7 @@ const SupportBadge = ({ brief }: { brief: HeirBrief }) => {
 
 const ExplicacionHerederosSienna = () => {
   const { data: workspace, isLoading, isFetching, refetch } = useSiennaWorkspace(false);
-  const { data: heirsWithMedia } = useConfirmedHeirs(true);
+  const { data: heirsWithMedia } = useConfirmedHeirs(false);
   const members = workspace?.members ?? [];
   const documents = workspace?.documents ?? [];
   const heirs = heirsWithMedia?.heirs ?? workspace?.heirs ?? [];
@@ -445,7 +446,7 @@ const ExplicacionHerederosSienna = () => {
                           <MemberPhoto
                             name={brief.share.member.name}
                             memberId={brief.share.member.id}
-                            photoData={brief.photo?.photo_data}
+                            photoData={resolveConfirmedHeirPhotoData(brief.photo)}
                             size="sm"
                             verificationStatus={brief.photo?.status === 'confirmado' ? 'verified' : 'pending'}
                           />
@@ -506,7 +507,7 @@ const ExplicacionHerederosSienna = () => {
                     <MemberPhoto
                       name={brief.share.member.name}
                       memberId={brief.share.member.id}
-                      photoData={brief.photo?.photo_data}
+                      photoData={resolveConfirmedHeirPhotoData(brief.photo)}
                       size="lg"
                       className="border-2 border-legal-gold/40"
                       verificationStatus={brief.photo?.status === 'confirmado' ? 'verified' : 'pending'}
@@ -576,7 +577,7 @@ const ExplicacionHerederosSienna = () => {
                           downloadHeirBriefPdf(
                             {
                               ...brief,
-                              photoData: brief.photo?.photo_data,
+                              photoData: resolveConfirmedHeirPhotoData(brief.photo),
                             },
                             netAmount
                           )

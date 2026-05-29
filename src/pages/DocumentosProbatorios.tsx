@@ -8,7 +8,7 @@ import MemberPhoto from '@/components/sienna/MemberPhoto';
 import { api, ConfirmedHeir, EvidenceDocument, EvidenceDocumentAiInterpretation, SiennaFamilyMember } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { invalidateSiennaData, useConfirmedHeirs, useSiennaWorkspace } from '@/hooks/useSiennaData';
-import { buildMemberPhotoLookup } from '@/lib/memberPhotos';
+import { buildMemberPhotoLookup, resolveConfirmedHeirPhotoData } from '@/lib/memberPhotos';
 import { getMemberLinkVerificationStatus } from '@/lib/siennaGenealogy';
 import { sortMembersByName } from '@/lib/siennaFamilyTree';
 import { Badge } from '@/components/ui/badge';
@@ -178,7 +178,7 @@ const DocumentosProbatorios = () => {
   const [searchParams] = useSearchParams();
   const { canEdit } = useAuth();
   const { data: workspace, refetch } = useSiennaWorkspace(false);
-  const { data: heirsWithPhotos } = useConfirmedHeirs(true);
+  const { data: heirsWithPhotos } = useConfirmedHeirs(false);
   const members = workspace?.members ?? [];
   const heirs = heirsWithPhotos?.heirs ?? workspace?.heirs ?? [];
   const genealogy = useMemo(
@@ -1104,7 +1104,7 @@ const DocumentosProbatorios = () => {
                     if (row.type === 'heir') {
                       const heir = row.heir;
                       const draft = heirDrafts[heir.id] || {};
-                      const photo = draft.photo_data || heir.photo_data;
+                      const photo = draft.photo_data || resolveConfirmedHeirPhotoData(heir);
                       return (
                         <TableRow key={'heir-' + heir.id} className="bg-legal-blue/[0.02]">
                           <TableCell className="min-w-[340px]">
@@ -1175,7 +1175,7 @@ const DocumentosProbatorios = () => {
                   const draft = linkedHeir ? heirDrafts[linkedHeir.id] || {} : {};
                   const displayName = linkedHeir?.heir_name || primaryName;
                   const displayMemberId = linkedHeir?.sienna_member_id || primaryMember?.id || null;
-                  const photo = draft.photo_data || linkedHeir?.photo_data || null;
+                  const photo = draft.photo_data || resolveConfirmedHeirPhotoData(linkedHeir);
                   const evidenceCount = linkedHeir
                     ? evidenceByHeir[String(linkedHeir.sienna_member_id || '')] || evidenceByHeir[linkedHeir.heir_name] || linkedHeir.evidence_count || 0
                     : 0;

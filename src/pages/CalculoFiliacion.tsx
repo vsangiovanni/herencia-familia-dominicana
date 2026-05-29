@@ -93,7 +93,7 @@ const LinkedSupportBadge = ({
 
 const CalculoFiliacion = () => {
   const { data: workspace } = useSiennaWorkspace(false);
-  const { data: heirsWithPhotos } = useConfirmedHeirs(true);
+  const { data: heirsWithPhotos } = useConfirmedHeirs(false);
   const confirmedHeirs = heirsWithPhotos?.heirs ?? workspace?.heirs ?? [];
   const members = workspace?.members ?? [];
   const unions = workspace?.unions ?? [];

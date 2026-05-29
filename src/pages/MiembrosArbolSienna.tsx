@@ -184,7 +184,7 @@ const MiembrosArbolSienna = () => {
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const { data: workspace, isLoading, isFetching, refetch } = useSiennaWorkspace(false);
-  const { data: heirsWithPhotos } = useConfirmedHeirs(true);
+  const { data: heirsWithPhotos } = useConfirmedHeirs(false);
   const { data: realtimeCalculationData } = useSiennaCalculation(
     workspace?.settings?.estate_amount ?? 0,
     workspace?.settings?.lawyer_fee_percentage ?? 0
@@ -1389,6 +1389,7 @@ const MiembrosArbolSienna = () => {
         heirs={heirs}
         documents={documents}
         photoData={detailMember ? photoCache[detailMember.id] : null}
+        photoLookup={photoLookup}
         open={Boolean(detailMember)}
         onOpenChange={(open) => !open && setDetailMemberId(null)}
       />

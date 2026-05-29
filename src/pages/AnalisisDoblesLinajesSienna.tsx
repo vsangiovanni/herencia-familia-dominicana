@@ -430,7 +430,7 @@ const filterOptions: Array<{ id: InheritanceFilter; label: string }> = [
 
 const AnalisisDoblesLinajesSienna = () => {
   const { data: workspace } = useSiennaWorkspace(false);
-  const { data: heirsData } = useConfirmedHeirs(true);
+  const { data: heirsData } = useConfirmedHeirs(false);
   const photoLookup = useMemo(
     () => buildMemberPhotoLookup(heirsData?.heirs ?? workspace?.heirs ?? []),
     [heirsData?.heirs, workspace?.heirs]

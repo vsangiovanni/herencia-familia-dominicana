@@ -26,6 +26,7 @@ import { Calculator, ClipboardCheck, FileText, GitBranch, GitMerge, Landmark, Ma
 import { Link } from 'react-router-dom';
 import { buildWhyIInheritText, formatMoney as formatMoneyExplain, formatPercent as formatPercentExplain } from '@/lib/siennaHeirExplain';
 import { buildInheritancePlanFromApiRows } from '@/lib/siennaCalculation';
+import { buildMemberPhotoLookup, resolveConfirmedHeirPhotoData } from '@/lib/memberPhotos';
 
 type TreeMember = SiennaFamilyMember & { children: TreeMember[] };
 
@@ -224,7 +225,7 @@ const ClassicNode = ({
             <MemberPhoto
               name={member.name}
               memberId={member.id}
-              photoData={heir?.photo_data}
+              photoData={resolveConfirmedHeirPhotoData(heir)}
               size="lg"
               rounded="xl"
               className="border-2 border-legal-gold/60 shadow-lg"
@@ -377,7 +378,7 @@ const ClassicNode = ({
                 <MemberPhoto
                   name={spousePartner.name}
                   memberId={spousePartner.id}
-                  photoData={spouseHeir?.photo_data}
+                  photoData={resolveConfirmedHeirPhotoData(spouseHeir)}
                   size="lg"
                   rounded="xl"
                   className="border-2 border-legal-gold/60 shadow-lg"
@@ -448,7 +449,7 @@ const ClassicNode = ({
 
 const ArbolGenealogicoSienna = () => {
   const { data: workspace, isLoading, isFetching } = useSiennaWorkspace(false);
-  const { data: heirsWithMedia } = useConfirmedHeirs(true);
+  const { data: heirsWithMedia } = useConfirmedHeirs(false);
   const members = workspace?.members ?? [];
   const heirs = heirsWithMedia?.heirs ?? workspace?.heirs ?? [];
   const genealogy = useMemo<SiennaGenealogyBundle>(
@@ -1173,7 +1174,7 @@ const ArbolGenealogicoSienna = () => {
                     <MemberPhoto
                       name={heir?.heir_name || share.member.name}
                       memberId={share.member.id}
-                      photoData={heir?.photo_data}
+                      photoData={resolveConfirmedHeirPhotoData(heir)}
                       size="xs"
                       verificationStatus={heir?.status === 'confirmado' ? 'verified' : 'pending'}
                     />
@@ -1200,10 +1201,9 @@ const ArbolGenealogicoSienna = () => {
                           <MemberPhoto
                             name={share.member.name}
                             memberId={share.member.id}
-                            photoData={
-                              heirsByMemberId.get(share.member.id)?.photo_data ||
-                              heirsByName.get(normalizeName(share.member.name))?.photo_data
-                            }
+                            photoData={resolveConfirmedHeirPhotoData(
+                              heirsByMemberId.get(share.member.id) || heirsByName.get(normalizeName(share.member.name))
+                            )}
                             size="sm"
                             verificationStatus={
                               (heirsByMemberId.get(share.member.id) || heirsByName.get(normalizeName(share.member.name)))?.status === 'confirmado'

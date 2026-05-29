@@ -27,6 +27,19 @@ export const buildMemberPhotoLookup = (heirs: ConfirmedHeir[]): MemberPhotoLooku
   return { byMemberId, byName };
 };
 
+export const resolveConfirmedHeirPhotoData = (heir?: ConfirmedHeir | null): string | null => {
+  const embeddedPhoto = heir?.photo_data;
+  if (embeddedPhoto && String(embeddedPhoto).trim()) {
+    return String(embeddedPhoto);
+  }
+
+  if (heir?.has_photo && heir.id) {
+    return `/api/confirmed-heirs/${encodeURIComponent(heir.id)}/photo`;
+  }
+
+  return null;
+};
+
 export const resolveMemberPhotoData = (
   lookup: MemberPhotoLookup,
   memberId?: string | null,
@@ -40,8 +53,7 @@ export const resolveMemberPhotoData = (
     (memberId ? lookup.byMemberId.get(String(memberId)) : undefined) ||
     (memberName ? lookup.byName.get(normalizeName(memberName)) : undefined);
 
-  const photo = heir?.photo_data;
-  return photo && String(photo).trim() ? String(photo) : null;
+  return resolveConfirmedHeirPhotoData(heir);
 };
 
 export const resolveMemberPhotoVerificationStatus = (
