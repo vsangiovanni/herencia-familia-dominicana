@@ -301,11 +301,8 @@ const renderPdfFirstPageThumbnail = async (evidence: EvidenceDocument): Promise<
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(canvas.width / 2, canvas.height / 2, canvas.width / 2, 0, Math.PI * 2);
-    ctx.clip();
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
     await page.render({ canvasContext: ctx, viewport }).promise;
     return canvas.toDataURL('image/jpeg', 0.86);
   } catch {

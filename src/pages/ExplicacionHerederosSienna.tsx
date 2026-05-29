@@ -283,6 +283,37 @@ const ExplicacionHerederosSienna = () => {
     }
   };
 
+  const downloadBriefPdf = async (brief: HeirBrief) => {
+    try {
+      const documentsWithMedia = await Promise.all(
+        brief.documents.map(async (document) => {
+          if (!document.id || document.file_data) return document;
+          try {
+            const response = await api.getEvidenceDocument(document.id);
+            return response.document || document;
+          } catch {
+            return document;
+          }
+        })
+      );
+
+      await downloadHeirBriefPdf(
+        {
+          ...brief,
+          documents: documentsWithMedia,
+          photoData: resolveConfirmedHeirPhotoData(brief.photo),
+        },
+        netAmount
+      );
+    } catch (error) {
+      toast({
+        title: 'No se pudo generar el PDF',
+        description: error instanceof Error ? error.message : 'Intente nuevamente.',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const glossary = useMemo(
     () => buildCaseGlossary(briefs.map((brief) => brief.share.member.name)),
     [briefs]
@@ -573,15 +604,7 @@ const ExplicacionHerederosSienna = () => {
                       <Button
                         variant="outline"
                         className="h-auto min-h-10 w-full whitespace-normal text-center leading-snug"
-                        onClick={() =>
-                          downloadHeirBriefPdf(
-                            {
-                              ...brief,
-                              photoData: resolveConfirmedHeirPhotoData(brief.photo),
-                            },
-                            netAmount
-                          )
-                        }
+                        onClick={() => void downloadBriefPdf(brief)}
                       >
                         <FileDown className="mr-2 h-4 w-4" />
                         PDF individual
