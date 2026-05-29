@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, EvidenceDocument, SiennaCalculationSnapshot } from '@/lib/api';
 
 export const SIENNA_STALE_MS = 90_000;
-const SIENNA_STORYBOOK_VERSION = 'memoria-viva-v4';
+const SIENNA_STORYBOOK_VERSION = 'memoria-viva-v5';
 
 export const siennaQueryKeys = {
   family: ['sienna-family'] as const,

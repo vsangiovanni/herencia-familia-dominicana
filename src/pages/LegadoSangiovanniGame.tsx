@@ -9,6 +9,7 @@ import { legadoStoryScenes } from '@/story/legado/storyScenes';
 
 const TYPEWRITER_INITIAL_DELAY_MS = 720;
 const AFTER_TYPEWRITER_ADVANCE_DELAY_MS = 2000;
+const BEFORE_CREDITS_ADVANCE_DELAY_MS = 6200;
 const getTypewriterCharMs = (length: number) => {
   if (length > 900) return 34;
   if (length > 650) return 38;
@@ -346,11 +347,13 @@ const LegacyCredits = ({
   dedication,
   showDedication,
   showDedicationText,
+  playing,
 }: {
   members: NonNullable<LegadoStoryScene['creditMembers']>;
   dedication?: { text: string; mode: string } | null;
   showDedication: boolean;
   showDedicationText: boolean;
+  playing: boolean;
 }) => {
   const durationSeconds = getCreditRollDurationSeconds(members.length);
   const isNanoDedication = dedication?.mode === 'openai';
@@ -370,6 +373,7 @@ const LegacyCredits = ({
           className="legacy-credit-roll mx-auto flex w-[min(58rem,88vw)] flex-col items-center gap-2.5 pb-[48vh] transition-opacity duration-700 md:gap-3"
           style={{
             '--credit-duration': durationSeconds + 's',
+            animationPlayState: playing ? 'running' : 'paused',
             opacity: showDedication ? 0 : 1,
           } as React.CSSProperties}
         >
@@ -423,7 +427,7 @@ const LegacyCredits = ({
         </div>
       </div>
       <AnimatePresence>
-        {showDedication && showDedicationText ? (
+        {showDedication && showDedicationText && dedication?.text ? (
           <motion.div
             className={'absolute left-1/2 top-1/2 z-[38] w-[min(34rem,86vw)] rounded-[0.45rem] border px-4 py-4 text-center shadow-[0_24px_80px_rgba(0,0,0,0.52)] backdrop-blur-md md:top-[22vh] md:w-[min(48rem,82vw)] md:px-10 md:py-7 ' + dedicationFrameClass}
             style={{ x: '-50%', y: '-50%' }}
@@ -466,11 +470,13 @@ const LegadoSangiovanniGame = () => {
   const aiNarrative = useMemo(resolveAiNarrativeMode, []);
   const forceCredits = useMemo(() => new URLSearchParams(window.location.search).get('credits') === '1', []);
   const fastCredits = useMemo(() => new URLSearchParams(window.location.search).get('fast') === '1', []);
-  const { data: storybook, isFetching: storybookFetching } = useSiennaStorybook(true, aiNarrative);
+  const { data: storybook, isFetching: storybookFetching, isError: storybookError } = useSiennaStorybook(true, aiNarrative);
 
   const scenes = storybook?.slides?.length ? storybook.slides : legadoStoryScenes;
+  const menuHasCompleteStorybook = Boolean(storybook?.slides?.length);
   const scene = scenes[sceneIndex] || scenes[0];
   const hasLegacyCredits = scene.visual === 'legacy' && Boolean(scene.creditMembers?.length);
+  const nextSceneHasLegacyCredits = Boolean(scenes[sceneIndex + 1]?.visual === 'legacy' && scenes[sceneIndex + 1]?.creditMembers?.length);
   const { data: legacyDedication, isFetching: dedicationFetching } = useSiennaStorybookDedication(
     dedicationNonce,
     hasLegacyCredits && Boolean(dedicationNonce)
@@ -512,10 +518,10 @@ const LegadoSangiovanniGame = () => {
 
     const timer = window.setTimeout(() => {
       setSceneIndex((current) => Math.min(scenes.length - 1, current + 1));
-    }, AFTER_TYPEWRITER_ADVANCE_DELAY_MS);
+    }, nextSceneHasLegacyCredits ? BEFORE_CREDITS_ADVANCE_DELAY_MS : AFTER_TYPEWRITER_ADVANCE_DELAY_MS);
 
     return () => window.clearTimeout(timer);
-  }, [playing, typewriterComplete, sceneIndex, isFinished, scenes.length]);
+  }, [playing, typewriterComplete, sceneIndex, isFinished, scenes.length, nextSceneHasLegacyCredits]);
 
   useEffect(() => {
     setShowLegacyCredits(false);
@@ -544,7 +550,7 @@ const LegadoSangiovanniGame = () => {
   useEffect(() => {
     setShowLegacyDedication(false);
     setShowLegacyDedicationText(false);
-    if (!showLegacyCredits || !hasLegacyCredits || !scene.creditMembers?.length) return;
+    if (!playing || !showLegacyCredits || !hasLegacyCredits || !scene.creditMembers?.length) return;
 
     const timer = window.setTimeout(() => {
       setShowLegacyDedication(true);
@@ -552,17 +558,17 @@ const LegadoSangiovanniGame = () => {
     }, fastCredits ? 2600 : Math.max(8000, getCreditRollDurationSeconds(scene.creditMembers.length) * 1000 - 6500));
 
     return () => window.clearTimeout(timer);
-  }, [showLegacyCredits, hasLegacyCredits, scene.id, scene.creditMembers?.length, fastCredits]);
+  }, [playing, showLegacyCredits, hasLegacyCredits, scene.id, scene.creditMembers?.length, fastCredits]);
 
   useEffect(() => {
-    if (!showNanoDedication || !showLegacyDedicationText) return;
+    if (!playing || !showNanoDedication || !showLegacyDedicationText) return;
 
     const timer = window.setTimeout(() => {
       setShowLegacyDedicationText(false);
     }, fastCredits ? 3200 : 8000);
 
     return () => window.clearTimeout(timer);
-  }, [showNanoDedication, showLegacyDedicationText, fastCredits]);
+  }, [playing, showNanoDedication, showLegacyDedicationText, fastCredits]);
 
   useEffect(() => {
     const wakeLockApi = (navigator as Navigator & {
@@ -694,7 +700,7 @@ const LegadoSangiovanniGame = () => {
         audio?.removeEventListener('ended', handleEnded);
       });
     };
-  }, [musicEnabled, playing]);
+  }, [musicEnabled, playing, hasLegacyCredits]);
 
   useEffect(() => {
     return () => {
@@ -846,8 +852,9 @@ const LegadoSangiovanniGame = () => {
                 <LegacyCredits
                   members={scene.creditMembers}
                   dedication={legacyDedication || null}
-                  showDedication={showNanoDedication}
+                  showDedication={showLegacyDedication}
                   showDedicationText={showLegacyDedicationText}
+                  playing={playing}
                 />
               ) : null}
             </AnimatePresence>
@@ -940,7 +947,7 @@ const LegadoSangiovanniGame = () => {
         <AnimatePresence>
           {mapOpen && (
             <motion.div
-              className="absolute bottom-[calc(max(1rem,env(safe-area-inset-bottom))+3.5rem)] left-4 z-50 max-h-[48vh] w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-md border border-[#f8e5bd]/28 bg-[#080706]/78 p-3 text-[#fff7e6] shadow-[0_24px_70px_rgba(0,0,0,0.48)] backdrop-blur-md"
+              className="absolute bottom-[calc(max(1rem,env(safe-area-inset-bottom))+3.5rem)] left-4 z-50 flex max-h-[64dvh] w-[min(22rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-md border border-[#f8e5bd]/28 bg-[#080706]/82 p-3 text-[#fff7e6] shadow-[0_24px_70px_rgba(0,0,0,0.48)] backdrop-blur-md"
               initial={{ opacity: 0, y: 14, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 14, scale: 0.98 }}
@@ -950,8 +957,19 @@ const LegadoSangiovanniGame = () => {
                 <p className="text-xs font-black uppercase tracking-[0.18em] text-[#f8e5bd]/80">Mapa narrativo</p>
                 <p className="text-xs font-bold text-[#fff7e6]/55">{sceneIndex + 1}/{scenes.length}</p>
               </div>
-              <div className="max-h-[38vh] space-y-1 overflow-y-auto pr-1">
-                {scenes.map((item, index) => (
+              <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
+                {!menuHasCompleteStorybook ? (
+                  <div className="rounded border border-[#f8e5bd]/18 bg-[#f8e5bd]/8 px-3 py-3 text-left">
+                    <p className="text-xs font-black uppercase tracking-[0.16em] text-[#f8e5bd]/80">
+                      {storybookFetching ? 'Cargando mapa completo' : 'Mapa completo no disponible'}
+                    </p>
+                    <p className="mt-1 text-xs leading-relaxed text-[#fff7e6]/62">
+                      {storybookError
+                        ? 'No se pudo traer la narrativa completa del API en este momento.'
+                        : 'El mapa se llenara con todas las escenas cuando termine de llegar la narrativa del API.'}
+                    </p>
+                  </div>
+                ) : scenes.map((item, index) => (
                   <button
                     key={item.id}
                     type="button"

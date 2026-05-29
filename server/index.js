@@ -4905,7 +4905,7 @@ function buildSiennaStorybookSlides({ family, heirs, documents }) {
 
 app.get('/api/sienna-storybook', requireAuth, async (req, res) => {
   const aiNarrative = req.query.aiNarrative === '1';
-  const response = await getCachedSiennaResponse('storybook', { mediaMode: 'urls', aiNarrative, view: 'memoria-viva-v4' }, async () => {
+  const response = await getCachedSiennaResponse('storybook', { mediaMode: 'urls', aiNarrative, view: 'memoria-viva-v5' }, async () => {
     const family = await loadSiennaFamilyBundle();
     const heirs = await loadConfirmedHeirs(false);
     const documents = await loadEvidenceDocuments(true);

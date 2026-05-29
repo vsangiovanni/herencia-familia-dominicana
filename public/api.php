@@ -5126,7 +5126,7 @@ try {
       'mediaMode' => 'urls',
       'aiNarrative' => $aiNarrative ? '1' : '0',
       'model' => env_value('OPENAI_MODEL') ?: sienna_ai_default_model(),
-      'prompt' => '2026-05-28-php-v6-memoria-viva',
+      'prompt' => '2026-05-28-php-v7-memoria-viva',
     ], function () use ($aiNarrative) {
       $storybook = build_sienna_storybook();
       return sanitize_storybook_response_narrative($aiNarrative ? apply_ai_narrative_to_storybook($storybook) : $storybook);
