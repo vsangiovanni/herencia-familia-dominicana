@@ -507,11 +507,12 @@ e0ac36e Add Legado Sangiovanni PWA support
 
 Antes de reiniciar la PC, estado conocido:
 
-- GitHub esta actualizado.
-- Hostinger esta actualizado.
-- Produccion responde OK en `/api/health`.
+- GitHub esta actualizado hasta `21caa76` (`Registra fecha de fallecimiento de Domenico`).
+- Hostinger esta actualizado con el bundle/API vigente y produccion responde OK en `/api/health`.
 - No hay una tarea de deploy pendiente.
-- Pendiente real: QA visual/manual posterior al reinicio, principalmente Documentos Probatorios en movil y flujo de guardar foto desde tabla unificada.
+- Base local fue sincronizada desde produccion el 2026-05-29 en modo ligero: se copiaron estructura y registros, pero no blobs pesados de documentos/fotos.
+- Produccion fue usada como fuente de lectura; no se modifico produccion durante la sincronizacion local.
+- Pendiente real: QA visual/manual posterior al reinicio, especialmente fotos/soportes en pantallas que dependan de blobs no copiados al local.
 
 ## Actualizacion narrativa Legado - 2026-05-28
 
@@ -584,3 +585,61 @@ Restricciones del release:
 - La tarjeta de resumen en `/sienna/explicacion-herederos` cambió de `En progreso / conflicto` a `Pendientes de documentación`.
 - Help actualizado en `src/data/screenHelp.ts` para reflejar cálculo manual, backend como fuente, pendientes documentales, linaje fundacional, linajes y documentos.
 - Validación ejecutada: `php -l public/api.php`, `node --check server/index.js`, `pnpm run test:sienna`, `pnpm run build`, `curl /sienna/arbol = 200`.
+
+## Release Sienna y PDFs - 2026-05-29 tarde
+
+- Cambios publicados en GitHub/Hostinger con autorizacion de Victor, sin tocar `.env`, migraciones ni datos de produccion salvo los ajustes puntuales autorizados por Victor.
+- Commit principal de UI/PDF: `312a037 Mejora flujo Sienna de arbol y PDFs`.
+- `/sienna/explicacion-herederos`:
+  - Columna `Cadena de pago` ahora es desplegable para evitar filas excesivamente largas.
+  - Columna `Soporte` ampliada.
+  - Botones/enlaces hacia Documentos/Arbol/Linajes/Administracion respetan permisos del usuario con `hasAccess()`.
+  - Pestañas revisadas: `Por qué heredo`, `Semáforo`, `Línea de tiempo`, `Glosario`, `Reparto final`.
+- PDF individual:
+  - Foto del heredero se imprime con recorte circular/borde redondeado.
+  - Documentos PDF relacionados intentan renderizar miniatura de primera pagina; si el navegador no puede renderizar, usan fallback textual.
+  - Texto legal/aceptacion fue cambiado para evitar frases de `backend`, `datos reales` o `fines de revision`.
+  - Herederos sin documentos directos reciben una sola nota formal de soporte pendiente, no repetida en varios acapites.
+  - Numeracion de acapites automatica segun secciones reales impresas.
+- `/sienna/arbol`:
+  - `Cálculo aplicado desde la API` es desplegable.
+  - `Cálculo de Monto a Heredar` queda dentro de ese desplegable.
+  - `Por qué heredan (resumen)` tambien es desplegable para dar protagonismo al arbol.
+  - Impresion del arbol incluye barra no imprimible con `Imprimir otra vez` y `Volver al árbol`.
+- Documentacion actualizada en `docs/SIENNA.md` y help contextual en `src/data/screenHelp.ts`.
+- Validacion ejecutada antes de deploy: `pnpm run build`, `php -l public/api.php`, `pnpm run lint`, `pnpm run test:sienna`, `pnpm run check:prod`.
+
+## Ajustes puntuales de datos autorizados - 2026-05-29
+
+- Maria Rosa Grisolia Di Vanna:
+  - Victor confirmo que `maria-rosa-grisolia-portrait.webp` es la foto correcta.
+  - Produccion tenia foto previa `40362.png` en el miembro canonico `maria-rosa-grisolia-di-vanna-1779890134349`.
+  - Se reemplazo solo esa foto en `confirmed_heirs`.
+  - Backup previo: `backups/prod_maria_rosa_grisolia_photo_before_2026-05-29T22-47-44-856Z.json`.
+- Domenico (Domingo) Sangiovanni Cino:
+  - Victor confirmo fecha de fallecimiento: 21/09/1928.
+  - Produccion quedo con `sienna_family_members.id = domenico`, nombre `Domenico (Domingo) Sangiovanni Cino`, nacimiento `17/12/1845`, fallecimiento `21/09/1928`.
+  - Backup previo: `backups/prod_domenico_death_before_2026-05-29T22-50-25-507Z.json`.
+  - Codigo/documentacion actualizados y publicados en commit `21caa76 Registra fecha de fallecimiento de Domenico`.
+
+## Sync produccion a local - 2026-05-29 noche
+
+- Victor pidio actualizar local desde produccion, pero sin traer documentos/fotos repetidos ni cargar pesado.
+- Se ejecuto sincronizacion unidireccional produccion -> local en modo ligero:
+  - estructura y registros copiados desde produccion;
+  - `evidence_documents.file_data` se dejo en `NULL` local;
+  - `confirmed_heirs.photo_data` se dejo en `NULL` local;
+  - metadatos de documentos y fotos se conservaron.
+- Produccion se uso solo en lectura.
+- Conteos locales despues del sync:
+  - 11 tablas;
+  - 76 `sienna_family_members`;
+  - 63 `confirmed_heirs`;
+  - 49 `evidence_documents`;
+  - 18 `family_unions`;
+  - 77 `member_parent_links`;
+  - 83 `user_page_permissions`;
+  - 0 blobs en `evidence_documents.file_data`;
+  - 0 blobs en `confirmed_heirs.photo_data`.
+- API local respondio OK en `/api/health`.
+- Nota importante para QA local: las pantallas veran metadatos y relaciones actualizadas, pero las vistas que requieren abrir/ver el archivo real o foto binaria no tendran el blob local hasta que se descargue/copien medios explicitamente.
