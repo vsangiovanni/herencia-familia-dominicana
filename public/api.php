@@ -250,7 +250,7 @@ function fetch_evidence_documents(bool $includeMedia = false): array {
 
 function default_known_intermediates(): array {
   return [
-    ['name' => 'Domenico (Domingo) Sangiovanni', 'reason' => 'Tronco familiar común; sirve para ubicar ramas, no como heredero final.'],
+    ['name' => 'Domenico (Domingo) Sangiovanni Cino', 'reason' => 'Tronco familiar común; sirve para ubicar ramas, no como heredero final.'],
     ['name' => 'María Magdalena Sangiovanni', 'reason' => 'Madre del causante Alessandro; rama del causante, no heredera final en este análisis.'],
     ['name' => 'Vincenzo (Vicente) Sangiovanni', 'reason' => 'Hermano de la madre del causante; abre una rama sucesoral activa por sus descendientes.'],
     ['name' => 'Paolo (Paulino) Sangiovanni', 'reason' => 'Hermano de la madre del causante; abre una rama sucesoral activa por sus descendientes.'],
@@ -833,7 +833,7 @@ function build_sienna_storybook(): array {
   $pick = function (array $ids) use ($memberById): array { $out = []; foreach ($ids as $id) if (isset($memberById[$id])) $out[] = $memberById[$id]; return $out; };
 
   $originMembers = $pick(['domenico', 'maria-rosa-grisolia', 'paolo', 'vincenzo']);
-  $slides[] = ['id' => 'origen-calabria', 'title' => 'Calabria, Italia', 'year' => 'Siglo XIX', 'location' => 'Santa Domenica Talao', 'tone' => 'origin', 'visual' => 'calabria', 'backgroundImage' => $bg['santaDomenica'], 'archiveImage' => '/game/legado/archive/domenico-maria-rosa-clean.webp', 'archiveCaption' => 'Domenico Sangiovanni y Maria Rosa Grisolia', 'text' => 'La historia familiar empieza en Santa Domenica Talao, un pueblo montanoso de Calabria, al sur de Italia. Desde alli, Domenico, tambien recordado como Domingo Sangiovanni, y Maria Rosa Grisolia guardaron una raiz que con el tiempo miraria hacia America: no como despedida del origen, sino como deseo de abrir caminos nuevos para los suyos.', 'members' => array_column($originMembers, 'id'), 'memberPhotos' => build_storybook_member_photos($pick(['domenico', 'maria-rosa-grisolia']), $photoLookup)];
+  $slides[] = ['id' => 'origen-calabria', 'title' => 'Calabria, Italia', 'year' => 'Siglo XIX', 'location' => 'Santa Domenica Talao', 'tone' => 'origin', 'visual' => 'calabria', 'backgroundImage' => $bg['santaDomenica'], 'archiveImage' => '/game/legado/archive/domenico-maria-rosa-clean.webp', 'archiveCaption' => 'Domenico Sangiovanni Cino y Maria Rosa Grisolia', 'text' => 'La historia familiar empieza en Santa Domenica Talao, un pueblo montanoso de Calabria, al sur de Italia. Desde alli, Domenico Sangiovanni Cino, tambien recordado como Domingo Sangiovanni, y Maria Rosa Grisolia guardaron una raiz que con el tiempo miraria hacia America: no como despedida del origen, sino como deseo de abrir caminos nuevos para los suyos.', 'members' => array_column($originMembers, 'id'), 'memberPhotos' => build_storybook_member_photos($pick(['domenico', 'maria-rosa-grisolia']), $photoLookup)];
   $addCovered(array_column($originMembers, 'id'));
 
   $houseMembers = $pick(['domenico', 'maria-rosa-grisolia', 'paolo', 'vincenzo']);
@@ -4464,7 +4464,7 @@ function ensure_schema(): void {
     }
 
     $members = [
-      ['domenico', null, 'Domenico (Domingo) Sangiovanni', '17/12/1845', null, null, 'María Rosa Grisolia', '18/07/1852', 0, 10],
+      ['domenico', null, 'Domenico (Domingo) Sangiovanni Cino', '17/12/1845', '21/09/1928', null, 'María Rosa Grisolia', '18/07/1852', 0, 10],
       ['maria-magdalena', 'domenico', 'María Magdalena Sangiovanni', '27/04/1874', '07/05/1935', null, 'Vincenzo de Paola', null, 0, 10],
       ['vincenzo', 'domenico', 'Vincenzo (Vicente) Sangiovanni', '13/08/1880', '07/02/1958', null, 'María Balbina Pérez Álvarez', null, 0, 20],
       ['paolo', 'domenico', 'Paolo (Paulino) Sangiovanni', '17/01/1885', '31/03/1936', null, 'Simona Simo', null, 0, 30],

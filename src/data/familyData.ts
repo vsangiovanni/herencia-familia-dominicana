@@ -4,8 +4,9 @@ import { Person } from '@/components/FamilyTree';
 // Datos del árbol genealógico
 export const familyData: Person = {
   id: "domenico",
-  name: "Domenico (Domingo) Sangiovanni",
+  name: "Domenico (Domingo) Sangiovanni Cino",
   birth: "17/12/1845",
+  death: "21/09/1928",
   spouse: "María Rosa Grisolia",
   spouseBirth: "18/07/1852",
   children: [

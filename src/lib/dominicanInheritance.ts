@@ -40,7 +40,7 @@ export type SiennaCaseConfig = {
 
 const defaultCaseConfig: SiennaCaseConfig = {
   causante_name: 'Alessandro de Paola Sangiovanni',
-  family_trunk_name: 'Domenico (Domingo) Sangiovanni',
+  family_trunk_name: 'Domenico (Domingo) Sangiovanni Cino',
   legal_criterion_text:
     'Criterio sucesoral dominicano aplicado: primero heredan los descendientes directos del causante; si no existen, se evalúan las ramas colaterales documentadas y los descendientes ocupan el lugar de su ascendiente fallecido por representación. En este expediente, al no existir descendencia directa registrada de Alessandro, la distribución activa se calcula por las ramas Vincenzo/Vicente y Paolo/Paulino, dividiendo cada rama por estirpes y recalculando cuando se agregan nuevos descendientes.',
   active_collateral_roots: [
@@ -48,7 +48,7 @@ const defaultCaseConfig: SiennaCaseConfig = {
     { name: 'Paolo (Paulino) Sangiovanni', label: 'Paolo/Paulino' },
   ],
   known_intermediates: [
-    { name: 'Domenico (Domingo) Sangiovanni', reason: 'Tronco familiar común; sirve para ubicar ramas, no como heredero final.' },
+    { name: 'Domenico (Domingo) Sangiovanni Cino', reason: 'Tronco familiar común; sirve para ubicar ramas, no como heredero final.' },
     { name: 'María Magdalena Sangiovanni', reason: 'Madre del causante Alessandro; rama del causante, no heredera final en este análisis.' },
     { name: 'Vincenzo (Vicente) Sangiovanni', reason: 'Hermano de la madre del causante; abre una rama sucesoral activa por sus descendientes.' },
     { name: 'Paolo (Paulino) Sangiovanni', reason: 'Hermano de la madre del causante; abre una rama sucesoral activa por sus descendientes.' },

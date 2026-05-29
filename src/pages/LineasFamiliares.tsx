@@ -39,8 +39,9 @@ const LineasFamiliares = () => {
               <CardContent className="p-6">
                 <div className="flex flex-col md:flex-row gap-6 mb-6">
                   <FamilyMember
-                    name="Domenico (Domingo) Sangiovanni"
+                    name="Domenico (Domingo) Sangiovanni Cino"
                     birth="17/12/1845"
+                    death="21/09/1928"
                     spouse="María Rosa Grisolia"
                     className="w-full md:w-auto"
                   />
@@ -48,7 +49,7 @@ const LineasFamiliares = () => {
                   <div className="flex-1">
                     <h3 className="text-lg font-medium text-legal-blue mb-2">Información Principal</h3>
                     <p className="text-gray-700 mb-4">
-                      Domenico (Domingo) Sangiovanni, nacido el 17 de diciembre de 1845 en Italia, contrajo matrimonio con 
+                      Domenico (Domingo) Sangiovanni Cino, nacido el 17 de diciembre de 1845 en Italia y fallecido el 21 de septiembre de 1928, contrajo matrimonio con 
                       María Rosa Grisolia, nacida el 18 de julio de 1852 también en Italia. Esta unión representa 
                       las raíces de la familia Sangiovanni en la República Dominicana.
                     </p>

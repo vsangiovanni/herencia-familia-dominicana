@@ -69,7 +69,7 @@
 
   <!-- Family tree -->
   <rect x="712" y="690" width="366" height="58" rx="12" class="root"/>
-  <text x="746" y="715" class="label">Domenico (Domingo) Sangiovanni</text>
+  <text x="746" y="715" class="label">Domenico (Domingo) Sangiovanni Cino</text>
   <text x="786" y="740" class="small">+ María Rosa Grisolía</text>
 
   <path class="ink" d="M895 748 V786 M895 786 H326 M895 786 H895 M895 786 H1464"/>

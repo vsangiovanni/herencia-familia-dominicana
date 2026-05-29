@@ -56,12 +56,12 @@ export const legadoStoryScenes: LegadoStoryScene[] = [
     durationMs: 12500,
     backgroundImage: '/game/legado/generated/storyteller/legado-santa-domenica-origen-documental.png',
     archiveImage: '/game/legado/archive/domenico-maria-rosa-clean.webp',
-    archiveCaption: 'Domenico Sangiovanni y Maria Rosa Grisolia',
+    archiveCaption: 'Domenico Sangiovanni Cino y Maria Rosa Grisolia',
     memberPhotos: [
       {
         id: 'domenico',
         memberId: 'domenico',
-        name: 'Domenico Sangiovanni',
+        name: 'Domenico Sangiovanni Cino',
         photoData: '/game/legado/archive/domenico-sangiovanni-portrait.webp',
         deceased: true,
       },
@@ -88,7 +88,7 @@ export const legadoStoryScenes: LegadoStoryScene[] = [
       {
         id: 'domenico',
         memberId: 'domenico',
-        name: 'Domenico (Domingo) Sangiovanni',
+        name: 'Domenico (Domingo) Sangiovanni Cino',
         photoData: '/game/legado/archive/domenico-sangiovanni-portrait.webp',
         deceased: true,
       },
@@ -127,7 +127,7 @@ export const legadoStoryScenes: LegadoStoryScene[] = [
       {
         id: 'domenico',
         memberId: 'domenico',
-        name: 'Domenico (Domingo) Sangiovanni',
+        name: 'Domenico (Domingo) Sangiovanni Cino',
         photoData: '/game/legado/archive/domenico-sangiovanni-portrait.webp',
         deceased: true,
       },
@@ -166,7 +166,7 @@ export const legadoStoryScenes: LegadoStoryScene[] = [
       {
         id: 'domenico',
         memberId: 'domenico',
-        name: 'Domenico (Domingo) Sangiovanni',
+        name: 'Domenico (Domingo) Sangiovanni Cino',
         photoData: '/game/legado/archive/domenico-sangiovanni-portrait.webp',
         deceased: true,
       },
@@ -205,7 +205,7 @@ export const legadoStoryScenes: LegadoStoryScene[] = [
       {
         id: 'domenico',
         memberId: 'domenico',
-        name: 'Domenico (Domingo) Sangiovanni',
+        name: 'Domenico (Domingo) Sangiovanni Cino',
         photoData: '/game/legado/archive/domenico-sangiovanni-portrait.webp',
         deceased: true,
       },
@@ -286,7 +286,7 @@ export const legadoStoryScenes: LegadoStoryScene[] = [
     durationMs: 12000,
     backgroundImage: '/game/legado/references/images-santa-domenica/vista-montanas-tejados-santa-domenica.jpg',
     archiveImage: '/game/legado/archive/domenico-maria-rosa-clean.webp',
-    archiveCaption: 'Domenico Sangiovanni y Maria Rosa Grisolia',
+    archiveCaption: 'Domenico Sangiovanni Cino y Maria Rosa Grisolia',
     tone: 'memory',
   },
 ];

@@ -329,7 +329,8 @@ Ayuda en pantalla: icono **?** (`sienna-miembros`, `sienna-miembros-agregar`) e 
 
 ## Linaje fundacional Doménico / María Rosa
 
-- Doménico Sangiovanni y María Rosa Grisolia Di Vanna son cónyuges fundacionales; María Rosa no debe colgar como hija/padre de Doménico.
+- Doménico (Domingo) Sangiovanni Cino y María Rosa Grisolia Di Vanna son cónyuges fundacionales; María Rosa no debe colgar como hija/padre de Doménico.
+- Dato confirmado por Víctor el 2026-05-29: Doménico falleció el 21/09/1928.
 - La corrección vigente deja a ambos sin `parent_id` y enlazados por `spouse_member_id`.
 - La unión canónica es `union-domenico-texto` con `partner_a_member_id = domenico` y `partner_b_member_id = maria-rosa-grisolia-di-vanna-1779890134349`.
 - En `/sienna/arbol`, cuando dos miembros raíz son cónyuges, se muestran como pareja raíz al mismo nivel y solo uno queda como raíz estructural para no duplicar ramas.
