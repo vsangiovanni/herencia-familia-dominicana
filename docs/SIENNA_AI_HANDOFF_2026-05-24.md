@@ -31,6 +31,22 @@ Actualizacion posterior - 2026-05-27 11:16 AST:
 - Ajuste posterior de lectura: la familia reporto que el storyteller quedo muy bien, pero el texto pasaba demasiado rapido. Se redujo la velocidad del typewriter y se agrego mas margen despues de terminar cada texto antes de avanzar al proximo slide.
 - Musica del storyteller actualizada: despues de `across-two-shores.mp3` sigue `across-the-atlantic.mp3`, con crossfade estilo DJ entre pistas. No toca DB ni datos.
 
+Actualizacion posterior - 2026-05-29 10:35 AST:
+
+- Victor autorizo deploy a Hostinger de la ronda local, con restriccion expresa: no tocar DB, datos de produccion, migraciones ni `.env`.
+- Se corrigio el comportamiento de simulacion de montos en:
+  - `/sienna/explicacion-herederos`
+  - `/sienna/arbol` / `/sienna/arbol-genealogico`
+  - `/sienna/filiacion` / `/calculo-filiacion`
+- En esas pantallas, editar el monto bruto o el porcentaje ya no dispara recalculo mientras se escribe. El usuario debe pulsar `Actualizar esta vista` o `Actualizar calculo` para aplicar la simulacion.
+- Se separaron valores editados vs valores aplicados para evitar llamadas parciales a `/api/sienna-calculation` con montos incompletos.
+- `/sienna/arbol` dejo de guardar montos heredados en `confirmed_heirs.inheritance_amount`; el boton `Calcular y guardar pagos` fue reemplazado por `Actualizar calculo`.
+- El endpoint legacy `/api/confirmed-heirs/bulk-amounts` queda como guardrail y responde `410`; no hay llamadas vivas desde la app.
+- Node y PHP ignoran montos heredados en `POST/PUT confirmed-heirs`; fotos, estado, notas y vinculo de heredero siguen funcionando.
+- La columna legacy `confirmed_heirs.inheritance_amount` no fue borrada ni modificada en DB. Queda sin uso operativo hasta una limpieza futura autorizada.
+- `/sienna/arbol` y `/sienna/explicacion-herederos` cargan workspace liviano y fotos de herederos aparte para reducir payload inicial pesado.
+- Validacion local previa: `pnpm run test:sienna`, `php -l public/api.php`, `node --check server/index.js`, `pnpm run build`, rutas locales 200 y endpoint legacy 410.
+
 Actualizacion posterior - 2026-05-24 21:15 AST:
 
 - GitHub actualizado hasta commit `1c78c01` (`Unify document and heir presentation table`).
@@ -551,3 +567,20 @@ Restricciones del release:
 - No ejecutar migraciones.
 - No subir ni sobrescribir `.env`.
 - Deploy a Hostinger debe ser solo archivos generados de `dist/` vía script FTP seguro.
+
+## Linaje fundacional y ayuda actualizada - 2026-05-29
+
+- Víctor aclaró la narrativa genealógica: Doménico Sangiovanni y María Rosa Grisolia Di Vanna son el matrimonio fundacional que llegó desde Santa Domenica Talao/Italia hacia Samaná; María Rosa no es hija de Doménico.
+- Backup local previo: `backups/db-sync/local_before_maria_rosa_spouse_fix_20260529_105507.sql.gz`.
+- Backup producción previo al ajuste autorizado: `backups/prod-maria-rosa/prod_maria_rosa_before_20260529_110524.sql`.
+- Datos locales corregidos:
+  - `domenico.spouse_member_id = maria-rosa-grisolia-di-vanna-1779890134349`.
+  - `maria-rosa-grisolia-di-vanna-1779890134349.parent_id = NULL`.
+  - `maria-rosa-grisolia-di-vanna-1779890134349.spouse_member_id = domenico`.
+  - `union-domenico-texto.partner_b_member_id = maria-rosa-grisolia-di-vanna-1779890134349`, `confidence = alta`, `is_inconsistent = 0`.
+- Víctor autorizó subir a Hostinger solamente el ajuste de María Rosa; producción quedó con Doménico y María Rosa como cónyuges, sin tocar otros miembros ni migraciones.
+- `/sienna/linajes` ya no reporta inconsistencia para esa unión.
+- `/sienna/arbol` renderiza a la pareja raíz en tarjetas al mismo nivel visual y evita que María Rosa aparezca como raíz separada.
+- La tarjeta de resumen en `/sienna/explicacion-herederos` cambió de `En progreso / conflicto` a `Pendientes de documentación`.
+- Help actualizado en `src/data/screenHelp.ts` para reflejar cálculo manual, backend como fuente, pendientes documentales, linaje fundacional, linajes y documentos.
+- Validación ejecutada: `php -l public/api.php`, `node --check server/index.js`, `pnpm run test:sienna`, `pnpm run build`, `curl /sienna/arbol = 200`.

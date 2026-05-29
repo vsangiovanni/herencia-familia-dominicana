@@ -1,10 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import BackButton from '@/components/BackButton';
 import DocumentHeader from '@/components/DocumentHeader';
 import SoftLoadingIndicator from '@/components/SoftLoadingIndicator';
-import { api, ConfirmedHeir, MemberParentLink, SiennaFamilyMember } from '@/lib/api';
-import { invalidateSiennaData, useSiennaCalculation, useSiennaWorkspace } from '@/hooks/useSiennaData';
+import { ConfirmedHeir, MemberParentLink, SiennaFamilyMember } from '@/lib/api';
+import { useConfirmedHeirs, useSiennaCalculation, useSiennaWorkspace } from '@/hooks/useSiennaData';
 import { formatUnionLabel, getMemberLinkVerificationStatus, getParentLinksForChild, resolveSpouseDisplayLabel, SiennaGenealogyBundle } from '@/lib/siennaGenealogy';
 import MemberVerificationBadge from '@/components/sienna/MemberVerificationBadge';
 import MemberPhoto from '@/components/sienna/MemberPhoto';
@@ -23,11 +22,10 @@ import {
 } from '@/lib/dominicanInheritance';
 import { getMemberEffectiveInheritanceReason, getMemberEffectiveInheritanceStatus } from '@/lib/siennaMemberInheritance';
 import { cn } from '@/lib/utils';
-import { Calculator, ClipboardCheck, FileText, GitBranch, GitMerge, Landmark, Maximize2, Minimize2, Printer, RotateCcw, Route, Save, Users, ZoomIn, ZoomOut } from 'lucide-react';
+import { Calculator, ClipboardCheck, FileText, GitBranch, GitMerge, Landmark, Maximize2, Minimize2, Printer, RotateCcw, Route, RefreshCw, Users, ZoomIn, ZoomOut } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { buildWhyIInheritText, formatMoney as formatMoneyExplain, formatPercent as formatPercentExplain } from '@/lib/siennaHeirExplain';
 import { buildInheritancePlanFromApiRows } from '@/lib/siennaCalculation';
-import { useAuth } from '@/context/AuthContext';
 
 type TreeMember = SiennaFamilyMember & { children: TreeMember[] };
 
@@ -74,7 +72,15 @@ const buildForest = (members: SiennaFamilyMember[], bundle?: SiennaGenealogyBund
   });
 
   const attached = new Set(childToParent.keys());
-  const roots = Array.from(byId.values()).filter((member) => !attached.has(member.id));
+  let roots = Array.from(byId.values()).filter((member) => !attached.has(member.id));
+  const rootIds = new Set(roots.map((member) => member.id));
+  roots = roots.filter((member) => {
+    const spouseId = member.spouse_member_id?.trim();
+    const spouse = spouseId ? byId.get(spouseId) : null;
+    if (!spouse || !rootIds.has(spouse.id)) return true;
+    if (member.relationship_to_parent === 'conyuge') return false;
+    return !(member.children.length === 0 && spouse.children.length > 0);
+  });
 
   const sortTree = (nodes: TreeMember[]) => {
     nodes.sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0) || a.name.localeCompare(b.name));
@@ -180,6 +186,11 @@ const ClassicNode = ({
   const parent = member.parent_id ? membersById.get(normalizedMemberId(member.parent_id)) || null : null;
   const otherParent = resolveFormalOtherParent(member, parent, membersById, genealogy);
   const spouseLabel = resolveSpouseDisplayLabel(member, allMembers, genealogy);
+  const spousePartner = member.spouse_member_id ? membersById.get(normalizedMemberId(member.spouse_member_id)) || null : null;
+  const spouseHeir = spousePartner
+    ? heirsByMemberId.get(spousePartner.id) || heirsByName.get(normalizeName(spousePartner.name))
+    : null;
+  const showRootSpouseCard = Boolean(spousePartner && !member.parent_id && !spousePartner.parent_id);
   const hasDualLineage = (inheritanceShare?.sources.length || 0) > 1;
   const childLinks = getParentLinksForChild(member.id, genealogy.parent_links);
   const unionLink = childLinks.find((link: MemberParentLink) => link.union_id);
@@ -191,13 +202,14 @@ const ClassicNode = ({
   return (
     <li className="relative">
       <div className="relative flex flex-col items-center pt-6">
-        <div
-          className={cn(
-            'relative mb-3 min-w-[230px] max-w-[270px] rounded-md border-2 bg-white p-3 text-center shadow-sm',
-            member.is_highlighted_ancestor && !isHeir ? 'border-legal-gold bg-legal-beige' : 'border-legal-blue/30',
-            isHeir && 'border-legal-gold bg-legal-gold/5 shadow-md'
-          )}
-        >
+        <div className="mb-3 flex flex-wrap justify-center gap-4">
+          <div
+            className={cn(
+              'relative min-w-[230px] max-w-[270px] rounded-md border-2 bg-white p-3 text-center shadow-sm',
+              member.is_highlighted_ancestor && !isHeir ? 'border-legal-gold bg-legal-beige' : 'border-legal-blue/30',
+              isHeir && 'border-legal-gold bg-legal-gold/5 shadow-md'
+            )}
+          >
           {isDeceased && (
             <div
               className="deceased-ribbon-badge right-12 top-2"
@@ -252,7 +264,7 @@ const ClassicNode = ({
             </div>
           )}
 
-          {spouseLabel && (
+          {spouseLabel && !showRootSpouseCard && (
             <div className="mt-1 text-xs">
               <span className="text-legal-gray">Cónyuge: </span>
               {spouseLabel}
@@ -348,6 +360,65 @@ const ClassicNode = ({
               </p>
             </div>
           )}
+          </div>
+
+          {showRootSpouseCard && spousePartner && (
+            <div className="relative min-w-[230px] max-w-[270px] rounded-md border-2 border-legal-gold/60 bg-legal-gold/5 p-3 text-center shadow-sm">
+              {isDeceasedMember(spousePartner) && (
+                <div
+                  className="deceased-ribbon-badge right-12 top-2"
+                  title={spousePartner.death ? `Fallecida: ${spousePartner.death}` : 'Fallecida'}
+                  aria-label={spousePartner.death ? `Fallecida: ${spousePartner.death}` : 'Fallecida'}
+                >
+                  <span className="deceased-ribbon" aria-hidden="true" />
+                </div>
+              )}
+              <div className="absolute -right-3 -top-3 z-10">
+                <MemberPhoto
+                  name={spousePartner.name}
+                  memberId={spousePartner.id}
+                  photoData={spouseHeir?.photo_data}
+                  size="lg"
+                  rounded="xl"
+                  className="border-2 border-legal-gold/60 shadow-lg"
+                  verificationStatus={spouseHeir?.status === 'confirmado' ? 'verified' : getMemberLinkVerificationStatus(spousePartner, allMembers, genealogy).status}
+                />
+              </div>
+              <h3 className="font-serif text-sm font-bold leading-tight text-legal-blue">{spousePartner.name}</h3>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="mt-1 h-7 px-2 text-xs text-legal-blue"
+                onClick={() => onOpenMember(spousePartner.id)}
+              >
+                Ficha
+              </Button>
+              <MemberVerificationBadge
+                member={spousePartner}
+                members={allMembers}
+                genealogy={genealogy}
+                className="mt-2 justify-center"
+              />
+              <div className="mt-1 text-xs text-gray-600">
+                {spousePartner.birth && <span>n. {spousePartner.birth}</span>}
+                {spousePartner.birth && spousePartner.death && <span> - </span>}
+                {spousePartner.death && <span>m. {spousePartner.death}</span>}
+              </div>
+              {isDeceasedMember(spousePartner) && (
+                <div className="mt-2 flex justify-center">
+                  <Badge variant="outline" className="border-gray-400 bg-gray-50 text-gray-800">
+                    Fallecida
+                  </Badge>
+                </div>
+              )}
+              <div className="mt-3 space-y-2 border-t border-legal-gold/30 pt-3">
+                <Badge variant="outline" className="border-legal-gold/60 bg-white">
+                  Cónyuge fundacional
+                </Badge>
+              </div>
+            </div>
+          )}
         </div>
 
         {member.children.length > 0 && (
@@ -376,11 +447,10 @@ const ClassicNode = ({
 };
 
 const ArbolGenealogicoSienna = () => {
-  const { canEdit } = useAuth();
-  const queryClient = useQueryClient();
-  const { data: workspace, isLoading, isFetching, refetch } = useSiennaWorkspace(true);
+  const { data: workspace, isLoading, isFetching } = useSiennaWorkspace(false);
+  const { data: heirsWithMedia } = useConfirmedHeirs(true);
   const members = workspace?.members ?? [];
-  const heirs = workspace?.heirs ?? [];
+  const heirs = heirsWithMedia?.heirs ?? workspace?.heirs ?? [];
   const genealogy = useMemo<SiennaGenealogyBundle>(
     () => ({
       unions: workspace?.unions ?? [],
@@ -390,6 +460,8 @@ const ArbolGenealogicoSienna = () => {
   );
   const [estateAmount, setEstateAmount] = useState('');
   const [lawyerFeePercentage, setLawyerFeePercentage] = useState('0');
+  const [appliedEstateAmount, setAppliedEstateAmount] = useState('');
+  const [appliedLawyerFeePercentage, setAppliedLawyerFeePercentage] = useState('0');
   const [isPresentationMode, setIsPresentationMode] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
@@ -397,7 +469,6 @@ const ArbolGenealogicoSienna = () => {
   const [workspaceInitialized, setWorkspaceInitialized] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('Cargando árbol y cálculos sucesorales...');
   const [detailMemberId, setDetailMemberId] = useState<string | null>(null);
-  const [paymentSaving, setPaymentSaving] = useState(false);
   const [treePan, setTreePan] = useState({ x: 40, y: 40 });
   const treeScreenRef = useRef<HTMLDivElement | null>(null);
   const treeViewportRef = useRef<HTMLDivElement | null>(null);
@@ -421,17 +492,16 @@ const ArbolGenealogicoSienna = () => {
     [detailMemberId, members]
   );
 
-  const loadData = async () => {
-    setLoadingMessage('Actualizando datos del árbol...');
-    await refetch();
-  };
-
   useEffect(() => {
     if (!workspace || workspaceInitialized) return;
 
     applySiennaCaseConfig(workspace.settings.sienna_case_config);
-    setEstateAmount(String(workspace.settings.estate_amount ?? 0));
-    setLawyerFeePercentage(String(workspace.settings.lawyer_fee_percentage ?? 0));
+    const defaultEstateAmount = String(workspace.settings.estate_amount ?? 0);
+    const defaultLawyerFeePercentage = String(workspace.settings.lawyer_fee_percentage ?? 0);
+    setEstateAmount(defaultEstateAmount);
+    setLawyerFeePercentage(defaultLawyerFeePercentage);
+    setAppliedEstateAmount(defaultEstateAmount);
+    setAppliedLawyerFeePercentage(defaultLawyerFeePercentage);
     setWorkspaceInitialized(true);
   }, [workspace, workspaceInitialized]);
 
@@ -506,8 +576,8 @@ const ArbolGenealogicoSienna = () => {
   };
 
   const { data: realtimeCalculationData, isFetching: isFetchingCalculation } = useSiennaCalculation(
-    estateAmount,
-    lawyerFeePercentage
+    appliedEstateAmount,
+    appliedLawyerFeePercentage
   );
   const realtimeCalculation = realtimeCalculationData?.calculation;
   const total = useMemo(
@@ -586,10 +656,6 @@ const ArbolGenealogicoSienna = () => {
       };
     }).sort((left, right) => left.share.member.name.localeCompare(right.share.member.name, 'es', { sensitivity: 'base' }));
   }, [distributableEstateAmount, heirsByMemberId, heirsByName, inheritancePlan, realtimeCalculation?.active_heirs]);
-  const activePaymentHeirIds = useMemo(
-    () => new Set(calculatedPayments.map(({ heir }) => heir?.id).filter((id): id is string => Boolean(id))),
-    [calculatedPayments]
-  );
   const presentationStats = useMemo(() => {
     const connectors = members.filter((member) => getMemberEffectiveInheritanceStatus(member) === 'no_hereda').length;
     const pending = members.filter((member) => getMemberEffectiveInheritanceStatus(member) === 'requiere_revision').length;
@@ -599,69 +665,19 @@ const ArbolGenealogicoSienna = () => {
       pending,
     };
   }, [inheritancePlan.activeHeirs.length, members]);
+  const hasPendingCalculationChanges =
+    estateAmount !== appliedEstateAmount || lawyerFeePercentage !== appliedLawyerFeePercentage;
 
-  const applyEstateCalculation = async () => {
-    if (!canEdit) {
-      toast({
-        title: 'Acceso restringido',
-        description: 'Solo usuarios con permiso can_edit pueden guardar pagos.',
-        variant: 'destructive',
-      });
-      return;
-    }
-    const totalEstate = distributableEstateAmount;
-    if (!totalEstate || totalEstate <= 0) {
+  const applyEstateCalculation = () => {
+    const nextEstateAmount = Number(estateAmount || 0);
+    if (!nextEstateAmount || nextEstateAmount <= 0) {
       toast({ title: 'Monto requerido', description: 'Indica el monto total de la herencia para distribuirlo después de abogados.' });
       return;
     }
 
-    setPaymentSaving(true);
-    try {
-      const bulkItems = calculatedPayments
-        .filter(({ heir }) => Boolean(heir?.id))
-        .map(({ heir, amount }) => ({
-          id: heir!.id,
-          inheritance_amount: amount,
-        }));
-      const inactiveItems = heirs
-        .filter((heir) => heir.id && !activePaymentHeirIds.has(heir.id) && Number(heir.inheritance_amount || 0) !== 0)
-        .map((heir) => ({
-          id: heir.id,
-          inheritance_amount: 0,
-        }));
-
-      const createItems = calculatedPayments.filter(({ heir }) => !heir?.id);
-
-      if (bulkItems.length || inactiveItems.length) {
-        await api.bulkUpdateHeirAmounts([...bulkItems, ...inactiveItems]);
-      }
-
-      await Promise.all(
-        createItems.map(({ share, amount }) =>
-          api.saveConfirmedHeir({
-            sienna_member_id: share.member.id,
-            heir_name: share.member.name,
-            relationship_summary: share.reason,
-            line_vincenzo: share.sources.includes('Vincenzo/Vicente'),
-            line_paolo: share.sources.includes('Paolo/Paulino'),
-            status: 'mencionado',
-            notes: share.paymentBasis,
-            inheritance_amount: amount,
-          })
-        )
-      );
-      invalidateSiennaData(queryClient);
-      await loadData();
-      toast({ title: 'Montos calculados', description: 'La API calculó en vivo, guardó los pagos y actualizó el árbol.' });
-    } catch (error) {
-      toast({
-        title: 'No se pudieron guardar los montos',
-        description: error instanceof Error ? error.message : 'Error desconocido',
-        variant: 'destructive',
-      });
-    } finally {
-      setPaymentSaving(false);
-    }
+    setAppliedEstateAmount(estateAmount);
+    setAppliedLawyerFeePercentage(lawyerFeePercentage);
+    toast({ title: 'Cálculo actualizado', description: 'La vista usa estos parámetros solo como simulación local.' });
   };
 
   const toggleFullscreen = async () => {
@@ -1124,12 +1140,10 @@ const ArbolGenealogicoSienna = () => {
                   % sobre el bruto. El default global se cambia solo en Settings.
                 </p>
               </div>
-              {canEdit && (
-                <Button onClick={applyEstateCalculation} disabled={paymentSaving || isFetchingCalculation} className="bg-legal-gold hover:bg-legal-gold/90 text-white">
-                  <Save className="mr-2 h-4 w-4" />
-                  {isFetchingCalculation ? 'Calculando...' : 'Calcular y guardar pagos'}
-                </Button>
-              )}
+              <Button onClick={applyEstateCalculation} disabled={isFetchingCalculation} className="bg-legal-gold hover:bg-legal-gold/90 text-white">
+                <RefreshCw className="mr-2 h-4 w-4" />
+                {isFetchingCalculation ? 'Calculando...' : 'Actualizar cálculo'}
+              </Button>
             </div>
 
             <div className="grid gap-3 md:grid-cols-3">
@@ -1147,6 +1161,10 @@ const ArbolGenealogicoSienna = () => {
                 <p className="font-bold text-legal-blue">{formatMoney(distributableEstateAmount)}</p>
               </div>
             </div>
+            <p className="text-xs text-legal-gray">
+              Cálculo aplicado desde la API
+              {hasPendingCalculationChanges ? ' · cambios pendientes de aplicar' : ''}
+            </p>
 
             <div className="grid gap-3 md:grid-cols-5">
               {calculatedPayments.map(({ heir, share, amount }) => (

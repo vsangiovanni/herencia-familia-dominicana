@@ -32,19 +32,21 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
   },
   dashboard: {
     title: 'Caso Alessandro',
-    intro: 'Portada principal del expediente de Alessandro de Paola Sangiovanni: árbol familiar, reparto, conexiones de parentesco y documentos.',
+    intro: 'Portada principal del expediente de Alessandro de Paola Sangiovanni: árbol familiar, reparto, conexiones de parentesco, documentos y seguimiento operativo.',
     sections: [
       {
         title: 'Accesos principales',
         items: [
           'Use las tarjetas grandes para ir directo a lo más importante.',
-          'Mi herencia muestra cuánto le corresponde; Líneas de parentesco aclara si está vinculado por más de una rama.',
+          'Árbol, Explicación, Filiación y Linajes consumen el cálculo vigente del backend para mantener una sola versión del reparto.',
+          'Líneas de parentesco aclara si una persona está vinculada por más de una rama familiar.',
         ],
       },
       {
         title: 'Administración',
         items: [
           'La sección de administración solo la ven cuentas del equipo legal.',
+          'Cambios de datos deben hacerse desde las pantallas autorizadas; las vistas de análisis no editan relaciones automáticamente.',
         ],
       },
     ],
@@ -219,6 +221,7 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
   },
   hallazgos: {
     title: 'Corrección por miembro',
+    intro: 'Lista operativa de pendientes detectados por el backend para limpiar vínculos antes de confiar en el árbol y el reparto.',
     sections: [
       {
         title: 'Tabla caso por caso',
@@ -226,6 +229,7 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
           'Cada fila es un problema que afecta filiación o reparto: vínculo de filiación, matrimonio del hijo o rama cortada.',
           'El cónyuge en texto (ej. «Ana Julia Rodríguez») es referencia documental: no se pide enlazarlo ni crear nodo aparte en el árbol.',
           'Use los selectores en «Corregir aquí» y pulse Guardar sin salir de la pantalla.',
+          'Si el pendiente requiere una decisión genealógica, confirme contra actas antes de guardar.',
           'Los casos resueltos desaparecen al recargar; avance hasta que no queden pendientes.',
         ],
       },
@@ -245,12 +249,23 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
   },
   'calculo-filiacion': {
     title: 'Cálculo por filiación',
+    intro: 'Vista comparativa de reparto por rama familiar. El cálculo viene del backend; la pantalla solo presenta y simula parámetros visibles.',
     sections: [
       {
-        title: 'Líneas',
+        title: 'Líneas y montos',
         items: [
           'Distribución por línea familiar (p. ej. Vincenzo vs Paolo).',
-          'Ingrese montos si la pantalla lo solicita para ver totales por heredero.',
+          'El monto bruto del caso y el % de firma se cargan desde Settings al abrir la pantalla.',
+          'Escribir en el campo no recalcula de inmediato; use Actualizar esta vista para aplicar la simulación local.',
+          'Los montos por heredero se calculan sobre el neto: bruto menos honorarios de abogados.',
+          'La pantalla no guarda montos en herederos; solo consulta y muestra el resultado vigente.',
+        ],
+      },
+      {
+        title: 'Lectura',
+        items: [
+          'Compare totales por rama para detectar diferencias entre líneas sucesorales.',
+          'Si algo luce raro, revise primero Árbol, Linajes y Documentos antes de modificar miembros.',
         ],
       },
     ],
@@ -284,6 +299,14 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
           'El texto OCR es apoyo; la verdad del sistema es la vinculación al miembro del árbol.',
         ],
       },
+      {
+        title: 'Soporte documental',
+        items: [
+          'Un documento marcado como “confirma heredero” o clasificado como acta de nacimiento ayuda a que el heredero aparezca verificado.',
+          'Si un heredero tiene documento vinculado pero no está clasificado o marcado como confirmación, aparecerá como pendiente en Explicación.',
+          'Si no hay documento asociado directamente, aparecerá como falta de soporte.',
+        ],
+      },
     ],
   },
   'sienna-arbol': {
@@ -295,7 +318,8 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
         items: [
           'Indique el monto total del caudal y el % de firma de abogados (sobre el bruto).',
           'Neto repartible = bruto − firma. Los montos por heredero usan siempre ese neto.',
-          'El % se carga desde Settings. Use Calcular y guardar pagos solo después de revisar el reparto.',
+          'El % se carga desde Settings. Use Actualizar cálculo para simular en esta vista sin guardar montos.',
+          'Escribir en los campos no recalcula automáticamente; el botón aplica la simulación visible.',
           'Sin monto, verá porcentajes; con monto, cada heredero muestra RD$ calculados.',
         ],
       },
@@ -313,6 +337,7 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
         items: [
           'Cada nodo muestra rol (heredero, enlace), % y monto si hay caudal.',
           'Los colores y badges reflejan el estado sucesoral automático.',
+          'Doménico Sangiovanni y María Rosa Grisolia Di Vanna se muestran como pareja raíz fundacional al mismo nivel cuando ambos están enlazados como cónyuges.',
           'En hijos registrados con unión, aparece "Filiación: Matrimonio: …" para distinguir hijos de esa pareja.',
           'Los miembros con fecha de defunción muestran lacito negro y etiqueta "Fallecido".',
           'Los casos de doble linaje muestran ambas rutas y un bloque visual de cruce de ramas.',
@@ -337,6 +362,7 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
           'Detecta personas conectadas por más de una ruta familiar usando la información registrada en el expediente.',
           'Compara rutas por fuente familiar, identifica ancestros compartidos y estima complejidad del cruce.',
           'Muestra alertas por duplicados, vínculos dudosos, fechas incoherentes y relaciones sospechosas.',
+          'Una inconsistencia no siempre significa conflicto legal; puede ser un vínculo incompleto o una relación cargada con formato viejo.',
           'El cónyuge en texto (sin spouse_member_id) es referencia documental y no genera inconsistencia sucesoria.',
           'El badge Verificado indica enlaces formales correctos; Ref. doc. señala cónyuge solo en texto.',
           'Use los filtros Todos, Heredan y No heredan / Vínculo para separar quienes reciben cuota del reparto de quienes solo conectan rutas.',
@@ -411,6 +437,7 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
           'Autodetectar (recomendado): el sistema clasifica según ley y árbol; use el simulador antes de guardar.',
           'Forzar manual: solo si está seguro; deje trazabilidad en la razón.',
           'Requiere revisión: use cuando falten datos o haya duda en la filiación.',
+          'La fuente operativa del reparto es el backend; el formulario ayuda a capturar relaciones, no a recalcular reglas sucesorales aparte.',
         ],
       },
       {
@@ -489,14 +516,14 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
   },
   'sienna-explicacion': {
     title: 'Explicación para herederos',
-    intro: 'Pantalla para reuniones: lenguaje claro, cálculo en vivo, doble linaje, simulador y documentación.',
+    intro: 'Pantalla para reuniones: lenguaje claro, cálculo vigente, doble linaje, simulador y estado documental de cada heredero.',
     sections: [
       {
         title: 'Pestañas',
         items: [
           'Por qué heredo: texto personalizado por heredero, con doble linaje desglosado cuando aplica.',
           'Simulador: excluir herederos hipotéticos y ver impacto en % y monto.',
-          'Semáforo: estado documental por heredero y conflictos detectados.',
+          'Semáforo: estado documental por heredero, pendientes de soporte y conflictos de datos si existen.',
           'Línea de tiempo y glosario: contexto para explicar filiación, representación y vocación sucesoral.',
         ],
       },
@@ -506,7 +533,18 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
           'Ingrese el caudal bruto y el mismo % de firma de abogados que en Árbol del caso.',
           'Neto = bruto − (bruto × % abogados). Los montos por heredero se calculan sobre el neto.',
           'La pantalla usa el mismo cálculo que ve en el árbol para mantenerse consistente.',
-          'Actualizar esta vista refresca datos y cálculo sin cambiar Settings globales.',
+          'Escribir en los campos no recalcula automáticamente; Actualizar esta vista aplica la simulación sin cambiar Settings globales.',
+          'La pantalla no guarda montos en la tabla de herederos.',
+        ],
+      },
+      {
+        title: 'Pendientes de documentación',
+        items: [
+          'Pendientes de documentación agrupa herederos que requieren revisión documental antes de considerarlos completamente verificados.',
+          'En progreso: hay un documento vinculado, pero todavía no está marcado como “confirma heredero” ni clasificado como acta de nacimiento.',
+          'Falta soporte: no hay actas ni documentos asociados directamente a ese heredero.',
+          'Conflicto: el sistema detectó datos contradictorios, por ejemplo fechas distintas o nacimiento y defunción iguales.',
+          'En la práctica, la mayoría de pendientes son falta de documentación o falta de clasificación del documento, no necesariamente conflicto legal.',
         ],
       },
       {

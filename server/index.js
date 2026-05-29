@@ -3674,22 +3674,7 @@ app.get('/api/confirmed-heirs/:id/photo', requireAuth, async (req, res) => {
 });
 
 app.post('/api/confirmed-heirs/bulk-amounts', requireAuth, requireEditor, async (req, res) => {
-  const items = Array.isArray(req.body?.items) ? req.body.items : [];
-  for (const item of items) {
-    if (!item || typeof item !== 'object') continue;
-    const id = String(item.id || '').trim();
-    if (!id) continue;
-    await query(
-      'UPDATE confirmed_heirs SET inheritance_amount = :amount, updated_by = :updatedBy WHERE id = :id',
-      {
-        id,
-        amount: Number(item.inheritance_amount || 0),
-        updatedBy: req.user.id,
-      }
-    );
-  }
-  invalidateSiennaApiCache();
-  res.json({ ok: true });
+  res.status(410).json({ message: 'Los montos heredados se calculan desde el API y ya no se guardan en confirmed_heirs.' });
 });
 
 app.put('/api/confirmed-heirs/:id', requireAuth, requireEditor, async (req, res) => {
@@ -3705,9 +3690,6 @@ app.put('/api/confirmed-heirs/:id', requireAuth, requireEditor, async (req, res)
     photo_file_type,
     photo_data,
   } = req.body || {};
-  const hasInheritanceAmount = Object.prototype.hasOwnProperty.call(req.body || {}, 'inheritance_amount');
-  const inheritanceAmount = hasInheritanceAmount ? Number(req.body.inheritance_amount || 0) : null;
-
   if (!heir_name || !String(heir_name).trim()) {
     return res.status(400).json({ message: 'El nombre del heredero es requerido' });
   }
@@ -3732,7 +3714,6 @@ app.put('/api/confirmed-heirs/:id', requireAuth, requireEditor, async (req, res)
          photo_file_name = :photoFileName,
          photo_file_type = :photoFileType,
          photo_data = :photoData,
-         inheritance_amount = CASE WHEN :hasInheritanceAmount = 1 THEN :inheritanceAmount ELSE inheritance_amount END,
          updated_by = :updatedBy
      WHERE id = :id`,
     {
@@ -3747,8 +3728,6 @@ app.put('/api/confirmed-heirs/:id', requireAuth, requireEditor, async (req, res)
       photoFileName: photo_file_name || null,
       photoFileType: photo_file_type || null,
       photoData: photo_data || null,
-      hasInheritanceAmount: hasInheritanceAmount ? 1 : 0,
-      inheritanceAmount,
       updatedBy: req.user.id,
     }
   );
@@ -3769,7 +3748,6 @@ app.post('/api/confirmed-heirs', requireAuth, requireEditor, async (req, res) =>
     photo_file_name,
     photo_file_type,
     photo_data,
-    inheritance_amount,
   } = req.body || {};
 
   if (!heir_name) return res.status(400).json({ message: 'El nombre del heredero es requerido' });
@@ -3785,11 +3763,11 @@ app.post('/api/confirmed-heirs', requireAuth, requireEditor, async (req, res) =>
   await query(
     `INSERT INTO confirmed_heirs (
        id, sienna_member_id, heir_name, relationship_summary, line_vincenzo, line_paolo, status, notes,
-       photo_file_name, photo_file_type, photo_data, inheritance_amount, created_by, updated_by
+       photo_file_name, photo_file_type, photo_data, created_by, updated_by
      )
      VALUES (
        :id, :siennaMemberId, :heirName, :relationshipSummary, :lineVincenzo, :linePaolo, :status, :notes,
-       :photoFileName, :photoFileType, :photoData, :inheritanceAmount, :createdBy, :updatedBy
+       :photoFileName, :photoFileType, :photoData, :createdBy, :updatedBy
      )
      ON DUPLICATE KEY UPDATE
        sienna_member_id = VALUES(sienna_member_id),
@@ -3801,7 +3779,6 @@ app.post('/api/confirmed-heirs', requireAuth, requireEditor, async (req, res) =>
        photo_file_name = VALUES(photo_file_name),
        photo_file_type = VALUES(photo_file_type),
        photo_data = VALUES(photo_data),
-       inheritance_amount = VALUES(inheritance_amount),
        updated_by = VALUES(updated_by)`,
     {
       id: randomUUID(),
@@ -3815,7 +3792,6 @@ app.post('/api/confirmed-heirs', requireAuth, requireEditor, async (req, res) =>
       photoFileName: photo_file_name || null,
       photoFileType: photo_file_type || null,
       photoData: photo_data || null,
-      inheritanceAmount: Number(inheritance_amount || 0),
       createdBy: req.user.id,
       updatedBy: req.user.id,
     }

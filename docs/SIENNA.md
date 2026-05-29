@@ -322,9 +322,25 @@ Ayuda en pantalla: icono **?** (`sienna-miembros`, `sienna-miembros-agregar`) e 
 - **Fórmula única** (`resolveEstateAmounts` en `siennaCalculation.ts`):
   - Firma = bruto × (% / 100)
   - Neto repartible = bruto − firma
-- **Árbol del caso** y **Explicación a herederos** usan la misma función; los montos por heredero = neto × % sucesorio real.
+- **Árbol del caso**, **Explicación a herederos** y **Cálculo por filiación** usan la misma función; los montos por heredero = neto × % sucesorio real.
 - Al abrir cada pantalla se leen Settings y el cálculo vigente desde la API.
-- Guardar montos en el árbol persiste los pagos calculados sobre los herederos confirmados; Explicación refresca la vista sin alterar Settings globales.
+- Las simulaciones de monto se aplican manualmente con `Actualizar cálculo` / `Actualizar esta vista`; escribir en el campo no recalcula hasta pulsar el botón.
+- Los montos heredados no se guardan en `confirmed_heirs`. `confirmed_heirs.inheritance_amount` queda como columna legacy sin uso operativo hasta una limpieza de DB autorizada.
+
+## Linaje fundacional Doménico / María Rosa
+
+- Doménico Sangiovanni y María Rosa Grisolia Di Vanna son cónyuges fundacionales; María Rosa no debe colgar como hija/padre de Doménico.
+- La corrección vigente deja a ambos sin `parent_id` y enlazados por `spouse_member_id`.
+- La unión canónica es `union-domenico-texto` con `partner_a_member_id = domenico` y `partner_b_member_id = maria-rosa-grisolia-di-vanna-1779890134349`.
+- En `/sienna/arbol`, cuando dos miembros raíz son cónyuges, se muestran como pareja raíz al mismo nivel y solo uno queda como raíz estructural para no duplicar ramas.
+- En `/sienna/linajes`, esa unión no debe contar como inconsistencia mientras ambos estén enlazados como cónyuges y no como relación parental.
+
+## Ayuda contextual
+
+- La ayuda vive en `src/data/screenHelp.ts` y debe actualizarse junto con cambios visibles de flujo.
+- `/sienna/explicacion-herederos` usa la etiqueta **Pendientes de documentación** para agrupar herederos con soporte documental incompleto, documentos sin clasificar como confirmación/acta o conflictos de datos reales.
+- La ayuda debe aclarar que “pendiente” normalmente significa falta de soporte o clasificación documental, no necesariamente conflicto legal.
+- Las pantallas de cálculo deben explicar que escribir montos no recalcula de inmediato; el usuario debe pulsar `Actualizar cálculo` o `Actualizar esta vista`.
 
 ## Hallazgos — corrección por miembro
 

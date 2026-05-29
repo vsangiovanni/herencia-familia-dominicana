@@ -4945,23 +4945,7 @@ try {
   if ($method === 'POST' && $path === '/confirmed-heirs/bulk-amounts') {
     $user = require_user();
     require_editor($user);
-    $data = body();
-    $items = is_array($data['items'] ?? null) ? $data['items'] : [];
-    foreach ($items as $item) {
-      if (!is_array($item)) continue;
-      $id = trim((string)($item['id'] ?? ''));
-      if ($id === '') continue;
-      exec_sql(
-        'UPDATE confirmed_heirs SET inheritance_amount = :amount, updated_by = :updatedBy WHERE id = :id',
-        [
-          'id' => $id,
-          'amount' => (float)($item['inheritance_amount'] ?? 0),
-          'updatedBy' => $user['id'],
-        ]
-      );
-    }
-    invalidate_sienna_cache();
-    json_response(['ok' => true]);
+    json_response(['message' => 'Los montos heredados se calculan desde el API y ya no se guardan en confirmed_heirs.'], 410);
   }
 
   if ($method === 'POST' && $path === '/confirmed-heirs') {
@@ -4982,9 +4966,9 @@ try {
     }
     $status = normalize_enum($data['status'] ?? null, ['mencionado', 'confirmado', 'pendiente'], 'mencionado');
     exec_sql(
-      'INSERT INTO confirmed_heirs (id, sienna_member_id, heir_name, relationship_summary, line_vincenzo, line_paolo, status, notes, photo_file_name, photo_file_type, photo_data, inheritance_amount, created_by, updated_by)
-       VALUES (:id, :siennaMemberId, :name, :summary, :vincenzo, :paolo, :status, :notes, :photoFileName, :photoFileType, :photoData, :inheritanceAmount, :createdBy, :updatedBy)
-       ON DUPLICATE KEY UPDATE sienna_member_id = VALUES(sienna_member_id), relationship_summary = VALUES(relationship_summary), line_vincenzo = VALUES(line_vincenzo), line_paolo = VALUES(line_paolo), status = VALUES(status), notes = VALUES(notes), photo_file_name = VALUES(photo_file_name), photo_file_type = VALUES(photo_file_type), photo_data = VALUES(photo_data), inheritance_amount = VALUES(inheritance_amount), updated_by = VALUES(updated_by)',
+      'INSERT INTO confirmed_heirs (id, sienna_member_id, heir_name, relationship_summary, line_vincenzo, line_paolo, status, notes, photo_file_name, photo_file_type, photo_data, created_by, updated_by)
+       VALUES (:id, :siennaMemberId, :name, :summary, :vincenzo, :paolo, :status, :notes, :photoFileName, :photoFileType, :photoData, :createdBy, :updatedBy)
+       ON DUPLICATE KEY UPDATE sienna_member_id = VALUES(sienna_member_id), relationship_summary = VALUES(relationship_summary), line_vincenzo = VALUES(line_vincenzo), line_paolo = VALUES(line_paolo), status = VALUES(status), notes = VALUES(notes), photo_file_name = VALUES(photo_file_name), photo_file_type = VALUES(photo_file_type), photo_data = VALUES(photo_data), updated_by = VALUES(updated_by)',
       [
         'id' => uuid(),
         'siennaMemberId' => $memberId,
@@ -4997,7 +4981,6 @@ try {
         'photoFileName' => $data['photo_file_name'] ?? null,
         'photoFileType' => $data['photo_file_type'] ?? null,
         'photoData' => $data['photo_data'] ?? null,
-        'inheritanceAmount' => (float)($data['inheritance_amount'] ?? 0),
         'createdBy' => $user['id'],
         'updatedBy' => $user['id'],
       ]
@@ -5056,9 +5039,8 @@ try {
       json_response(['message' => 'El miembro vinculado no existe en el árbol.'], 400);
     }
     $status = normalize_enum($data['status'] ?? null, ['mencionado', 'confirmado', 'pendiente'], 'mencionado');
-    $hasInheritanceAmount = array_key_exists('inheritance_amount', $data);
     exec_sql(
-      'UPDATE confirmed_heirs SET sienna_member_id = :siennaMemberId, heir_name = :name, relationship_summary = :summary, line_vincenzo = :vincenzo, line_paolo = :paolo, status = :status, notes = :notes, photo_file_name = :photoFileName, photo_file_type = :photoFileType, photo_data = :photoData, inheritance_amount = CASE WHEN :hasInheritanceAmount = 1 THEN :inheritanceAmount ELSE inheritance_amount END, updated_by = :updatedBy WHERE id = :id',
+      'UPDATE confirmed_heirs SET sienna_member_id = :siennaMemberId, heir_name = :name, relationship_summary = :summary, line_vincenzo = :vincenzo, line_paolo = :paolo, status = :status, notes = :notes, photo_file_name = :photoFileName, photo_file_type = :photoFileType, photo_data = :photoData, updated_by = :updatedBy WHERE id = :id',
       [
         'id' => $m[1],
         'siennaMemberId' => $memberId,
@@ -5071,8 +5053,6 @@ try {
         'photoFileName' => $data['photo_file_name'] ?? null,
         'photoFileType' => $data['photo_file_type'] ?? null,
         'photoData' => $data['photo_data'] ?? null,
-        'hasInheritanceAmount' => $hasInheritanceAmount ? 1 : 0,
-        'inheritanceAmount' => $hasInheritanceAmount ? (float)($data['inheritance_amount'] ?? 0) : null,
         'updatedBy' => $user['id'],
       ]
     );

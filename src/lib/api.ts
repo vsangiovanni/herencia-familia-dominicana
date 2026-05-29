@@ -43,7 +43,6 @@ export interface ConfirmedHeir {
   photo_file_type?: string | null;
   photo_data?: string | null;
   has_photo?: boolean;
-  inheritance_amount?: number | string | null;
   evidence_count?: number;
 }
 
@@ -571,11 +570,6 @@ export const api = {
     request<{ heir: ConfirmedHeir }>(
       `/api/confirmed-heirs/${id}${options?.includeMedia ? "?includeMedia=1" : ""}`
     ),
-  bulkUpdateHeirAmounts: (items: Array<{ id: string; inheritance_amount: number }>) =>
-    request<{ ok: boolean }>("/api/confirmed-heirs/bulk-amounts", {
-      method: "POST",
-      body: JSON.stringify({ items }),
-    }),
   saveConfirmedHeir: (data: Omit<ConfirmedHeir, "id" | "evidence_count">) =>
     request<{ ok: boolean }>("/api/confirmed-heirs", {
       method: "POST",

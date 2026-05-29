@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   Table,
   TableBody,
@@ -20,7 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { GitBranch, Scale, UserCheck, AlertTriangle } from 'lucide-react';
+import { GitBranch, Scale, UserCheck, AlertTriangle, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 type DistributionLine = {
@@ -98,9 +99,10 @@ const CalculoFiliacion = () => {
   const unions = workspace?.unions ?? [];
   const parentLinks = workspace?.parent_links ?? [];
   const [estateAmount, setEstateAmount] = useState(0);
+  const [appliedEstateAmount, setAppliedEstateAmount] = useState(0);
   const lawyerFeePercentage = Number(workspace?.settings?.lawyer_fee_percentage || 0);
   const { data: realtimeCalculationData, isFetching: isFetchingCalculation } = useSiennaCalculation(
-    estateAmount,
+    appliedEstateAmount,
     lawyerFeePercentage
   );
   const realtimeCalculation = realtimeCalculationData?.calculation;
@@ -117,10 +119,16 @@ const CalculoFiliacion = () => {
   useEffect(() => {
     if (!workspace) return;
     applySiennaCaseConfig(workspace.settings?.sienna_case_config);
-    setEstateAmount(Number(workspace.settings?.estate_amount || 0));
+    const defaultEstateAmount = Number(workspace.settings?.estate_amount || 0);
+    setEstateAmount(defaultEstateAmount);
+    setAppliedEstateAmount(defaultEstateAmount);
   }, [workspace]);
 
   const genealogyIssues = useMemo(() => countGenealogyInconsistencies(genealogy), [genealogy]);
+  const hasPendingCalculationChanges = estateAmount !== appliedEstateAmount;
+  const applyEstateCalculation = () => {
+    setAppliedEstateAmount(Number(estateAmount || 0));
+  };
 
   const distributionLines = useMemo<DistributionLine[]>(
     () => {
@@ -292,7 +300,7 @@ const CalculoFiliacion = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-6">
-            <div className="grid md:grid-cols-2 gap-4 items-end">
+            <div className="grid gap-4 md:grid-cols-[1fr_auto_1fr] items-end">
               <div>
                 <Label htmlFor="estateAmount">Monto bruto del caso</Label>
                 <Input
@@ -305,12 +313,17 @@ const CalculoFiliacion = () => {
                   onChange={(event) => setEstateAmount(Number(event.target.value))}
                 />
               </div>
+              <Button onClick={applyEstateCalculation} disabled={isFetchingCalculation}>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                {isFetchingCalculation ? 'Calculando...' : 'Actualizar cálculo'}
+              </Button>
               <div className="bg-legal-blue/5 border border-legal-blue/20 rounded-md p-4">
                 <p className="text-sm text-legal-gray">Total neto calculado</p>
                 <p className="text-2xl font-bold text-legal-blue">{formatMoney(totalAmount)}</p>
                 <p className="text-xs text-legal-gray">
                   Firma: {formatPercent(lawyerFeePercentage)}
                   {isFetchingCalculation ? ' · recalculando...' : ''}
+                  {hasPendingCalculationChanges ? ' · cambios pendientes de aplicar' : ''}
                 </p>
               </div>
             </div>
@@ -368,7 +381,7 @@ const CalculoFiliacion = () => {
                         <Badge variant="outline">{formatPercent(item.percentage)}</Badge>
                       </TableCell>
                       <TableCell className="text-right font-medium">
-                        {formatMoney(Number(realtimeCalculation?.estate.distributableAmount || estateAmount) * (item.percentage / 100))}
+                        {formatMoney(Number(realtimeCalculation?.estate.distributableAmount || appliedEstateAmount) * (item.percentage / 100))}
                       </TableCell>
                     </TableRow>
                   );

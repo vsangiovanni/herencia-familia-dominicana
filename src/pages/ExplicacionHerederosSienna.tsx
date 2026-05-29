@@ -1,11 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import BackButton from '@/components/BackButton';
 import DocumentHeader from '@/components/DocumentHeader';
 import SiennaPageLayout from '@/components/sienna/SiennaPageLayout';
 import { api, ConfirmedHeir, EvidenceDocument } from '@/lib/api';
-import { invalidateSiennaData, useSiennaCalculation, useSiennaWorkspace } from '@/hooks/useSiennaData';
+import { useConfirmedHeirs, useSiennaCalculation, useSiennaWorkspace } from '@/hooks/useSiennaData';
 import MemberPhoto from '@/components/sienna/MemberPhoto';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -132,11 +131,11 @@ const SupportBadge = ({ brief }: { brief: HeirBrief }) => {
 };
 
 const ExplicacionHerederosSienna = () => {
-  const queryClient = useQueryClient();
-  const { data: workspace, isLoading, isFetching, refetch } = useSiennaWorkspace(true);
+  const { data: workspace, isLoading, isFetching, refetch } = useSiennaWorkspace(false);
+  const { data: heirsWithMedia } = useConfirmedHeirs(true);
   const members = workspace?.members ?? [];
   const documents = workspace?.documents ?? [];
-  const heirs = workspace?.heirs ?? [];
+  const heirs = heirsWithMedia?.heirs ?? workspace?.heirs ?? [];
   const genealogy = useMemo(
     () => ({
       unions: workspace?.unions ?? [],
@@ -146,6 +145,8 @@ const ExplicacionHerederosSienna = () => {
   );
   const [estateAmount, setEstateAmount] = useState('');
   const [lawyerFeePercentage, setLawyerFeePercentage] = useState('0');
+  const [appliedEstateAmount, setAppliedEstateAmount] = useState('');
+  const [appliedLawyerFeePercentage, setAppliedLawyerFeePercentage] = useState('0');
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [isPresentationMode, setIsPresentationMode] = useState(false);
   const [workspaceInitialized, setWorkspaceInitialized] = useState(false);
@@ -155,8 +156,12 @@ const ExplicacionHerederosSienna = () => {
     if (!workspace || workspaceInitialized) return;
 
     applySiennaCaseConfig(workspace.settings.sienna_case_config);
-    setEstateAmount(String(workspace.settings.estate_amount ?? 0));
-    setLawyerFeePercentage(String(workspace.settings.lawyer_fee_percentage ?? 0));
+    const defaultEstateAmount = String(workspace.settings.estate_amount ?? 0);
+    const defaultLawyerFeePercentage = String(workspace.settings.lawyer_fee_percentage ?? 0);
+    setEstateAmount(defaultEstateAmount);
+    setLawyerFeePercentage(defaultLawyerFeePercentage);
+    setAppliedEstateAmount(defaultEstateAmount);
+    setAppliedLawyerFeePercentage(defaultLawyerFeePercentage);
     setWorkspaceInitialized(true);
   }, [workspace, workspaceInitialized]);
 
@@ -176,9 +181,9 @@ const ExplicacionHerederosSienna = () => {
 
   const loading = isLoading || !workspaceInitialized;
 
-  const { data: realtimeCalculationData, isFetching: isFetchingCalculation } = useSiennaCalculation(
-    estateAmount,
-    lawyerFeePercentage
+  const { data: realtimeCalculationData, isFetching: isFetchingCalculation, refetch: refetchCalculation } = useSiennaCalculation(
+    appliedEstateAmount,
+    appliedLawyerFeePercentage
   );
   const realtimeCalculation = realtimeCalculationData?.calculation;
   const {
@@ -251,12 +256,20 @@ const ExplicacionHerederosSienna = () => {
     }),
     [briefs]
   );
+  const hasPendingSimulationChanges =
+    estateAmount !== appliedEstateAmount || lawyerFeePercentage !== appliedLawyerFeePercentage;
 
   const saveCalculationSettings = async () => {
     setSettingsSaving(true);
     try {
-      invalidateSiennaData(queryClient);
+      const shouldRefetchCalculation =
+        estateAmount === appliedEstateAmount && lawyerFeePercentage === appliedLawyerFeePercentage;
+      setAppliedEstateAmount(estateAmount);
+      setAppliedLawyerFeePercentage(lawyerFeePercentage);
       await refetch();
+      if (shouldRefetchCalculation) {
+        await refetchCalculation();
+      }
       toast({ title: 'Cálculo actualizado', description: 'La explicación usa estos parámetros solo para esta pantalla.' });
     } catch (error) {
       toast({
@@ -333,7 +346,7 @@ const ExplicacionHerederosSienna = () => {
             <CardContent className="flex items-center gap-3 p-5">
               <AlertTriangle className="h-9 w-9 text-amber-600" />
               <div>
-                <p className="text-sm text-legal-gray">En progreso / conflicto</p>
+                <p className="text-sm text-legal-gray">Pendientes de documentación</p>
                 <p className="text-2xl font-bold text-amber-700">{trafficSummary.amber + trafficSummary.red}</p>
               </div>
             </CardContent>
@@ -389,16 +402,21 @@ const ExplicacionHerederosSienna = () => {
                 <p className="font-bold text-legal-blue">{formatMoney(netAmount)}</p>
                 <p className="text-xs text-legal-gray">Firma: {formatMoney(lawyerFee)}</p>
               </div>
-              <Button variant="outline" onClick={saveCalculationSettings} disabled={settingsSaving || isFetchingCalculation}>
+              <Button
+                variant="outline"
+                onClick={saveCalculationSettings}
+                disabled={settingsSaving || isFetchingCalculation}
+              >
                 {settingsSaving ? 'Actualizando...' : 'Actualizar esta vista'}
               </Button>
             </div>
             <p className="text-xs text-legal-gray">
-              Cálculo en vivo: {isFetchingCalculation
+              Cálculo aplicado: {isFetchingCalculation
                 ? 'actualizando desde la API...'
                 : realtimeCalculation?.generated_at
                   ? new Date(realtimeCalculation.generated_at).toLocaleString('es-DO')
                   : 'pendiente de respuesta de la API'}
+              {hasPendingSimulationChanges ? ' · cambios pendientes de aplicar' : ''}
             </p>
             {distributedTotal < 99.95 && (
               <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">
