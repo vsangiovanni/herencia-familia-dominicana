@@ -301,8 +301,11 @@ const renderPdfFirstPageThumbnail = async (evidence: EvidenceDocument): Promise<
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
 
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(canvas.width / 2, canvas.height / 2, canvas.width / 2, 0, Math.PI * 2);
+    ctx.clip();
     await page.render({ canvasContext: ctx, viewport }).promise;
     return canvas.toDataURL('image/jpeg', 0.86);
   } catch {
@@ -390,8 +393,9 @@ const normalizeAvatarForPdf = async (dataUrl: string): Promise<string | null> =>
     const drawX = (canvas.width - drawW) / 2;
     const drawY = (canvas.height - drawH) / 2;
     ctx.drawImage(img, drawX, drawY, drawW, drawH);
+    ctx.restore();
 
-    return canvas.toDataURL('image/jpeg', 0.88);
+    return canvas.toDataURL('image/png');
   } catch {
     return null;
   }
@@ -887,7 +891,7 @@ export const downloadHeirBriefPdf = async (brief: HeirBriefExport, netAmount: nu
   pdf.setFillColor(250, 246, 238);
   pdf.rect(0, 0, pageWidth, pageHeight, 'F');
 
-  const logoData = await loadImageDataUrl('/legado-sangiovanni-logo-transparent.png');
+  const logoData = await loadImageDataUrl('/legado-sangiovanni-logo-pdf-20260529b.png');
   if (logoData) {
     try {
       pdf.addImage(logoData, 'PNG', margin + 4, 8, 48, 32);
@@ -927,7 +931,7 @@ export const downloadHeirBriefPdf = async (brief: HeirBriefExport, netAmount: nu
   const normalizedAvatarDataUrl = avatarDataUrl ? await normalizeAvatarForPdf(avatarDataUrl) : null;
   if (normalizedAvatarDataUrl) {
     try {
-      pdf.addImage(normalizedAvatarDataUrl, 'JPEG', avatarX, avatarY, 22, 22);
+      pdf.addImage(normalizedAvatarDataUrl, 'PNG', avatarX, avatarY, 22, 22);
     } catch {
       pdf.setFont('times', 'bold');
       pdf.setFontSize(11);
