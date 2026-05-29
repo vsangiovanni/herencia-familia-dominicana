@@ -320,6 +320,7 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
           'Neto repartible = bruto − firma. Los montos por heredero usan siempre ese neto.',
           'El % se carga desde Settings. Use Actualizar cálculo para simular en esta vista sin guardar montos.',
           'Escribir en los campos no recalcula automáticamente; el botón aplica la simulación visible.',
+          'Cálculo de Monto a Heredar vive dentro del desplegable Cálculo aplicado desde la API para dejar más espacio visual al árbol.',
           'Sin monto, verá porcentajes; con monto, cada heredero muestra RD$ calculados.',
         ],
       },
@@ -348,6 +349,7 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
         items: [
           'Imprimir árbol abre una vista preparada en A3 horizontal y ajusta el árbol completo al ancho disponible.',
           'La impresión conserva indicadores de doble linaje, fotos, montos y marcador de fallecido.',
+          'La vista de impresión incluye botones para imprimir otra vez o volver al árbol; esos controles no salen en el papel.',
         ],
       },
     ],
@@ -522,9 +524,10 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
         title: 'Pestañas',
         items: [
           'Por qué heredo: texto personalizado por heredero, con doble linaje desglosado cuando aplica.',
-          'Simulador: excluir herederos hipotéticos y ver impacto en % y monto.',
-          'Semáforo: estado documental por heredero, pendientes de soporte y conflictos de datos si existen.',
-          'Línea de tiempo y glosario: contexto para explicar filiación, representación y vocación sucesoral.',
+          'Semáforo: estado documental por heredero, pendientes de soporte y conflictos de datos si existen; los enlaces para cargar soporte solo aparecen si el usuario tiene permiso a Documentos.',
+          'Línea de tiempo: eventos familiares relevantes del heredero y su ruta documental.',
+          'Glosario: términos legales y familiares usados en esta explicación.',
+          'Reparto final: bruto, firma de abogados, neto y cantidad de herederos incluidos por el cálculo sucesoral vigente de la API.',
         ],
       },
       {
@@ -550,8 +553,9 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
       {
         title: 'PDF',
         items: [
-          'El PDF individual incluye ruta sucesoral, doble linaje cuando existe, monto estimado y mosaico de documentos soporte.',
-          'Las imágenes de actas se normalizan para que aparezcan visibles; PDF u otros formatos muestran vista resumida.',
+          'El PDF individual incluye ruta sucesoral, doble linaje cuando existe, monto calculado, fundamento legal/documental y mosaico de documentos soporte.',
+          'Las imágenes de actas se normalizan para que aparezcan visibles; los PDF muestran miniatura de la primera página cuando el navegador puede renderizarla.',
+          'La foto del heredero se recorta en formato circular en el PDF.',
           'Si el heredero o miembro tiene fecha de defunción, el PDF muestra el indicador "Fallecido" con fecha.',
         ],
       },

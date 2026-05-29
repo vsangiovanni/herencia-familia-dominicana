@@ -23,6 +23,7 @@ import {
 import MemberPhoto from './MemberPhoto';
 import MemberVerificationBadge from './MemberVerificationBadge';
 import { Edit, FileText, GitBranch, Network, Route, UserRound } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
 
 const statusLabel: Record<string, string> = {
   confirmado: 'Confirmado',
@@ -107,6 +108,10 @@ const MemberDetailSheet = ({
   open,
   onOpenChange,
 }: MemberDetailSheetProps) => {
+  const { hasAccess } = useAuth();
+  const canOpenTree = hasAccess('/sienna/arbol-genealogico');
+  const canOpenLineages = hasAccess('/sienna/dobles-linajes');
+  const canOpenMemberAdmin = hasAccess('/sienna/miembros-arbol');
   const membersById = new Map(members.map((item) => [item.id, item]));
   const heir =
     member &&
@@ -230,24 +235,30 @@ const MemberDetailSheet = ({
             )}
 
             <div className="grid gap-2 sm:grid-cols-3">
-              <Button asChild variant="outline" size="sm">
-                <Link to={`/sienna/arbol-genealogico?member=${encodeURIComponent(member.id)}`}>
-                  <Network className="mr-2 h-4 w-4" />
-                  Árbol
-                </Link>
-              </Button>
-              <Button asChild variant="outline" size="sm">
-                <Link to={`/sienna/dobles-linajes?member=${encodeURIComponent(member.id)}`}>
-                  <GitBranch className="mr-2 h-4 w-4" />
-                  Linajes
-                </Link>
-              </Button>
-              <Button asChild size="sm" className="bg-legal-blue hover:bg-legal-blue/90">
-                <Link to={`/sienna/miembros-arbol?edit=${encodeURIComponent(member.id)}`}>
-                  <Edit className="mr-2 h-4 w-4" />
-                  Editar
-                </Link>
-              </Button>
+              {canOpenTree && (
+                <Button asChild variant="outline" size="sm">
+                  <Link to={`/sienna/arbol-genealogico?member=${encodeURIComponent(member.id)}`}>
+                    <Network className="mr-2 h-4 w-4" />
+                    Árbol
+                  </Link>
+                </Button>
+              )}
+              {canOpenLineages && (
+                <Button asChild variant="outline" size="sm">
+                  <Link to={`/sienna/dobles-linajes?member=${encodeURIComponent(member.id)}`}>
+                    <GitBranch className="mr-2 h-4 w-4" />
+                    Linajes
+                  </Link>
+                </Button>
+              )}
+              {canOpenMemberAdmin && (
+                <Button asChild size="sm" className="bg-legal-blue hover:bg-legal-blue/90">
+                  <Link to={`/sienna/miembros-arbol?edit=${encodeURIComponent(member.id)}`}>
+                    <Edit className="mr-2 h-4 w-4" />
+                    Editar
+                  </Link>
+                </Button>
+              )}
             </div>
           </div>
         )}

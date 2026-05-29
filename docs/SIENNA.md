@@ -338,9 +338,12 @@ Ayuda en pantalla: icono **?** (`sienna-miembros`, `sienna-miembros-agregar`) e 
 ## Ayuda contextual
 
 - La ayuda vive en `src/data/screenHelp.ts` y debe actualizarse junto con cambios visibles de flujo.
+- `/sienna/arbol` ahora prioriza el árbol: `Cálculo aplicado desde la API` es desplegable e incluye `Cálculo de Monto a Heredar`; `Por qué heredan (resumen)` también es desplegable.
+- La impresión del árbol abre una vista A3 horizontal con barra de acciones no imprimible: `Imprimir otra vez` y `Volver al árbol`.
 - `/sienna/explicacion-herederos` usa la etiqueta **Pendientes de documentación** para agrupar herederos con soporte documental incompleto, documentos sin clasificar como confirmación/acta o conflictos de datos reales.
 - La ayuda debe aclarar que “pendiente” normalmente significa falta de soporte o clasificación documental, no necesariamente conflicto legal.
 - Las pantallas de cálculo deben explicar que escribir montos no recalcula de inmediato; el usuario debe pulsar `Actualizar cálculo` o `Actualizar esta vista`.
+- En `Explicación para herederos`, los botones/enlaces hacia Documentos, Árbol, Linajes o Administración de miembros deben respetar `hasAccess()` y ocultarse si el usuario no tiene permiso.
 
 ## Hallazgos — corrección por miembro
 
@@ -380,10 +383,10 @@ Estado de la última validación local: PHP OK, build OK, pruebas Sienna OK, lin
 ## PDF individual de herencia
 
 - En `siennaHeirExplain.ts`, el PDF individual sigue el formato premium del **Legado Sangiovanni**:
-  - encabezado/portada con logo, título `REPORTE INDIVIDUAL DE HERENCIA`, ficha del heredero, foto, estado, monto heredado estimado y validación;
+  - encabezado/portada con logo, título `REPORTE INDIVIDUAL DE HERENCIA`, ficha del heredero, foto circular, estado, monto heredado calculado y validación;
   - página 1 con resumen ejecutivo, resumen hereditario y explicación simple;
   - página 2 con rutas genealógicas, análisis de doble linaje cuando aplica, tabla de vínculos y hallazgos;
-  - páginas posteriores con documentos relacionados, mosaico visual, timeline, validación del sistema, observaciones y pie de página.
+  - páginas posteriores con documentos relacionados, mosaico visual, timeline, fundamento legal/documental, descargo/aceptación y pie de página.
 - El mosaico de documentos soporta:
   - imágenes de actas en `data:image/...`,
   - base64 crudo con detección de mime (`jpeg/png/gif/webp`),
@@ -393,6 +396,8 @@ Estado de la última validación local: PHP OK, build OK, pruebas Sienna OK, lin
 - Si el heredero tiene doble linaje, el PDF imprime las rutas separadas por fuente y porcentaje.
 - Si el miembro está fallecido, el PDF imprime marcador de fallecido con fecha.
 - La regla de soporte documental considera **verificado** al heredero cuando tiene al menos un documento marcado como `confirma heredero` o un acta/documento de nacimiento vinculado directamente.
+- Si un heredero no tiene documentos asociados directamente, el PDF incluye una única nota formal: se le mantiene considerado por vínculo familiar/consanguíneo identificado, pero el soporte documental debe completarse.
+- La numeración de acápites del PDF es automática según el orden real impreso; las secciones condicionales no deben dejar saltos.
 
 ## Pruebas manuales recomendadas
 

@@ -34,6 +34,7 @@ import {
 import { buildInheritancePlanFromApiRows } from '@/lib/siennaCalculation';
 import { buildSiennaDocumentSupportHref } from '@/lib/siennaSupportLinks';
 import { resolveConfirmedHeirPhotoData } from '@/lib/memberPhotos';
+import { useAuth } from '@/context/AuthContext';
 import {
   AlertTriangle,
   BookOpen,
@@ -90,35 +91,51 @@ const initials = (name: string) =>
 const supportDocumentHref = (brief: HeirBrief) =>
   buildSiennaDocumentSupportHref(brief.share.member.id, 'heir-support');
 
+const noDirectDocumentationNote =
+  'Se mantiene considerado por el vínculo familiar y consanguíneo identificado en el expediente. Aún no cuenta con documentación directa asociada, por lo que el soporte debe completarse sin desconocer el reconocimiento provisional de su relación familiar.';
+
 const PaymentChain = ({ steps }: { steps: string[] }) => {
   if (!steps.length) return <span className="text-legal-gray">Ruta pendiente</span>;
+  const firstStep = steps[0];
+  const lastStep = steps[steps.length - 1];
+  const summary = steps.length > 1 ? `${firstStep} -> ${lastStep}` : firstStep;
+  const generationCount = Math.max(steps.length - 1, 0);
 
   return (
-    <div className="flex min-w-[360px] flex-wrap items-center gap-1.5">
-      {steps.map((step, index) => (
-        <React.Fragment key={step + '-' + index}>
-          <span className="inline-flex max-w-[220px] items-center gap-1.5 rounded-full border border-legal-blue/15 bg-legal-blue/5 px-2.5 py-1 text-xs font-medium text-legal-blue">
-            {index === 0 ? (
-              <Landmark className="h-3.5 w-3.5 shrink-0 text-legal-gold" />
-            ) : index === steps.length - 1 ? (
-              <Users className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
-            ) : (
-              <GitBranch className="h-3.5 w-3.5 shrink-0 text-legal-gold" />
-            )}
-            <span className="truncate">{step}</span>
-          </span>
-          {index < steps.length - 1 && <GitMerge className="h-4 w-4 shrink-0 text-legal-gold" />}
-        </React.Fragment>
-      ))}
-    </div>
+    <details className="group max-w-[360px] rounded-md border border-legal-blue/15 bg-white open:bg-legal-blue/[0.03]">
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-xs font-medium text-legal-blue [&::-webkit-details-marker]:hidden">
+        <Route className="h-3.5 w-3.5 shrink-0 text-legal-gold" />
+        <span className="min-w-0 flex-1 truncate">{summary}</span>
+        <span className="shrink-0 rounded-full bg-legal-gold/10 px-2 py-0.5 text-[11px] text-legal-blue">
+          {generationCount} {generationCount === 1 ? 'generacion' : 'generaciones'}
+        </span>
+      </summary>
+      <div className="flex flex-wrap items-center gap-1.5 border-t border-legal-blue/10 px-3 py-2">
+        {steps.map((step, index) => (
+          <React.Fragment key={step + '-' + index}>
+            <span className="inline-flex max-w-[220px] items-center gap-1.5 rounded-full border border-legal-blue/15 bg-legal-blue/5 px-2.5 py-1 text-xs font-medium text-legal-blue">
+              {index === 0 ? (
+                <Landmark className="h-3.5 w-3.5 shrink-0 text-legal-gold" />
+              ) : index === steps.length - 1 ? (
+                <Users className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+              ) : (
+                <GitBranch className="h-3.5 w-3.5 shrink-0 text-legal-gold" />
+              )}
+              <span className="truncate">{step}</span>
+            </span>
+            {index < steps.length - 1 && <GitMerge className="h-4 w-4 shrink-0 text-legal-gold" />}
+          </React.Fragment>
+        ))}
+      </div>
+    </details>
   );
 };
 
-const SupportBadge = ({ brief }: { brief: HeirBrief }) => {
+const SupportBadge = ({ brief, canOpenSupport = true }: { brief: HeirBrief; canOpenSupport?: boolean }) => {
   const needsSupport = brief.traffic.label === 'Falta soporte' || brief.traffic.label === 'En progreso';
   const badge = <Badge className={brief.traffic.className}>{brief.traffic.label}</Badge>;
 
-  if (!needsSupport) return badge;
+  if (!needsSupport || !canOpenSupport) return badge;
 
   return (
     <Link
@@ -132,11 +149,13 @@ const SupportBadge = ({ brief }: { brief: HeirBrief }) => {
 };
 
 const ExplicacionHerederosSienna = () => {
+  const { hasAccess } = useAuth();
   const { data: workspace, isLoading, isFetching, refetch } = useSiennaWorkspace(false);
   const { data: heirsWithMedia } = useConfirmedHeirs(false);
   const members = workspace?.members ?? [];
   const documents = workspace?.documents ?? [];
   const heirs = heirsWithMedia?.heirs ?? workspace?.heirs ?? [];
+  const canOpenDocumentSupport = hasAccess('/sienna/documentos');
   const genealogy = useMemo(
     () => ({
       unions: workspace?.unions ?? [],
@@ -465,8 +484,8 @@ const ExplicacionHerederosSienna = () => {
                     <th className="p-3">%</th>
                     <th className="p-3">Monto</th>
                     <th className="p-3">Ramas</th>
-                    <th className="min-w-[420px] p-3">Cadena de pago</th>
-                    <th className="p-3">Soporte</th>
+                    <th className="min-w-[280px] p-3">Cadena de pago</th>
+                    <th className="min-w-[150px] p-3">Soporte</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -487,11 +506,11 @@ const ExplicacionHerederosSienna = () => {
                       <td className="p-3">{formatPercent(brief.simulatedShare)}</td>
                       <td className="p-3">{formatMoney(brief.simulatedAmount)}</td>
                       <td className="p-3 text-xs text-legal-gray">{brief.share.sources.join(', ') || '-'}</td>
-                      <td className="min-w-[420px] p-3">
+                      <td className="min-w-[280px] p-3 align-top">
                         <PaymentChain steps={routeSteps(brief.share)} />
                       </td>
-                      <td className="p-3">
-                        <SupportBadge brief={brief} />
+                      <td className="min-w-[150px] p-3 align-top">
+                        <SupportBadge brief={brief} canOpenSupport={canOpenDocumentSupport} />
                       </td>
                     </tr>
                   ))}
@@ -552,7 +571,7 @@ const ExplicacionHerederosSienna = () => {
                           </Badge>
                         )}
                         <Badge variant="outline">{formatPercent(brief.simulatedShare)}</Badge>
-                        <SupportBadge brief={brief} />
+                        <SupportBadge brief={brief} canOpenSupport={canOpenDocumentSupport} />
                       </div>
                       <p className="mt-3 whitespace-normal break-words rounded-md bg-legal-gold/10 p-3 text-sm leading-relaxed text-gray-800">
                         {buildWhyIInheritText(brief.share, brief.simulatedShare, brief.simulatedAmount)}
@@ -622,7 +641,7 @@ const ExplicacionHerederosSienna = () => {
                   <CardHeader className="border-b bg-legal-blue/5">
                     <CardTitle className="flex items-center justify-between gap-2 text-base text-legal-blue">
                       <span>{brief.share.member.name}</span>
-                      <SupportBadge brief={brief} />
+                      <SupportBadge brief={brief} canOpenSupport={canOpenDocumentSupport} />
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3 p-5">
@@ -633,13 +652,17 @@ const ExplicacionHerederosSienna = () => {
                       </p>
                     ))}
                     {brief.documents.length === 0 && (
-                      <p className="text-sm text-legal-gray">
-                        No hay documentos asociados directamente a este heredero.{' '}
-                        <Link to={supportDocumentHref(brief)} className="font-medium text-legal-blue underline">
-                          Cargar soporte
-                        </Link>
-                        .
-                      </p>
+                      <div className="space-y-1 text-sm text-legal-gray">
+                        <p>No hay documentos asociados directamente a este heredero.</p>
+                        <p>{noDirectDocumentationNote}</p>
+                        {canOpenDocumentSupport ? (
+                          <Link to={supportDocumentHref(brief)} className="font-medium text-legal-blue underline">
+                            Cargar soporte
+                          </Link>
+                        ) : (
+                          <p className="text-xs font-medium text-legal-gray">Acceso a carga de soporte no disponible para este usuario.</p>
+                        )}
+                      </div>
                     )}
                     {brief.documents.map((document) => (
                       <div key={document.id} className="rounded-md border border-legal-blue/15 p-3">
@@ -739,7 +762,7 @@ const ExplicacionHerederosSienna = () => {
                   </div>
                 </div>
                 <p className="text-sm text-legal-gray">
-                  {briefs.length} herederos confirmados por el cálculo del backend.
+                  {briefs.length} herederos incluidos por el cálculo sucesoral vigente de la API.
                 </p>
               </CardContent>
             </Card>

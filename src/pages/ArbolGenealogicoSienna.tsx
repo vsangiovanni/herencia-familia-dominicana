@@ -27,6 +27,7 @@ import { Link } from 'react-router-dom';
 import { buildWhyIInheritText, formatMoney as formatMoneyExplain, formatPercent as formatPercentExplain } from '@/lib/siennaHeirExplain';
 import { buildInheritancePlanFromApiRows } from '@/lib/siennaCalculation';
 import { buildMemberPhotoLookup, resolveConfirmedHeirPhotoData } from '@/lib/memberPhotos';
+import { useAuth } from '@/context/AuthContext';
 
 type TreeMember = SiennaFamilyMember & { children: TreeMember[] };
 
@@ -448,6 +449,7 @@ const ClassicNode = ({
 };
 
 const ArbolGenealogicoSienna = () => {
+  const { hasAccess } = useAuth();
   const { data: workspace, isLoading, isFetching } = useSiennaWorkspace(false);
   const { data: heirsWithMedia } = useConfirmedHeirs(false);
   const members = workspace?.members ?? [];
@@ -471,6 +473,8 @@ const ArbolGenealogicoSienna = () => {
   const [loadingMessage, setLoadingMessage] = useState('Cargando árbol y cálculos sucesorales...');
   const [detailMemberId, setDetailMemberId] = useState<string | null>(null);
   const [treePan, setTreePan] = useState({ x: 40, y: 40 });
+  const canOpenHeirExplanation = hasAccess('/sienna/explicacion-herederos');
+  const canOpenMemberAdmin = hasAccess('/sienna/miembros-arbol');
   const treeScreenRef = useRef<HTMLDivElement | null>(null);
   const treeViewportRef = useRef<HTMLDivElement | null>(null);
   const treeWorldRef = useRef<HTMLDivElement | null>(null);
@@ -871,6 +875,32 @@ const ArbolGenealogicoSienna = () => {
             @page { size: A3 landscape; margin: 8mm; }
             html, body { margin: 0; background: #fff; color: #173f73; }
             body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+            .print-toolbar {
+              position: sticky;
+              top: 0;
+              z-index: 20;
+              display: flex;
+              justify-content: flex-end;
+              gap: 8px;
+              border-bottom: 1px solid #d8b45d;
+              background: #fffdf8;
+              padding: 10px 14px;
+            }
+            .print-toolbar button {
+              cursor: pointer;
+              border: 1px solid #173f73;
+              border-radius: 6px;
+              background: #ffffff;
+              color: #173f73;
+              font-size: 12px;
+              font-weight: 700;
+              padding: 7px 10px;
+            }
+            .print-toolbar .primary {
+              border-color: #d8b45d;
+              background: #d8b45d;
+              color: #ffffff;
+            }
             .print-page { width: calc(420mm - 16mm); padding: 0; overflow: visible; }
             .print-header {
               display: flex;
@@ -904,9 +934,14 @@ const ArbolGenealogicoSienna = () => {
               break-inside: avoid;
             }
             .rounded-md, .shadow-sm, .shadow-md, .shadow-lg { box-shadow: none !important; }
+            @media print { .print-toolbar { display: none !important; } }
           </style>
         </head>
         <body>
+          <nav class="print-toolbar" aria-label="Acciones de impresión">
+            <button type="button" onclick="window.print()">Imprimir otra vez</button>
+            <button type="button" class="primary" onclick="returnToTree()">Volver al árbol</button>
+          </nav>
           <main class="print-page">
             <header class="print-header">
               <div>
@@ -922,6 +957,17 @@ const ArbolGenealogicoSienna = () => {
             </section>
           </main>
           <script>
+            const returnToTree = () => {
+              if (window.opener && !window.opener.closed) {
+                window.opener.focus();
+              }
+              window.close();
+            };
+            window.onafterprint = () => {
+              if (window.opener && !window.opener.closed) {
+                window.opener.focus();
+              }
+            };
             const preparePrint = async () => {
               const canvas = document.querySelector('.print-canvas');
               const fit = document.querySelector('.print-fit');
@@ -990,15 +1036,19 @@ const ArbolGenealogicoSienna = () => {
         <Button variant={isPresentationMode ? 'default' : 'outline'} size="sm" onClick={() => setIsPresentationMode((current) => !current)}>
           {isPresentationMode ? 'Salir modo exposición' : 'Modo exposición'}
         </Button>
-        <Button variant="outline" size="sm" asChild>
-          <Link to="/sienna/explicacion-herederos">
-            <FileText className="mr-2 h-4 w-4" />
-            Explicación para herederos
-          </Link>
-        </Button>
-        <Button variant="outline" size="sm" asChild>
-          <Link to="/sienna/miembros-arbol">Administrar miembros</Link>
-        </Button>
+        {canOpenHeirExplanation && (
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/sienna/explicacion-herederos">
+              <FileText className="mr-2 h-4 w-4" />
+              Explicación para herederos
+            </Link>
+          </Button>
+        )}
+        {canOpenMemberAdmin && (
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/sienna/miembros-arbol">Administrar miembros</Link>
+          </Button>
+        )}
       </div>
 
       <div className="space-y-6">
@@ -1107,13 +1157,19 @@ const ArbolGenealogicoSienna = () => {
         </div>
 
         <Card className="border border-legal-gold/20">
-          <CardHeader className="bg-legal-blue/5 border-b">
-            <CardTitle className="flex items-center gap-2 text-legal-blue">
-              <Calculator className="h-5 w-5" />
-              Cálculo de Monto a Heredar
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4 p-6">
+          <CardContent className="p-0">
+            <details className="rounded-md bg-white open:bg-legal-blue/[0.02]">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-sm font-semibold text-legal-blue [&::-webkit-details-marker]:hidden">
+                <span className="flex items-center gap-2">
+                  <Calculator className="h-5 w-5 text-legal-gold" />
+                  Cálculo aplicado desde la API
+                </span>
+                <span className="text-xs font-normal text-legal-gray">
+                  Cálculo de Monto a Heredar · {hasPendingCalculationChanges ? 'cambios pendientes de aplicar' : `${calculatedPayments.length} herederos calculados`}
+                </span>
+              </summary>
+              <div className="space-y-4 border-t border-legal-blue/10 p-6">
+                <h3 className="font-serif text-base font-bold text-legal-blue">Cálculo de Monto a Heredar</h3>
             <div className="grid gap-4 md:grid-cols-[1fr_220px_auto] md:items-end">
               <div>
                 <Label>Monto bruto de la herencia</Label>
@@ -1162,36 +1218,37 @@ const ArbolGenealogicoSienna = () => {
                 <p className="font-bold text-legal-blue">{formatMoney(distributableEstateAmount)}</p>
               </div>
             </div>
-            <p className="text-xs text-legal-gray">
-              Cálculo aplicado desde la API
-              {hasPendingCalculationChanges ? ' · cambios pendientes de aplicar' : ''}
-            </p>
-
-            <div className="grid gap-3 md:grid-cols-5">
-              {calculatedPayments.map(({ heir, share, amount }) => (
-                <div key={share.member.id} className="rounded-md border border-legal-blue/15 bg-white p-3">
-                  <div className="flex items-center gap-2">
-                    <MemberPhoto
-                      name={heir?.heir_name || share.member.name}
-                      memberId={share.member.id}
-                      photoData={resolveConfirmedHeirPhotoData(heir)}
-                      size="xs"
-                      verificationStatus={heir?.status === 'confirmado' ? 'verified' : 'pending'}
-                    />
-                    <p className="text-xs font-semibold leading-tight text-legal-blue">
-                      {heir?.heir_name || share.member.name}
-                    </p>
+            <div className="grid gap-3 rounded-md border border-legal-blue/15 bg-white p-3 md:grid-cols-5">
+                {calculatedPayments.map(({ heir, share, amount }) => (
+                  <div key={share.member.id} className="rounded-md border border-legal-blue/15 bg-white p-3">
+                    <div className="flex items-center gap-2">
+                      <MemberPhoto
+                        name={heir?.heir_name || share.member.name}
+                        memberId={share.member.id}
+                        photoData={resolveConfirmedHeirPhotoData(heir)}
+                        size="xs"
+                        verificationStatus={heir?.status === 'confirmado' ? 'verified' : 'pending'}
+                      />
+                      <p className="text-xs font-semibold leading-tight text-legal-blue">
+                        {heir?.heir_name || share.member.name}
+                      </p>
+                    </div>
+                    <p className="mt-2 text-sm font-bold text-legal-blue">{formatMoney(amount)}</p>
+                    <p className="text-xs text-legal-gray">{formatPercent(share.share)}</p>
                   </div>
-                  <p className="mt-2 text-sm font-bold text-legal-blue">{formatMoney(amount)}</p>
-                  <p className="text-xs text-legal-gray">{formatPercent(share.share)}</p>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
 
             {inheritancePlan.activeHeirs.length > 0 && (
-              <div className="space-y-3 border-t border-legal-blue/10 pt-4">
-                <h4 className="font-serif text-base font-bold text-legal-blue">Por qué heredan (resumen)</h4>
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <details className="rounded-md border border-legal-gold/25 bg-legal-gold/[0.04] open:bg-legal-gold/[0.06]">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-legal-blue [&::-webkit-details-marker]:hidden">
+                  <span className="flex items-center gap-2">
+                    <Route className="h-4 w-4 text-legal-gold" />
+                    Por qué heredan (resumen)
+                  </span>
+                  <span className="text-xs font-normal text-legal-gray">{inheritancePlan.activeHeirs.length} herederos</span>
+                </summary>
+                <div className="grid gap-3 border-t border-legal-gold/20 p-3 sm:grid-cols-2 xl:grid-cols-3">
                   {inheritancePlan.activeHeirs.map((share) => {
                     const amount =
                       Number(realtimeCalculation?.active_heirs.find((row) => row.member_id === share.member.id)?.amount || 0);
@@ -1223,8 +1280,10 @@ const ArbolGenealogicoSienna = () => {
                     );
                   })}
                 </div>
-              </div>
+              </details>
             )}
+              </div>
+            </details>
           </CardContent>
         </Card>
 

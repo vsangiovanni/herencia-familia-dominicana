@@ -325,7 +325,7 @@ const normalizeImageForPdf = async (dataUrl: string): Promise<string | null> => 
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
 
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = '#fffdf8';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     const ratio = Math.min(canvas.width / (img.naturalWidth || 1), canvas.height / (img.naturalHeight || 1));
@@ -379,7 +379,7 @@ const normalizeAvatarForPdf = async (dataUrl: string): Promise<string | null> =>
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
 
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = '#fffdf8';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     const sourceW = img.naturalWidth || canvas.width;
@@ -389,6 +389,10 @@ const normalizeAvatarForPdf = async (dataUrl: string): Promise<string | null> =>
     const drawH = sourceH * ratio;
     const drawX = (canvas.width - drawW) / 2;
     const drawY = (canvas.height - drawH) / 2;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(canvas.width / 2, canvas.height / 2, canvas.width / 2, 0, Math.PI * 2);
+    ctx.clip();
     ctx.drawImage(img, drawX, drawY, drawW, drawH);
     ctx.restore();
 
@@ -437,7 +441,12 @@ export const downloadHeirBriefPdf = async (brief: HeirBriefExport, netAmount: nu
     y += lines.length * lineHeight + 2;
   };
 
+  let sectionCounter = 0;
+  const normalizeSectionTitle = (title: string) => title.replace(/^\s*\d+\.\s*/, '');
+
   const drawSectionTitle = (title: string) => {
+    sectionCounter += 1;
+    const numberedTitle = `${sectionCounter}. ${normalizeSectionTitle(title)}`;
     ensureSpace(11);
     pdf.setDrawColor(215, 186, 118);
     pdf.line(margin, y - 2, pageWidth - margin, y - 2);
@@ -446,8 +455,17 @@ export const downloadHeirBriefPdf = async (brief: HeirBriefExport, netAmount: nu
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(10.5);
     pdf.setTextColor(9, 27, 58);
-    pdf.text(title.toUpperCase(), margin + 3, y + 5.4);
+    pdf.text(numberedTitle.toUpperCase(), margin + 3, y + 5.4);
     y += 11.5;
+  };
+
+  const drawSubsectionTitle = (title: string) => {
+    ensureSpace(9);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(9.2);
+    pdf.setTextColor(9, 27, 58);
+    pdf.text(normalizeSectionTitle(title).toUpperCase(), margin + 2, y);
+    y += 5.5;
   };
 
   const drawMetricCard = (x: number, cardTitle: string, value: string, subtitle?: string) => {
@@ -535,9 +553,11 @@ export const downloadHeirBriefPdf = async (brief: HeirBriefExport, netAmount: nu
   const generationsInvolved = Math.max(1, primaryRouteNodes.length);
   const confidencePercent = brief.traffic.level === 'green' ? 95 : brief.traffic.level === 'amber' ? 72 : 45;
   const alertCount = brief.traffic.issues.length;
+  const noDirectDocumentationNote =
+    'Nota: Este heredero se mantiene considerado por el vinculo familiar y consanguineo identificado dentro del expediente. Aun no cuenta con documentacion directa asociada, por lo que su soporte debe completarse sin desconocer el reconocimiento provisional de su relacion familiar.';
 
   const drawMiniMetricGrid = () => {
-    drawSectionTitle('3. Resumen hereditario');
+    drawSectionTitle('Resumen hereditario');
     const metrics = [
       ['Estado', brief.traffic.label],
       ['Participacion', formatPercent(brief.simulatedShare)],
@@ -572,7 +592,7 @@ export const downloadHeirBriefPdf = async (brief: HeirBriefExport, netAmount: nu
 
   const drawDoubleLineageAnalysis = () => {
     if (lineageRoutes.length < 2 && brief.share.sources.length < 2) return;
-    drawSectionTitle('6. Analisis de doble linaje');
+    drawSectionTitle('Analisis de doble linaje');
     const commonAncestor = primaryRouteNodes.length > 1 ? primaryRouteNodes[1] : 'Ancestro comun por documentar';
     const explanation =
       `${brief.share.member.name} presenta mas de una ruta familiar dentro del legado. El sistema detecta convergencia entre ${brief.share.sources.join(' y ') || 'las ramas documentadas'}, lo que explica la doble participacion o doble vinculacion en el caso.`;
@@ -580,7 +600,7 @@ export const downloadHeirBriefPdf = async (brief: HeirBriefExport, netAmount: nu
       ['Tipo de convergencia', 'Por rutas familiares documentadas'],
       ['Ancestro comun', commonAncestor],
       ['Profundidad generacional', `${generationsInvolved} generaciones`],
-      ['Validacion del sistema', brief.traffic.label],
+      ['Estado documental', brief.traffic.label],
     ];
     rows.forEach(([label, value]) => {
       ensureSpace(7);
@@ -597,7 +617,7 @@ export const downloadHeirBriefPdf = async (brief: HeirBriefExport, netAmount: nu
   };
 
   const drawLinksTable = () => {
-    drawSectionTitle('7. Tabla de vinculos');
+    drawSectionTitle('Tabla de vinculos');
     const rows = [
       ['Heredero', brief.share.member.name, brief.traffic.label],
       ['Rama principal', brief.share.sources[0] || 'Ruta documentada', 'Detectada'],
@@ -630,7 +650,7 @@ export const downloadHeirBriefPdf = async (brief: HeirBriefExport, netAmount: nu
   };
 
   const drawFindings = () => {
-    drawSectionTitle('8. Hallazgos importantes');
+    drawSectionTitle('Hallazgos importantes');
     const findings = brief.traffic.issues.length
       ? brief.traffic.issues
       : ['No se detectan inconsistencias criticas para este heredero.', 'Documentacion vinculada al expediente familiar.', 'Se recomienda preservar y digitalizar cualquier soporte adicional disponible.'];
@@ -638,9 +658,10 @@ export const downloadHeirBriefPdf = async (brief: HeirBriefExport, netAmount: nu
   };
 
   const drawDocumentList = () => {
-    drawSectionTitle('9. Documentos relacionados');
+    drawSectionTitle('Documentos relacionados');
     if (!brief.documents.length) {
       writeParagraph('No hay documentos asociados directamente a este heredero.', { size: 9 });
+      writeParagraph(noDirectDocumentationNote, { size: 8.9, lineHeight: 4.35 });
       return;
     }
     brief.documents.slice(0, 8).forEach((document) => {
@@ -654,7 +675,7 @@ export const downloadHeirBriefPdf = async (brief: HeirBriefExport, netAmount: nu
   };
 
   const drawTimeline = () => {
-    drawSectionTitle('10. Timeline familiar');
+    drawSectionTitle('Timeline familiar');
     const timeline = buildMemberLifeTimeline(brief.share.member, brief.share).slice(0, 5);
     if (!timeline.length) {
       writeParagraph('No hay eventos familiares fechados para mostrar en esta ficha.', { size: 9 });
@@ -669,27 +690,27 @@ export const downloadHeirBriefPdf = async (brief: HeirBriefExport, netAmount: nu
   };
 
   const drawSystemValidation = () => {
-    drawSectionTitle('11. Validacion del sistema');
+    drawSectionTitle('Fundamento legal y documental');
     [
       ['Fecha de calculo', new Date().toLocaleString('es-DO')],
-      ['Version del motor', 'Sienna Genealogy Engine'],
-      ['API utilizada', 'Sienna backend / datos reales del expediente'],
-      ['Estado del analisis', brief.traffic.level === 'green' ? 'Completo y actualizado' : 'Requiere revision documental'],
+      ['Base legal', 'Reglas sucesorales vigentes aplicables al expediente'],
+      ['Base documental', 'Actas, vinculos familiares y soportes incorporados al expediente'],
+      ['Estado documental', brief.traffic.level === 'green' ? 'Soporte documental completo' : 'Pendiente de completar soporte documental'],
     ].forEach(([label, value]) => writeParagraph(`${label}: ${value}`, { size: 8.8, lineHeight: 4.2 }));
   };
 
   const drawAcceptanceRelease = () => {
-    drawSectionTitle('12. Descargo y aceptacion');
+    drawSectionTitle('Descargo y aceptacion');
     writeParagraph(
-      `Yo, ${brief.share.member.name}, declaro haber recibido esta ficha individual de herencia, con la explicacion de mi participacion, ruta sucesoral, soporte documental, monto estimado y validaciones disponibles dentro del expediente familiar de ${caseCausanteName}.`,
+      `Yo, ${brief.share.member.name}, declaro haber recibido esta ficha individual de herencia, con la explicacion de mi participacion, ruta sucesoral, soporte documental, monto calculado y estado documental dentro del expediente familiar de ${caseCausanteName}.`,
       { size: 9.1, lineHeight: 4.35 }
     );
     writeParagraph(
-      'Reconozco que la informacion presentada emana del calculo vigente del backend sobre los datos reales del expediente y acepto esta constancia para fines de revision, conciliacion y documentacion familiar, sin perjuicio de correcciones documentales o validaciones legales posteriores.',
+      'Reconozco que la participacion hereditaria indicada ha sido determinada conforme a las reglas sucesorales vigentes y al soporte documental incorporado al expediente, para fines de constancia, conciliacion y formalizacion familiar, sin perjuicio de cualquier validacion judicial, notarial o documental que corresponda.',
       { size: 9.1, lineHeight: 4.35 }
     );
     writeParagraph(
-      `Dejo constancia de que el monto indicado es estimado sobre el neto actualmente configurado (${formatMoney(netAmount)}) y sobre mi participacion calculada (${formatPercent(brief.simulatedShare)}).`,
+      `Dejo constancia de que el monto indicado resulta de aplicar la participacion hereditaria calculada (${formatPercent(brief.simulatedShare)}) sobre el neto sucesoral considerado (${formatMoney(netAmount)}).`,
       { size: 9.1, lineHeight: 4.35 }
     );
 
@@ -718,8 +739,8 @@ export const downloadHeirBriefPdf = async (brief: HeirBriefExport, netAmount: nu
 
     drawSectionTitle(
       lineageRoutes.length > 1
-        ? '5. Rutas genealogicas'
-        : '5. Ruta genealogica'
+        ? 'Rutas genealogicas'
+        : 'Ruta genealogica'
     );
 
     lineageRoutes.forEach((lineage, lineageIndex) => {
@@ -769,7 +790,7 @@ export const downloadHeirBriefPdf = async (brief: HeirBriefExport, netAmount: nu
   };
 
   const drawDocumentMosaic = async () => {
-    drawSectionTitle('Documentos de soporte (mosaico)');
+    drawSubsectionTitle('Documentos de soporte (mosaico)');
     if (!brief.documents.length) {
       writeParagraph('Sin documentos asociados directamente en el expediente.', { size: 10 });
       return;
@@ -929,6 +950,8 @@ export const downloadHeirBriefPdf = async (brief: HeirBriefExport, netAmount: nu
   if (normalizedAvatarDataUrl) {
     try {
       pdf.addImage(normalizedAvatarDataUrl, 'PNG', avatarX, avatarY, 22, 22);
+      pdf.setDrawColor(196, 157, 73);
+      pdf.circle(avatarX + 11, avatarY + 11, 11, 'S');
     } catch {
       pdf.setFont('times', 'bold');
       pdf.setFontSize(11);
@@ -983,7 +1006,7 @@ export const downloadHeirBriefPdf = async (brief: HeirBriefExport, netAmount: nu
 
   y += 43;
 
-  drawSectionTitle('2. Resumen ejecutivo');
+  drawSectionTitle('Resumen ejecutivo');
   writeParagraph(
     `Este documento presenta el analisis genealogico y hereditario correspondiente a ${brief.share.member.name}, incluyendo sus rutas familiares, vinculos de herencia, validaciones y hallazgos detectados dentro del caso Alessandro de Paola Sangiovanni.`,
     { size: 9.5, lineHeight: 4.6 }
@@ -996,7 +1019,7 @@ export const downloadHeirBriefPdf = async (brief: HeirBriefExport, netAmount: nu
   drawMetricCard(margin + ((contentWidth - 4) / 2) + 4, 'Monto heredado estimado', formatMoney(brief.simulatedAmount), `Neto usado: ${formatMoney(netAmount)}`);
   y = cardsY + 24;
 
-  drawSectionTitle('4. Por que aparece esta persona en la herencia');
+  drawSectionTitle('Por que aparece esta persona en la herencia');
   writeParagraph(buildWhyIInheritText(brief.share, brief.simulatedShare, brief.simulatedAmount), {
     size: 10,
     lineHeight: 4.9,
