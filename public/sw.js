@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'legado-sangiovanni-v7';
+const CACHE_VERSION = 'legado-sangiovanni-v8-pwa-reset';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 
 const STATIC_ASSETS = [
@@ -20,14 +20,18 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) =>
+      .then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
+      .then(() => self.clients.claim())
+      .then(() => self.clients.matchAll({ type: 'window', includeUncontrolled: true }))
+      .then((clients) =>
         Promise.all(
-          keys
-            .filter((key) => key.startsWith('legado-sangiovanni-') && key !== STATIC_CACHE)
-            .map((key) => caches.delete(key))
+          clients.map((client) => {
+            const url = new URL(client.url);
+            url.searchParams.set('pwa-reset', Date.now().toString());
+            return client.navigate(url.toString());
+          })
         )
       )
-      .then(() => self.clients.claim())
   );
 });
 
