@@ -356,6 +356,47 @@ const loadImageDataUrl = async (path: string): Promise<string | null> => {
   }
 };
 
+const resolvePhotoDataUrlForPdf = async (photoData?: string | null): Promise<string | null> => {
+  const source = (photoData || '').trim();
+  if (!source) return null;
+  if (source.startsWith('data:image/')) return source;
+  if (source.startsWith('data:')) return null;
+  return loadImageDataUrl(source);
+};
+
+const normalizeAvatarForPdf = async (dataUrl: string): Promise<string | null> => {
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const element = new Image();
+      element.onload = () => resolve(element);
+      element.onerror = reject;
+      element.src = dataUrl;
+    });
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 420;
+    canvas.height = 420;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const sourceW = img.naturalWidth || canvas.width;
+    const sourceH = img.naturalHeight || canvas.height;
+    const ratio = Math.max(canvas.width / sourceW, canvas.height / sourceH);
+    const drawW = sourceW * ratio;
+    const drawH = sourceH * ratio;
+    const drawX = (canvas.width - drawW) / 2;
+    const drawY = (canvas.height - drawH) / 2;
+    ctx.drawImage(img, drawX, drawY, drawW, drawH);
+
+    return canvas.toDataURL('image/jpeg', 0.88);
+  } catch {
+    return null;
+  }
+};
+
 export const downloadHeirBriefPdf = async (brief: HeirBriefExport, netAmount: number) => {
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
   const pageWidth = 216;
@@ -882,10 +923,11 @@ export const downloadHeirBriefPdf = async (brief: HeirBriefExport, netAmount: nu
   pdf.setFillColor(9, 27, 58);
   pdf.setDrawColor(196, 157, 73);
   pdf.circle(avatarX + 11, avatarY + 11, 11, 'FD');
-  if (brief.photoData?.startsWith('data:image')) {
+  const avatarDataUrl = await resolvePhotoDataUrlForPdf(brief.photoData);
+  const normalizedAvatarDataUrl = avatarDataUrl ? await normalizeAvatarForPdf(avatarDataUrl) : null;
+  if (normalizedAvatarDataUrl) {
     try {
-      const format = brief.photoData.includes('image/png') ? 'PNG' : 'JPEG';
-      pdf.addImage(brief.photoData, format, avatarX, avatarY, 22, 22);
+      pdf.addImage(normalizedAvatarDataUrl, 'JPEG', avatarX, avatarY, 22, 22);
     } catch {
       pdf.setFont('times', 'bold');
       pdf.setFontSize(11);
