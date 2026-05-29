@@ -112,7 +112,7 @@ const NarrativeText = ({
   }, [typedText]);
 
   return (
-  <div className={`absolute left-[5vw] top-[5vh] z-30 md:top-[7vh] ${wide ? 'max-w-[88vw] md:max-w-[72vw] xl:max-w-[62vw]' : 'max-w-[70vw] md:max-w-[58vw] xl:max-w-[48vw]'}`}>
+  <div className={`absolute left-[5vw] top-[5vh] z-30 md:top-[7vh] ${wide ? 'max-w-[90vw] md:max-w-[82vw] xl:max-w-[74vw]' : 'max-w-[70vw] md:max-w-[58vw] xl:max-w-[48vw]'}`}>
     <motion.p
       className="text-xs font-black uppercase tracking-[0.24em] text-[#f4dfb8]/88 drop-shadow-[0_2px_10px_rgba(0,0,0,0.6)] md:text-sm"
       initial={{ opacity: 0, y: 18 }}
@@ -138,7 +138,7 @@ const NarrativeText = ({
     <motion.div
       ref={scrollRef}
       data-legado-control="true"
-      className={`pointer-events-auto mt-4 touch-pan-y overflow-y-auto overscroll-contain pr-2 [mask-image:none] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden md:mt-5 md:pr-0 ${reservesDocumentCarousel ? 'max-h-[38vh] md:max-h-[calc(100vh-27rem)] xl:max-h-[calc(100vh-29rem)]' : 'max-h-[61vh] md:max-h-[calc(100vh-21rem)] xl:max-h-[calc(100vh-23rem)]'} ${wide ? 'max-w-[86vw] md:max-w-4xl' : 'max-w-[68vw] md:max-w-2xl'}`}
+      className={`pointer-events-auto mt-4 touch-pan-y overflow-y-auto overscroll-contain pr-2 [mask-image:none] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden md:mt-5 md:pr-0 ${reservesDocumentCarousel ? 'max-h-[38vh] md:max-h-[calc(100vh-27rem)] xl:max-h-[calc(100vh-29rem)]' : 'max-h-[61vh] md:max-h-[calc(100vh-21rem)] xl:max-h-[calc(100vh-23rem)]'} ${wide ? 'max-w-[88vw] md:max-w-[74vw] xl:max-w-[64vw]' : 'max-w-[68vw] md:max-w-2xl'}`}
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: hideBody ? 0 : 1, y: 0, filter: hideBody ? 'blur(7px)' : 'blur(0px)' }}
       transition={{ duration: hideBody ? 1.15 : 0.8, delay: hideBody ? 0 : 0.55, ease: 'easeOut' }}
