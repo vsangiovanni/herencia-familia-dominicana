@@ -7,8 +7,24 @@ export type MemberPhotoLookup = {
 };
 
 const LOCAL_MEMBER_PHOTO_OVERRIDES = new Map<string, string>([
+  ['alessandro', '/game/legado/archive/member-photos/prod-sync/alessandro.png'],
+  ['domingo-ramon-sangiovanni-perez-1779220685351', '/game/legado/archive/member-photos/prod-sync/domingo-ramon-sangiovanni-perez-1779220685351.png'],
+  ['domenico', '/game/legado/archive/domenico-sangiovanni-portrait.webp'],
+  ['gilda-altagracia-sangiovanni-gesualdo-1779238018002', '/game/legado/archive/member-photos/prod-sync/gilda-altagracia-sangiovanni-gesualdo-1779238018002.png'],
+  ['irma-mercedes-sangiovanni-gesualdo-1779245439725', '/game/legado/archive/member-photos/prod-sync/irma-mercedes-sangiovanni-gesualdo-1779245439725.png'],
+  ['javier-de-jesus-marquez-sangiovanni-1779247232889', '/game/legado/archive/member-photos/prod-sync/javier-de-jesus-marquez-sangiovanni-1779247232889.png'],
+  ['jose-luis-de-jesus-marquez-sangiovanni-1779247298999', '/game/legado/archive/member-photos/prod-sync/jose-luis-de-jesus-marquez-sangiovanni-1779247298999.jpg'],
+  ['jose-vicente', '/game/legado/archive/member-photos/prod-sync/jose-vicente.png'],
+  ['maria-amparo-sangiovanni-gesualdo-1779300884233', '/game/legado/archive/member-photos/prod-sync/maria-amparo-sangiovanni-gesualdo-1779300884233.png'],
   ['maria-rosa', '/game/legado/archive/member-photos/maria-rosa-sangiovanni-perez.jpg'],
+  ['maria-rosa-grisolia', '/game/legado/archive/maria-rosa-grisolia-portrait.webp'],
+  ['maria-rosa-grisolia-di-vanna-1779890134349', '/game/legado/archive/maria-rosa-grisolia-portrait.webp'],
+  ['paolo', '/game/legado/archive/member-photos/prod-sync/paolo.png'],
+  ['vicente-sangiovanni-perez-1779294692767', '/game/legado/archive/extracted-faces/named/vicente-sangiovanni-perez.jpg'],
+  ['vincenzo', '/game/legado/archive/member-photos/prod-sync/vincenzo.png'],
   ['victor-manuel', '/game/legado/archive/member-photos/victor-manuel-sangiovanni-sangiovanni.jpg'],
+  ['victor-manuel-martin', '/game/legado/archive/member-photos/victor-manuel-martin-sangiovanni-rodriguez.jpg'],
+  ['yolanda-providencia-sangiovanni-gesualdo-1779220777309', '/game/legado/archive/member-photos/prod-sync/yolanda-providencia-sangiovanni-gesualdo-1779220777309.png'],
 ]);
 
 export const buildMemberPhotoLookup = (heirs: ConfirmedHeir[]): MemberPhotoLookup => {
