@@ -15,8 +15,28 @@ const jwtSecret = process.env.JWT_SECRET || 'herencia-rd-local-dev-secret';
 const cookieName = 'herencia_session';
 const distPath = path.join(process.cwd(), 'dist');
 
-app.use(express.json({ limit: '20mb' }));
+app.use(express.json({ limit: '50mb' }));
 app.use(cookieParser());
+
+const temporaryPdfDownloads = new Map();
+const TEMPORARY_PDF_DOWNLOAD_TTL_MS = 10 * 60 * 1000;
+
+const cleanupTemporaryPdfDownloads = () => {
+  const now = Date.now();
+  for (const [id, item] of temporaryPdfDownloads.entries()) {
+    if (!item || item.expiresAt <= now) {
+      temporaryPdfDownloads.delete(id);
+    }
+  }
+};
+
+const safeDownloadFileName = (value) => {
+  const baseName = String(value || 'arbol-genealogico-domenico-maria-rosa.pdf')
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+  return baseName.toLowerCase().endsWith('.pdf') ? baseName : `${baseName || 'arbol-genealogico'}.pdf`;
+};
 
 const dbConfig = {
   host: process.env.DB_HOST || '127.0.0.1',
@@ -3661,6 +3681,54 @@ app.get('/api/page-visits', requireAuth, requireAdmin, async (_req, res) => {
      LIMIT 100`
   );
   res.json({ visits });
+});
+
+app.post('/api/sienna-tree-pdf-downloads', requireAuth, async (req, res) => {
+  cleanupTemporaryPdfDownloads();
+  const { file_name, pdf_base64 } = req.body || {};
+  const normalizedBase64 = typeof pdf_base64 === 'string' ? pdf_base64.replace(/^data:application\/pdf;base64,/, '') : '';
+  if (!normalizedBase64) {
+    return res.status(400).json({ message: 'PDF requerido' });
+  }
+
+  let buffer;
+  try {
+    buffer = Buffer.from(normalizedBase64, 'base64');
+  } catch {
+    return res.status(400).json({ message: 'PDF inválido' });
+  }
+
+  if (buffer.length < 5 || buffer.subarray(0, 5).toString('utf8') !== '%PDF-') {
+    return res.status(400).json({ message: 'El archivo generado no es un PDF válido' });
+  }
+
+  const id = randomUUID();
+  const token = randomUUID();
+  const fileName = safeDownloadFileName(file_name);
+  temporaryPdfDownloads.set(id, {
+    buffer,
+    fileName,
+    token,
+    createdBy: req.user.id,
+    expiresAt: Date.now() + TEMPORARY_PDF_DOWNLOAD_TTL_MS,
+  });
+
+  res.status(201).json({ url: `/api/sienna-tree-pdf-downloads/${id}/${token}/${encodeURIComponent(fileName)}` });
+});
+
+app.get('/api/sienna-tree-pdf-downloads/:id/:token/:fileName', async (req, res) => {
+  cleanupTemporaryPdfDownloads();
+  const item = temporaryPdfDownloads.get(req.params.id);
+  if (!item || item.token !== req.params.token) {
+    return res.status(404).type('text/plain').send('PDF no disponible. Genérelo nuevamente.');
+  }
+
+  res.setHeader('Content-Type', 'application/octet-stream');
+  res.setHeader('Content-Length', String(item.buffer.length));
+  res.setHeader('Content-Disposition', `attachment; filename="${item.fileName}"; filename*=UTF-8''${encodeURIComponent(item.fileName)}`);
+  res.setHeader('Cache-Control', 'no-store, max-age=0');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.send(item.buffer);
 });
 
 app.get('/api/confirmed-heirs', requireAuth, async (req, res) => {

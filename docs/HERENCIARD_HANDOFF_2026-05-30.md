@@ -30,6 +30,49 @@
 - GitHub fue actualizado con los commits de la ronda antes del deploy.
 - Hostinger fue actualizado con `dist/` sin tocar datos ni DB de produccion.
 
+## Cambio local posterior - arbol familiar conmemorativo
+
+- Victor pidio que la pantalla del arbol deje de hablar de montos, reparto, porcentajes o herencia dentro del arbol.
+- El arbol se retitulo localmente como `Árbol genealógico de la descendencia de Domenico y María Rosa`.
+- La pantalla ahora enfoca la experiencia como recuerdo familiar:
+  - miembros familiares;
+  - ramas visibles;
+  - generaciones;
+  - fotos familiares;
+  - fichas familiares;
+  - vinculos familiares complejos sin lenguaje sucesoral.
+- Se removio de esta pantalla la seccion de calculo aplicado, montos heredados, porcentajes y herederos finales.
+- Se refinaron tarjetas y conectores CSS para dar una lectura mas elegante y documental.
+- Se agrego selector local por ramas principales: Arbol completo, Maria Magdalena, Vincenzo/Vicente y Paolo/Paulino.
+- La vista por rama mantiene a Domenico y Maria Rosa como origen y enfoca una sola linea para mejorar lectura y valor familiar.
+- Se corrigio la ficha familiar del arbol para recibir `photoLookup` y mostrar fotos resueltas por API/backend.
+- Se ajusto el render de conyuges para soportar el campo texto `spouse` sin obligar a crear un miembro/conyuge separado.
+- En local, Victor Manuel Martin Sangiovanni Rodriguez quedo con `spouse = Vanessa Navarro`, `spouse_member_id = NULL`; no se creo miembro Vanessa Navarro ni union familiar.
+- Se cambio `Imprimir arbol` para imprimir desde la misma pantalla una hoja dedicada: solo el arbol, A3 horizontal/landscape, con encabezado conmemorativo y bloques laterales familiares; ya no imprime la pagina completa con navegacion/controles ni abre una ventana aparte en movil.
+- Ajuste posterior: se elimino la composicion tipo caratula de impresion; ahora el encabezado es compacto y el arbol debe ocupar directamente la hoja landscape.
+- Ajuste final de impresion movil: `Imprimir arbol` ahora abre una vista previa dentro de la app con botones `Volver al arbol` e `Imprimir / Compartir`; la impresion usa esa vista, sin caratula ni ventana nueva.
+- Ajuste posterior: el boton `Imprimir / Compartir` dentro de la vista previa oculta encabezado/footer/fondo y manda a imprimir solamente el arbol.
+- Ajuste de escala: impresion configurada a `letter landscape` con margen minimo y escala calculada para intentar encajar todo el arbol en una sola pagina aunque quede mas pequeño.
+- Ajuste Safari/iPhone: la vista impresa ahora usa un contenedor con ancho/alto ya escalados, no solo transform visual, para evitar que Safari pagine usando el tamaño original del arbol.
+- Ajuste posterior de encaje: escala objetivo reducida a 900x560 px equivalentes, margen de impresion a 1mm y marco permitido ampliado para forzar una sola hoja landscape.
+- Solucion limpia aplicada: el boton interno de la vista previa ya no usa `window.print`; genera un PDF real con `html2canvas` + `jsPDF`, en una sola pagina horizontal tipo letter, centrado y sin headers/pies de Safari.
+- Fix posterior: se cambio la imagen interna del PDF de PNG a JPEG para evitar el error `wrong PNG signature` de `jsPDF` en Safari/iPhone.
+- UX posterior: al abrir la vista previa de impresion/PDF, el contenedor hace scroll automatico al inicio para no entrar a mitad del arbol.
+- Ajuste posterior: el inicio de la vista previa ahora centra horizontalmente el arbol y mantiene el scroll vertical arriba, para coincidir con la pantalla indicada por Victor.
+- Fix posterior de PDF: `Generar PDF` ahora clona el arbol real en un contenedor oculto con dimensiones medidas, calcula una escala segura para Safari, valida canvas/imagen/dimensiones antes de llamar a `jsPDF.addImage` y evita el error `Invalid argument passed to jsPDF.scale`.
+- UX posterior: la vista previa vuelve al inicio vertical y horizontal para mantener visibles los botones en celular; `Generar PDF` crea un Blob y dispara descarga con un enlace temporal en vez de intentar mostrar el PDF inline.
+- UX iPhone posterior: la barra de la vista previa quedo fija arriba con soporte de `safe-area`, de modo que `Volver al arbol` y `Descargar PDF` permanezcan visibles al entrar desde celular.
+- Flujo iOS posterior: `Descargar PDF` ahora genera un `File` y usa Web Share API primero para permitir guardar/compartir el PDF desde iPhone; solo cae al enlace temporal si el navegador no soporta compartir archivos.
+- Ajuste final de descarga local: se elimino el flujo Blob/Web Share para el boton de PDF; ahora el frontend sube temporalmente el PDF generado al backend y descarga desde `/api/sienna-tree-pdf-downloads/:id/:fileName` con `Content-Disposition: attachment`, para evitar que Safari iPhone abra el preview.
+- Fix posterior de descarga iPhone: el enlace temporal del PDF ya no se consume en la primera lectura y usa token privado en URL; el backend lo sirve como `application/octet-stream` con `nosniff` y `attachment` para evitar el preview de Safari y el error `PDF no disponible. Genérelo nuevamente.`
+- Help actualizado: `sienna-arbol` ya describe la pantalla como arbol genealogico conmemorativo de Domenico y Maria Rosa, sin montos, porcentajes ni datos de reparto; tambien documenta la descarga PDF temporal por backend para iPhone/Safari.
+- Build local validado con `pnpm run build`.
+- Capturas locales autenticadas generadas en:
+  - `docs/mockups/herenciard-tree-branches-2026-05-30.png`
+  - `docs/mockups/herenciard-tree-branch-focus-2026-05-30.png`
+- Este cambio aun no ha sido subido a GitHub ni desplegado a Hostinger salvo autorizacion posterior de Victor.
+
+
 ## Fotos y miembros trabajados
 
 - Se trabajo la asignacion/validacion de fotos recientes indicadas por Victor para miembros del arbol.

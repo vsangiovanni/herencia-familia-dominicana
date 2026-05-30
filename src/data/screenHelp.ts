@@ -310,18 +310,16 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
     ],
   },
   'sienna-arbol': {
-    title: 'Árbol genealógico de Alessandro',
-    intro: 'Vista principal del reparto: árbol completo, porcentajes, montos, doble linaje e impresión para reunión.',
+    title: 'Árbol genealógico de Domenico y María Rosa',
+    intro: 'Vista conmemorativa de la descendencia de Domenico Sangiovanni y María Rosa Grisolia: lectura familiar, ramas, fotos, fichas y PDF del árbol sin datos de herencia.',
     sections: [
       {
-        title: 'Monto de la herencia',
+        title: 'Enfoque familiar',
         items: [
-          'Indique el monto total del caudal y el % de firma de abogados (sobre el bruto).',
-          'Neto repartible = bruto − firma. Los montos por heredero usan siempre ese neto.',
-          'El % se carga desde Settings. Use Actualizar cálculo para simular en esta vista sin guardar montos.',
-          'Escribir en los campos no recalcula automáticamente; el botón aplica la simulación visible.',
-          'Cálculo de Monto a Heredar vive dentro del desplegable Cálculo aplicado desde la API para dejar más espacio visual al árbol.',
-          'Sin monto, verá porcentajes; con monto, cada heredero muestra RD$ calculados.',
+          'Esta pantalla no muestra montos, porcentajes ni datos de reparto sucesoral.',
+          'El título oficial de esta vista es “Árbol genealógico de la descendencia de Domenico y María Rosa”.',
+          'Su propósito es servir como recuerdo familiar: ramas, generaciones, fotos y fichas familiares.',
+          'La información visual proviene del backend/API y de los datos reales del árbol familiar.',
         ],
       },
       {
@@ -336,20 +334,20 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
       {
         title: 'Tarjetas del árbol',
         items: [
-          'Cada nodo muestra rol (heredero, enlace), % y monto si hay caudal.',
-          'Los colores y badges reflejan el estado sucesoral automático.',
+          'Cada nodo muestra la información familiar disponible: nombre, relación, foto, cónyuge textual cuando aplique y estado documental básico.',
           'Doménico Sangiovanni y María Rosa Grisolia Di Vanna se muestran como pareja raíz fundacional al mismo nivel cuando ambos están enlazados como cónyuges.',
           'En hijos registrados con unión, aparece "Filiación: Matrimonio: …" para distinguir hijos de esa pareja.',
           'Los miembros con fecha de defunción muestran lacito negro y etiqueta "Fallecido".',
-          'Los casos de doble linaje muestran ambas rutas y un bloque visual de cruce de ramas.',
+          'La ficha familiar abre el detalle del miembro y debe mostrar la foto resuelta por el API cuando exista.',
         ],
       },
       {
-        title: 'Impresión',
+        title: 'PDF del árbol',
         items: [
-          'Imprimir árbol abre una vista preparada en A3 horizontal y ajusta el árbol completo al ancho disponible.',
-          'La impresión conserva indicadores de doble linaje, fotos, montos y marcador de fallecido.',
-          'La vista de impresión incluye botones para imprimir otra vez o volver al árbol; esos controles no salen en el papel.',
+          'Descargar PDF genera el árbol en una sola página horizontal tipo carta para facilitar impresión landscape.',
+          'En móvil, la vista previa mantiene arriba los botones Volver al árbol y Descargar PDF.',
+          'Para evitar el preview de Safari en iPhone, el PDF se entrega desde el backend como archivo descargable temporal.',
+          'El enlace temporal de descarga expira automáticamente; si caduca, genere el PDF nuevamente.',
         ],
       },
     ],

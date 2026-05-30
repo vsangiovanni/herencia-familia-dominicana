@@ -3,40 +3,34 @@ import BackButton from '@/components/BackButton';
 import DocumentHeader from '@/components/DocumentHeader';
 import SoftLoadingIndicator from '@/components/SoftLoadingIndicator';
 import { ConfirmedHeir, MemberParentLink, SiennaFamilyMember } from '@/lib/api';
-import { useConfirmedHeirs, useSiennaCalculation, useSiennaWorkspace } from '@/hooks/useSiennaData';
+import { useConfirmedHeirs, useSiennaWorkspace } from '@/hooks/useSiennaData';
 import { formatUnionLabel, getMemberLinkVerificationStatus, getParentLinksForChild, resolveSpouseDisplayLabel, SiennaGenealogyBundle } from '@/lib/siennaGenealogy';
 import MemberVerificationBadge from '@/components/sienna/MemberVerificationBadge';
 import MemberPhoto from '@/components/sienna/MemberPhoto';
 import MemberDetailSheet from '@/components/sienna/MemberDetailSheet';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Card, CardContent } from '@/components/ui/card';
 import { toast } from '@/components/ui/use-toast';
-import {
-  applySiennaCaseConfig,
-  InheritancePlan,
-  legalCriterionText,
-  normalizeName,
-} from '@/lib/dominicanInheritance';
-import { getMemberEffectiveInheritanceReason, getMemberEffectiveInheritanceStatus } from '@/lib/siennaMemberInheritance';
+import { normalizeName } from '@/lib/dominicanInheritance';
 import { cn } from '@/lib/utils';
-import { Calculator, ClipboardCheck, FileText, GitBranch, GitMerge, Landmark, Maximize2, Minimize2, Printer, RotateCcw, Route, RefreshCw, Users, ZoomIn, ZoomOut } from 'lucide-react';
+import { Camera, GitBranch, GitMerge, Maximize2, Minimize2, Printer, RotateCcw, Sparkles, Users, ZoomIn, ZoomOut } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { buildWhyIInheritText, formatMoney as formatMoneyExplain, formatPercent as formatPercentExplain } from '@/lib/siennaHeirExplain';
-import { buildInheritancePlanFromApiRows } from '@/lib/siennaCalculation';
 import { buildMemberPhotoLookup, MemberPhotoLookup, resolveConfirmedHeirPhotoData } from '@/lib/memberPhotos';
 import { useAuth } from '@/context/AuthContext';
 
 type TreeMember = SiennaFamilyMember & { children: TreeMember[] };
 
-const formatMoney = (amount: number | string | null | undefined) =>
-  new Intl.NumberFormat('es-DO', {
-    style: 'currency',
-    currency: 'DOP',
-    minimumFractionDigits: 2,
-  }).format(Number(amount || 0));
+const blobToBase64 = async (blob: Blob) => {
+  const buffer = await blob.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+  }
+  return window.btoa(binary);
+};
 
 const buildForest = (members: SiennaFamilyMember[], bundle?: SiennaGenealogyBundle) => {
   const byId = new Map<string, TreeMember>();
@@ -79,8 +73,8 @@ const buildForest = (members: SiennaFamilyMember[], bundle?: SiennaGenealogyBund
   roots = roots.filter((member) => {
     const spouseId = member.spouse_member_id?.trim();
     const spouse = spouseId ? byId.get(spouseId) : null;
+    if (member.relationship_to_parent === 'conyuge' && spouse) return false;
     if (!spouse || !rootIds.has(spouse.id)) return true;
-    if (member.relationship_to_parent === 'conyuge') return false;
     return !(member.children.length === 0 && spouse.children.length > 0);
   });
 
@@ -93,18 +87,9 @@ const buildForest = (members: SiennaFamilyMember[], bundle?: SiennaGenealogyBund
   return sortTree(roots);
 };
 
-const explanationRole = (status?: string | null) => {
-  if (status === 'confirmado' || status === 'posible_heredero') return 'Heredero final';
-  if (status === 'no_hereda') return 'Enlace genealógico';
-  return 'Pendiente de explicar';
-};
-
-const formatPercent = (value: number) =>
-  `${new Intl.NumberFormat('es-DO', { maximumFractionDigits: 2 }).format(value)}%`;
-
 const normalizedMemberId = (value: string | null | undefined) => (value || '').trim();
 const isDeceasedMember = (member: SiennaFamilyMember) => Boolean(member.death?.trim());
-const MIN_TREE_ZOOM = 0.15;
+const MIN_TREE_ZOOM = 0.3;
 const MAX_TREE_ZOOM = 2.5;
 const clampTreeZoom = (value: number) => Math.min(MAX_TREE_ZOOM, Math.max(MIN_TREE_ZOOM, value));
 
@@ -143,50 +128,125 @@ const resolveFormalOtherParent = (
   return otherParentId ? membersById.get(otherParentId) || null : null;
 };
 
+const familyRoleLabel = (member: TreeMember, isRoot: boolean) => {
+  if (isRoot) return 'Origen familiar';
+  if (member.children.length > 0) return 'Rama familiar';
+  if (member.relationship_to_parent === 'conyuge') return 'Cónyuge';
+  return 'Descendencia';
+};
+
+const MemberTreeCard = ({
+  member,
+  heir,
+  photoLookup,
+  allMembers,
+  genealogy,
+  role,
+  onOpenMember,
+  tone = 'default',
+}: {
+  member: SiennaFamilyMember;
+  heir?: ConfirmedHeir | null;
+  photoLookup: MemberPhotoLookup;
+  allMembers: SiennaFamilyMember[];
+  genealogy: SiennaGenealogyBundle;
+  role: string;
+  onOpenMember: (memberId: string) => void;
+  tone?: 'default' | 'founder' | 'spouse';
+}) => {
+  const isDeceased = isDeceasedMember(member);
+
+  return (
+    <div
+      className={cn(
+        'sienna-family-card relative text-center',
+        tone === 'founder' && 'sienna-family-card-founder',
+        tone === 'spouse' && 'sienna-family-card-spouse'
+      )}
+    >
+      {isDeceased && (
+        <div
+          className="deceased-ribbon-badge right-12 top-2"
+          title={member.death ? 'Fallecido: ' + member.death : 'Fallecido'}
+          aria-label={member.death ? 'Fallecido: ' + member.death : 'Fallecido'}
+        >
+          <span className="deceased-ribbon" aria-hidden="true" />
+        </div>
+      )}
+
+      <div className="absolute -right-3 -top-3 z-10">
+        <MemberPhoto
+          name={member.name}
+          memberId={member.id}
+          photoData={resolveConfirmedHeirPhotoData(heir || undefined)}
+          lookup={photoLookup}
+          size="lg"
+          rounded="xl"
+          className="border-2 border-legal-gold/70 shadow-lg"
+          verificationStatus={heir?.status === 'confirmado' ? 'verified' : getMemberLinkVerificationStatus(member, allMembers, genealogy).status}
+        />
+      </div>
+
+      <h3 className="pr-10 font-serif text-[15px] font-bold leading-tight text-legal-blue">{member.name}</h3>
+      <div className="mt-1 min-h-[18px] text-xs text-gray-600">
+        {member.birth && <span>n. {member.birth}</span>}
+        {member.birth && member.death && <span> - </span>}
+        {member.death && <span>m. {member.death}</span>}
+      </div>
+
+      <div className="mt-3 flex flex-wrap justify-center gap-1.5">
+        <Badge variant={tone === 'founder' ? 'default' : 'outline'} className={tone === 'founder' ? 'bg-legal-gold text-white' : ''}>
+          {role}
+        </Badge>
+        {isDeceased && (
+          <Badge variant="outline" className="border-gray-400 bg-gray-50 text-gray-800">
+            Fallecido
+          </Badge>
+        )}
+      </div>
+
+      <MemberVerificationBadge
+        member={member}
+        members={allMembers}
+        genealogy={genealogy}
+        className="mt-2 justify-center"
+      />
+
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="mt-2 h-7 px-2 text-xs text-legal-blue"
+        onClick={() => onOpenMember(member.id)}
+      >
+        Ficha familiar
+      </Button>
+    </div>
+  );
+};
+
 const ClassicNode = ({
   member,
   heirsByMemberId,
   heirsByName,
   photoLookup,
-  inheritancePlan,
-  calculationAmountsByMemberId,
-  total,
-  estateAmount,
   membersById,
   allMembers,
   genealogy,
   onOpenMember,
+  isRoot = false,
 }: {
   member: TreeMember;
   heirsByMemberId: Map<string, ConfirmedHeir>;
   heirsByName: Map<string, ConfirmedHeir>;
   photoLookup: MemberPhotoLookup;
-  inheritancePlan: InheritancePlan;
-  calculationAmountsByMemberId: Map<string, number>;
-  total: number;
-  estateAmount: number;
   membersById: Map<string, SiennaFamilyMember>;
   allMembers: SiennaFamilyMember[];
   genealogy: SiennaGenealogyBundle;
   onOpenMember: (memberId: string) => void;
+  isRoot?: boolean;
 }) => {
   const heir = heirsByMemberId.get(member.id) || heirsByName.get(normalizeName(member.name));
-  const inheritanceShare = inheritancePlan.sharesById.get(member.id);
-  const isActivePaymentHeir = Boolean(inheritanceShare);
-  const isHeir = isActivePaymentHeir;
-  const inheritanceStatus = inheritanceShare
-    ? 'posible_heredero'
-    : getMemberEffectiveInheritanceStatus(member);
-  const inheritanceReason =
-    inheritanceShare?.reason ||
-    getMemberEffectiveInheritanceReason(member) ||
-    null;
-  const role = inheritanceShare?.role || explanationRole(inheritanceStatus);
-  const calculatedAmount =
-    inheritanceShare ? calculationAmountsByMemberId.get(member.id) || 0 : 0;
-  const amount = calculatedAmount;
-  const referenceTotal = estateAmount > 0 ? estateAmount : total;
-  const share = inheritanceShare?.share || (referenceTotal > 0 && amount > 0 ? (amount / referenceTotal) * 100 : 0);
   const parent = member.parent_id ? membersById.get(normalizedMemberId(member.parent_id)) || null : null;
   const otherParent = resolveFormalOtherParent(member, parent, membersById, genealogy);
   const spouseLabel = resolveSpouseDisplayLabel(member, allMembers, genealogy);
@@ -194,238 +254,56 @@ const ClassicNode = ({
   const spouseHeir = spousePartner
     ? heirsByMemberId.get(spousePartner.id) || heirsByName.get(normalizeName(spousePartner.name))
     : null;
-  const showRootSpouseCard = Boolean(spousePartner && !member.parent_id && !spousePartner.parent_id);
-  const hasDualLineage = (inheritanceShare?.sources.length || 0) > 1;
+  const showSpouseCard = Boolean(spousePartner && member.relationship_to_parent !== 'conyuge');
   const childLinks = getParentLinksForChild(member.id, genealogy.parent_links);
   const unionLink = childLinks.find((link: MemberParentLink) => link.union_id);
   const filiationUnion = unionLink?.union_id
     ? genealogy.unions.find((union) => union.id === unionLink.union_id) || null
     : null;
-  const isDeceased = isDeceasedMember(member);
 
   return (
     <li className="relative">
       <div className="relative flex flex-col items-center pt-6">
-        <div className="mb-3 flex flex-wrap justify-center gap-4">
-          <div
-            className={cn(
-              'relative min-w-[230px] max-w-[270px] rounded-md border-2 bg-white p-3 text-center shadow-sm',
-              member.is_highlighted_ancestor && !isHeir ? 'border-legal-gold bg-legal-beige' : 'border-legal-blue/30',
-              isHeir && 'border-legal-gold bg-legal-gold/5 shadow-md'
-            )}
-          >
-          {isDeceased && (
-            <div
-              className="deceased-ribbon-badge right-12 top-2"
-              title={member.death ? `Fallecido: ${member.death}` : 'Fallecido'}
-              aria-label={member.death ? `Fallecido: ${member.death}` : 'Fallecido'}
-            >
-              <span className="deceased-ribbon" aria-hidden="true" />
-            </div>
-          )}
-
-          <div className="absolute -right-3 -top-3 z-10">
-            <MemberPhoto
-              name={member.name}
-              memberId={member.id}
-              photoData={resolveConfirmedHeirPhotoData(heir)}
-              lookup={photoLookup}
-              size="lg"
-              rounded="xl"
-              className="border-2 border-legal-gold/60 shadow-lg"
-              verificationStatus={heir?.status === 'confirmado' ? 'verified' : getMemberLinkVerificationStatus(member, allMembers, genealogy).status}
-            />
-          </div>
-
-          <h3 className="font-serif text-sm font-bold leading-tight text-legal-blue">{member.name}</h3>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="mt-1 h-7 px-2 text-xs text-legal-blue"
-            onClick={() => onOpenMember(member.id)}
-          >
-            Ficha
-          </Button>
-
-          <MemberVerificationBadge
+        <div className="tree-marriage-group mb-3 flex flex-wrap justify-center gap-5">
+          <MemberTreeCard
             member={member}
-            members={allMembers}
+            heir={heir}
+            photoLookup={photoLookup}
+            allMembers={allMembers}
             genealogy={genealogy}
-            className="mt-2 justify-center"
+            role={familyRoleLabel(member, isRoot)}
+            tone={isRoot || member.is_highlighted_ancestor ? 'founder' : 'default'}
+            onOpenMember={onOpenMember}
           />
 
-          <div className="mt-1 text-xs text-gray-600">
-            {member.birth && <span>n. {member.birth}</span>}
-            {member.birth && member.death && <span> - </span>}
-            {member.death && <span>m. {member.death}</span>}
-          </div>
-
-          {isDeceased && (
-            <div className="mt-2 flex justify-center">
-              <Badge variant="outline" className="border-gray-400 bg-gray-50 text-gray-800">
-                Fallecido
-              </Badge>
-            </div>
-          )}
-
-          {spouseLabel && !showRootSpouseCard && (
-            <div className="mt-1 text-xs">
-              <span className="text-legal-gray">Cónyuge: </span>
-              {spouseLabel}
-            </div>
-          )}
-
-          {filiationUnion && (
-            <div className="mt-1 text-xs text-legal-blue">
-              <span className="text-legal-gray">Filiación: </span>
-              {formatUnionLabel(filiationUnion, membersById)}
-            </div>
-          )}
-
-          {(parent || otherParent) && (
-            <div className="mt-2 rounded-md bg-legal-blue/5 p-2 text-left">
-              {parent && (
-                <p className="text-xs leading-relaxed text-legal-gray">
-                  <span className="font-semibold text-legal-blue">Padre/Madre base: </span>
-                  {parent.name}
-                </p>
-              )}
-              {otherParent && (
-                <p className="mt-1 text-xs leading-relaxed text-legal-gray">
-                  <span className="font-semibold text-legal-blue">Otro vínculo parental: </span>
-                  {otherParent.name}
-                </p>
-              )}
-              {parent && otherParent && (
-                <div className="mt-2 rounded border border-legal-gold/30 bg-white/80 p-2">
-                  <p className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-legal-blue">
-                    <GitMerge className="h-3 w-3" />
-                    Cruce transversal de ramas
-                  </p>
-                  <div className="dual-lineage-connector mt-1">
-                    <span className="dual-lineage-dot dual-lineage-dot-left" />
-                    <span className="dual-lineage-dot dual-lineage-dot-right" />
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="mt-3 space-y-2 border-t border-legal-blue/10 pt-3">
-            <div className="flex flex-wrap justify-center gap-1">
-              <Badge variant={inheritanceStatus === 'posible_heredero' || inheritanceStatus === 'confirmado' ? 'default' : 'secondary'}>
-                {role}
-              </Badge>
-              {inheritanceStatus && (
-                <Badge variant="outline">{inheritanceStatus.replace(/_/g, ' ')}</Badge>
-              )}
-            </div>
-            {inheritanceReason && (
-              <p className="text-xs leading-relaxed text-legal-gray">{inheritanceReason}</p>
-            )}
-          </div>
-
-          {isActivePaymentHeir && (
-            <div className="mt-3 space-y-2 border-t border-legal-gold/30 pt-3">
-              <div className="flex flex-wrap justify-center gap-1">
-                {(heir?.line_vincenzo || inheritanceShare?.sources.includes('Vincenzo/Vicente')) && <Badge variant="outline">Vincenzo/Vicente</Badge>}
-                {(heir?.line_paolo || inheritanceShare?.sources.includes('Paolo/Paulino')) && <Badge variant="outline">Paolo/Paulino</Badge>}
-                {hasDualLineage && <Badge variant="default">Doble linaje</Badge>}
-                <Badge variant={heir?.status === 'confirmado' ? 'default' : 'secondary'}>{heir?.status || 'calculado'}</Badge>
-              </div>
-              <div className="rounded-md bg-white/80 p-2">
-                <p className="text-[11px] uppercase tracking-wide text-legal-gray">Monto heredado</p>
-                <p className="font-semibold text-legal-blue">{amount > 0 ? formatMoney(amount) : 'Pendiente de monto'}</p>
-                <p className="text-xs text-legal-gray">
-                  {share > 0 ? formatPercent(share) : 'Porcentaje pendiente'}
-                </p>
-              </div>
-              {inheritanceShare && (
-                <div className="rounded-md bg-legal-blue/5 p-2 text-left">
-                  <p className="flex items-center gap-1 text-[11px] font-semibold uppercase text-legal-blue">
-                    <Route className="h-3 w-3" />
-                    Ruta y pago
-                  </p>
-                  <p className="mt-1 text-xs leading-relaxed text-gray-700">{inheritanceShare.paymentBasis}</p>
-                  <p className="mt-1 text-xs leading-relaxed text-legal-gray">{inheritanceShare.route}</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {!isHeir && inheritanceStatus === 'no_hereda' && (
-            <div className="mt-3 rounded-md bg-legal-blue/5 p-2 text-left">
-              <p className="flex items-center gap-1 text-[11px] font-semibold uppercase text-legal-blue">
-                <GitBranch className="h-3 w-3" />
-                Función en el árbol
-              </p>
-              <p className="mt-1 text-xs leading-relaxed text-gray-700">
-                Este nodo no recibe pago final; explica de dónde sale la rama que conecta con quien sí hereda.
-              </p>
-            </div>
-          )}
-          </div>
-
-          {showRootSpouseCard && spousePartner && (
-            <div className="relative min-w-[230px] max-w-[270px] rounded-md border-2 border-legal-gold/60 bg-legal-gold/5 p-3 text-center shadow-sm">
-              {isDeceasedMember(spousePartner) && (
-                <div
-                  className="deceased-ribbon-badge right-12 top-2"
-                  title={spousePartner.death ? `Fallecida: ${spousePartner.death}` : 'Fallecida'}
-                  aria-label={spousePartner.death ? `Fallecida: ${spousePartner.death}` : 'Fallecida'}
-                >
-                  <span className="deceased-ribbon" aria-hidden="true" />
-                </div>
-              )}
-              <div className="absolute -right-3 -top-3 z-10">
-                <MemberPhoto
-                  name={spousePartner.name}
-                  memberId={spousePartner.id}
-                  photoData={resolveConfirmedHeirPhotoData(spouseHeir)}
-                  lookup={photoLookup}
-                  size="lg"
-                  rounded="xl"
-                  className="border-2 border-legal-gold/60 shadow-lg"
-                  verificationStatus={spouseHeir?.status === 'confirmado' ? 'verified' : getMemberLinkVerificationStatus(spousePartner, allMembers, genealogy).status}
-                />
-              </div>
-              <h3 className="font-serif text-sm font-bold leading-tight text-legal-blue">{spousePartner.name}</h3>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="mt-1 h-7 px-2 text-xs text-legal-blue"
-                onClick={() => onOpenMember(spousePartner.id)}
-              >
-                Ficha
-              </Button>
-              <MemberVerificationBadge
-                member={spousePartner}
-                members={allMembers}
-                genealogy={genealogy}
-                className="mt-2 justify-center"
-              />
-              <div className="mt-1 text-xs text-gray-600">
-                {spousePartner.birth && <span>n. {spousePartner.birth}</span>}
-                {spousePartner.birth && spousePartner.death && <span> - </span>}
-                {spousePartner.death && <span>m. {spousePartner.death}</span>}
-              </div>
-              {isDeceasedMember(spousePartner) && (
-                <div className="mt-2 flex justify-center">
-                  <Badge variant="outline" className="border-gray-400 bg-gray-50 text-gray-800">
-                    Fallecida
-                  </Badge>
-                </div>
-              )}
-              <div className="mt-3 space-y-2 border-t border-legal-gold/30 pt-3">
-                <Badge variant="outline" className="border-legal-gold/60 bg-white">
-                  Cónyuge fundacional
-                </Badge>
-              </div>
-            </div>
+          {showSpouseCard && spousePartner && (
+            <MemberTreeCard
+              member={spousePartner}
+              heir={spouseHeir}
+              photoLookup={photoLookup}
+              allMembers={allMembers}
+              genealogy={genealogy}
+              role="Cónyuge fundacional"
+              tone="spouse"
+              onOpenMember={onOpenMember}
+            />
           )}
         </div>
+
+        {(spouseLabel || filiationUnion || parent || otherParent) && (
+          <div className="tree-context-note mb-3">
+            {spouseLabel && !showSpouseCard && <span>Cónyuge: {spouseLabel}</span>}
+            {filiationUnion && <span>Filiación: {formatUnionLabel(filiationUnion, membersById)}</span>}
+            {parent && <span>Vínculo base: {parent.name}</span>}
+            {otherParent && <span>Otro vínculo parental: {otherParent.name}</span>}
+            {parent && otherParent && (
+              <span className="inline-flex items-center gap-1 text-legal-blue">
+                <GitMerge className="h-3 w-3" />
+                Cruce transversal de ramas
+              </span>
+            )}
+          </div>
+        )}
 
         {member.children.length > 0 && (
           <ul className={cn('classic-tree-children relative', member.children.length > 1 && 'has-multiple')}>
@@ -436,10 +314,6 @@ const ClassicNode = ({
                 heirsByMemberId={heirsByMemberId}
                 heirsByName={heirsByName}
                 photoLookup={photoLookup}
-                inheritancePlan={inheritancePlan}
-                calculationAmountsByMemberId={calculationAmountsByMemberId}
-                total={total}
-                estateAmount={estateAmount}
                 membersById={membersById}
                 allMembers={allMembers}
                 genealogy={genealogy}
@@ -452,6 +326,14 @@ const ClassicNode = ({
     </li>
   );
 };
+
+const maxTreeDepth = (nodes: TreeMember[]): number => {
+  if (!nodes.length) return 0;
+  return Math.max(...nodes.map((node) => 1 + maxTreeDepth(node.children)));
+};
+
+const countMembersWithPhotos = (heirs: ConfirmedHeir[]) =>
+  heirs.filter((heir) => heir.has_photo || Boolean(heir.photo_data)).length;
 
 const ArbolGenealogicoSienna = () => {
   const { hasAccess } = useAuth();
@@ -466,23 +348,23 @@ const ArbolGenealogicoSienna = () => {
     }),
     [workspace]
   );
-  const [estateAmount, setEstateAmount] = useState('');
-  const [lawyerFeePercentage, setLawyerFeePercentage] = useState('0');
-  const [appliedEstateAmount, setAppliedEstateAmount] = useState('');
-  const [appliedLawyerFeePercentage, setAppliedLawyerFeePercentage] = useState('0');
   const [isPresentationMode, setIsPresentationMode] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [isPanningTree, setIsPanningTree] = useState(false);
   const [workspaceInitialized, setWorkspaceInitialized] = useState(false);
-  const [loadingMessage, setLoadingMessage] = useState('Cargando árbol y cálculos sucesorales...');
+  const [loadingMessage, setLoadingMessage] = useState('Cargando árbol genealógico familiar...');
   const [detailMemberId, setDetailMemberId] = useState<string | null>(null);
+  const [selectedBranchId, setSelectedBranchId] = useState('all');
+  const [isPrintPreviewOpen, setIsPrintPreviewOpen] = useState(false);
+  const [printScale, setPrintScale] = useState(0.32);
+  const [printTreeSize, setPrintTreeSize] = useState({ width: 1200, height: 800 });
   const [treePan, setTreePan] = useState({ x: 40, y: 40 });
-  const canOpenHeirExplanation = hasAccess('/sienna/explicacion-herederos');
   const canOpenMemberAdmin = hasAccess('/sienna/miembros-arbol');
   const treeScreenRef = useRef<HTMLDivElement | null>(null);
   const treeViewportRef = useRef<HTMLDivElement | null>(null);
   const treeWorldRef = useRef<HTMLDivElement | null>(null);
+  const printPreviewRef = useRef<HTMLElement | null>(null);
   const treePanRef = useRef({
     dragging: false,
     startX: 0,
@@ -494,8 +376,6 @@ const ArbolGenealogicoSienna = () => {
     active: false,
     distance: 0,
     zoom: 1,
-    centerX: 0,
-    centerY: 0,
   });
   const detailMember = useMemo(
     () => members.find((member) => member.id === detailMemberId) || null,
@@ -504,42 +384,29 @@ const ArbolGenealogicoSienna = () => {
 
   useEffect(() => {
     if (!workspace || workspaceInitialized) return;
-
-    applySiennaCaseConfig(workspace.settings.sienna_case_config);
-    const defaultEstateAmount = String(workspace.settings.estate_amount ?? 0);
-    const defaultLawyerFeePercentage = String(workspace.settings.lawyer_fee_percentage ?? 0);
-    setEstateAmount(defaultEstateAmount);
-    setLawyerFeePercentage(defaultLawyerFeePercentage);
-    setAppliedEstateAmount(defaultEstateAmount);
-    setAppliedLawyerFeePercentage(defaultLawyerFeePercentage);
     setWorkspaceInitialized(true);
   }, [workspace, workspaceInitialized]);
 
   useEffect(() => {
     if (isLoading) {
-      setLoadingMessage('Consultando miembros, herederos y configuración...');
+      setLoadingMessage('Consultando miembros y vínculos familiares...');
       return;
     }
     if (isFetching) {
-      setLoadingMessage('Actualizando datos del árbol...');
+      setLoadingMessage('Actualizando árbol familiar...');
       return;
     }
     if (workspace) {
-      setLoadingMessage('Renderizando árbol genealógico...');
+      setLoadingMessage('Renderizando descendencia de Domenico y María Rosa...');
     }
   }, [isFetching, isLoading, workspace]);
 
   const loading = isLoading || !workspaceInitialized;
 
   useEffect(() => {
-    const onFullscreenChange = () => {
-      setIsFullscreen(Boolean(document.fullscreenElement));
-    };
-
+    const onFullscreenChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
     document.addEventListener('fullscreenchange', onFullscreenChange);
-    return () => {
-      document.removeEventListener('fullscreenchange', onFullscreenChange);
-    };
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
   }, []);
 
   useEffect(() => {
@@ -549,9 +416,7 @@ const ArbolGenealogicoSienna = () => {
       setIsPanningTree(false);
     };
     window.addEventListener('mouseup', stopTreePan);
-    return () => {
-      window.removeEventListener('mouseup', stopTreePan);
-    };
+    return () => window.removeEventListener('mouseup', stopTreePan);
   }, []);
 
   const centerTree = (nextZoom = zoomLevel) => {
@@ -563,7 +428,7 @@ const ArbolGenealogicoSienna = () => {
     if (!worldWidth || !worldHeight) return;
     setTreePan({
       x: (viewport.clientWidth - worldWidth * nextZoom) / 2,
-      y: Math.max(24, (viewport.clientHeight - worldHeight * nextZoom) / 2),
+      y: 32,
     });
   };
 
@@ -574,7 +439,7 @@ const ArbolGenealogicoSienna = () => {
     const worldWidth = world.scrollWidth;
     const worldHeight = world.scrollHeight;
     if (!worldWidth || !worldHeight) return;
-    const padding = 56;
+    const padding = 72;
     const nextZoom = clampTreeZoom(
       Math.min(
         (viewport.clientWidth - padding) / worldWidth,
@@ -584,22 +449,6 @@ const ArbolGenealogicoSienna = () => {
     setZoomLevel(Number(nextZoom.toFixed(3)));
     centerTree(nextZoom);
   };
-
-  const { data: realtimeCalculationData, isFetching: isFetchingCalculation } = useSiennaCalculation(
-    appliedEstateAmount,
-    appliedLawyerFeePercentage
-  );
-  const realtimeCalculation = realtimeCalculationData?.calculation;
-  const total = useMemo(
-    () => (realtimeCalculation?.active_heirs ?? []).reduce((sum, row) => sum + Number(row.amount || 0), 0),
-    [realtimeCalculation?.active_heirs]
-  );
-  const {
-    grossAmount: estateAmountNumber = 0,
-    lawyerFeePercentage: lawyerFeePercentageNumber = 0,
-    lawyerFeeAmount = 0,
-    distributableAmount: distributableEstateAmount = 0,
-  } = realtimeCalculation?.estate ?? {};
 
   const heirsByName = useMemo(
     () => new Map(heirs.map((heir) => [normalizeName(heir.heir_name), heir])),
@@ -616,80 +465,82 @@ const ArbolGenealogicoSienna = () => {
   );
 
   const forest = useMemo(() => buildForest(members, genealogy), [genealogy, members]);
+  const branchOptions = useMemo(() => {
+    if (forest.length === 1) return forest[0].children;
+    return forest;
+  }, [forest]);
+  const selectedBranchLabel = useMemo(
+    () =>
+      selectedBranchId === 'all'
+        ? 'Árbol completo'
+        : branchOptions.find((branch) => branch.id === selectedBranchId)?.name || 'Rama familiar',
+    [branchOptions, selectedBranchId]
+  );
+  const visibleForest = useMemo(() => {
+    if (selectedBranchId === 'all') return forest;
+    if (forest.length === 1) {
+      const root = forest[0];
+      const branch = root.children.find((child) => child.id === selectedBranchId);
+      return branch ? [{ ...root, children: [branch] }] : forest;
+    }
+    const root = forest.find((node) => node.id === selectedBranchId);
+    return root ? [root] : forest;
+  }, [forest, selectedBranchId]);
+
   useEffect(() => {
-    if (loading || !forest.length) return;
+    if (loading || !visibleForest.length) return;
     const frame = window.requestAnimationFrame(() => fitTreeToScreen());
     return () => window.cancelAnimationFrame(frame);
-  }, [forest.length, loading]);
+  }, [loading, selectedBranchId, visibleForest.length]);
+
+  useEffect(() => {
+    document.body.classList.toggle('sienna-tree-print-active', isPrintPreviewOpen);
+    return () => document.body.classList.remove('sienna-tree-print-active');
+  }, [isPrintPreviewOpen]);
+
+  useEffect(() => {
+    if (!isPrintPreviewOpen) return;
+    const alignPreviewStart = () => {
+      window.scrollTo({ left: 0, top: 0, behavior: 'auto' });
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+      const preview = printPreviewRef.current;
+      if (!preview) return;
+      preview.scrollTo({
+        left: 0,
+        top: 0,
+        behavior: 'auto',
+      });
+    };
+    window.requestAnimationFrame(() => {
+      alignPreviewStart();
+      window.requestAnimationFrame(alignPreviewStart);
+    });
+  }, [isPrintPreviewOpen, printScale, printTreeSize.height, printTreeSize.width]);
+
   const orphanMembers = useMemo(() => {
     const ids = new Set(members.map((member) => member.id));
     return members.filter((member) => member.parent_id && !ids.has(member.parent_id));
   }, [members]);
-  const inheritancePlan = useMemo(
-    () => buildInheritancePlanFromApiRows(realtimeCalculation?.active_heirs ?? [], members),
-    [members, realtimeCalculation?.active_heirs]
-  );
-  const calculationAmountsByMemberId = useMemo(
-    () => new Map((realtimeCalculation?.active_heirs ?? []).map((row) => [row.member_id, Number(row.amount || 0)])),
-    [realtimeCalculation?.active_heirs]
-  );
-  const dualLineageRows = useMemo(
-    () =>
-      inheritancePlan.activeHeirs
-        .filter((share) => share.sources.length > 1)
-        .map((share) => {
-          const baseParent = share.member.parent_id
-            ? membersById.get(normalizedMemberId(share.member.parent_id)) || null
-            : null;
-          return {
-            memberId: share.member.id,
-            memberName: share.member.name,
-            sources: share.sources.join(' + '),
-            baseParentName: baseParent?.name || 'No definido',
-            linkedParentName: resolveFormalOtherParent(share.member, baseParent, membersById, genealogy)?.name || 'No definido',
-            routes: share.sourceBreakdown.flatMap((segment) => segment.routes),
-          };
-        })
-        .sort((left, right) => left.memberName.localeCompare(right.memberName, 'es', { sensitivity: 'base' })),
-    [genealogy, inheritancePlan.activeHeirs, members, membersById]
-  );
-  const calculatedPayments = useMemo(() => {
-    const totalEstate = distributableEstateAmount;
-    const calculationRowsByMemberId = new Map(
-      (realtimeCalculation?.active_heirs ?? []).map((row) => [row.member_id, row])
-    );
-    return inheritancePlan.activeHeirs.map((share) => {
-      const heir = heirsByMemberId.get(share.member.id) || heirsByName.get(normalizeName(share.member.name));
-      return {
-        heir,
-        share,
-        amount: Number(calculationRowsByMemberId.get(share.member.id)?.amount || 0),
-      };
-    }).sort((left, right) => left.share.member.name.localeCompare(right.share.member.name, 'es', { sensitivity: 'base' }));
-  }, [distributableEstateAmount, heirsByMemberId, heirsByName, inheritancePlan, realtimeCalculation?.active_heirs]);
-  const presentationStats = useMemo(() => {
-    const connectors = members.filter((member) => getMemberEffectiveInheritanceStatus(member) === 'no_hereda').length;
-    const pending = members.filter((member) => getMemberEffectiveInheritanceStatus(member) === 'requiere_revision').length;
+
+  const familyStats = useMemo(() => {
+    const rootChildren = forest.reduce((sum, root) => sum + root.children.length, 0);
     return {
-      finalHeirs: inheritancePlan.activeHeirs.length,
-      connectors,
-      pending,
+      members: members.length,
+      generations: maxTreeDepth(forest),
+      branches: branchOptions.length || rootChildren || forest.length,
+      photos: countMembersWithPhotos(heirs),
     };
-  }, [inheritancePlan.activeHeirs.length, members]);
-  const hasPendingCalculationChanges =
-    estateAmount !== appliedEstateAmount || lawyerFeePercentage !== appliedLawyerFeePercentage;
+  }, [branchOptions.length, forest, heirs, members.length]);
 
-  const applyEstateCalculation = () => {
-    const nextEstateAmount = Number(estateAmount || 0);
-    if (!nextEstateAmount || nextEstateAmount <= 0) {
-      toast({ title: 'Monto requerido', description: 'Indica el monto total de la herencia para distribuirlo después de abogados.' });
-      return;
-    }
-
-    setAppliedEstateAmount(estateAmount);
-    setAppliedLawyerFeePercentage(lawyerFeePercentage);
-    toast({ title: 'Cálculo actualizado', description: 'La vista usa estos parámetros solo como simulación local.' });
-  };
+  const hasComplexLinks = useMemo(
+    () =>
+      members.some((member) => {
+        const parent = member.parent_id ? membersById.get(normalizedMemberId(member.parent_id)) || null : null;
+        return Boolean(resolveFormalOtherParent(member, parent, membersById, genealogy));
+      }),
+    [genealogy, members, membersById]
+  );
 
   const toggleFullscreen = async () => {
     if (!document.fullscreenEnabled) {
@@ -763,11 +614,9 @@ const ArbolGenealogicoSienna = () => {
   const onTreeMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
     if (!treePanRef.current.dragging || !treeViewportRef.current) return;
     event.preventDefault();
-    const deltaX = event.clientX - treePanRef.current.startX;
-    const deltaY = event.clientY - treePanRef.current.startY;
     setTreePan({
-      x: treePanRef.current.startPanX + deltaX,
-      y: treePanRef.current.startPanY + deltaY,
+      x: treePanRef.current.startPanX + event.clientX - treePanRef.current.startX,
+      y: treePanRef.current.startPanY + event.clientY - treePanRef.current.startY,
     });
   };
 
@@ -798,13 +647,10 @@ const ArbolGenealogicoSienna = () => {
     }
 
     if (event.touches.length >= 2) {
-      const center = touchCenter(event.touches);
       treePinchRef.current = {
         active: true,
         distance: touchDistance(event.touches),
         zoom: zoomLevel,
-        centerX: center.x,
-        centerY: center.y,
       };
       setIsPanningTree(true);
     }
@@ -835,192 +681,238 @@ const ArbolGenealogicoSienna = () => {
     setIsPanningTree(false);
   };
 
+  const escapePrintText = (value: string | number) =>
+    String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+
   const printTree = () => {
-    const treeWorld = treeWorldRef.current;
-    if (!treeWorld) {
+    const world = treeWorldRef.current;
+    if (world) {
+      const worldWidth = Math.max(world.scrollWidth, 1);
+      const worldHeight = Math.max(world.scrollHeight, 1);
+      const nextPrintScale = Math.max(
+        0.04,
+        Math.min(0.62, 900 / worldWidth, 560 / worldHeight)
+      );
+      setPrintScale(Number(nextPrintScale.toFixed(3)));
+      setPrintTreeSize({ width: worldWidth, height: worldHeight });
+    }
+    setIsPrintPreviewOpen(true);
+  };
+
+  const generateTreePdf = async () => {
+    const target = document.querySelector('.print-tree-world') as HTMLElement | null;
+    if (!target) {
       toast({
-        title: 'No se pudo preparar impresión',
-        description: 'No se encontró el área visual del árbol.',
+        title: 'Vista del árbol no disponible',
+        description: 'Abra primero la vista de impresión del árbol.',
         variant: 'destructive',
       });
       return;
     }
 
-    const printWindow = window.open('', '_blank', 'width=1200,height=900');
-    if (!printWindow) {
+    try {
       toast({
-        title: 'No se pudo abrir impresión',
-        description: 'Permite ventanas emergentes para imprimir el árbol.',
+        title: 'Generando PDF',
+        description: 'Preparando el árbol en una sola página horizontal...',
+      });
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+      ]);
+      const sourceWidth = Math.max(target.scrollWidth, target.offsetWidth, 1);
+      const sourceHeight = Math.max(target.scrollHeight, target.offsetHeight, 1);
+      const captureScale = Math.max(0.08, Math.min(1, 2400 / sourceWidth, 1600 / sourceHeight));
+
+      if (!Number.isFinite(sourceWidth) || !Number.isFinite(sourceHeight) || sourceWidth <= 1 || sourceHeight <= 1) {
+        throw new Error('El árbol todavía no tiene dimensiones válidas para exportar.');
+      }
+
+      const captureHost = document.createElement('div');
+      const captureNode = target.cloneNode(true) as HTMLElement;
+      captureHost.style.position = 'fixed';
+      captureHost.style.left = '-100000px';
+      captureHost.style.top = '0';
+      captureHost.style.width = sourceWidth + 'px';
+      captureHost.style.height = sourceHeight + 'px';
+      captureHost.style.overflow = 'visible';
+      captureHost.style.background = '#ffffff';
+      captureHost.style.pointerEvents = 'none';
+      captureHost.style.zIndex = '-1';
+      captureNode.style.position = 'relative';
+      captureNode.style.left = '0';
+      captureNode.style.top = '0';
+      captureNode.style.width = sourceWidth + 'px';
+      captureNode.style.height = sourceHeight + 'px';
+      captureNode.style.transform = 'none';
+      captureNode.style.padding = '0';
+      captureHost.appendChild(captureNode);
+      document.body.appendChild(captureHost);
+
+      let canvas: HTMLCanvasElement;
+      try {
+        canvas = await html2canvas(captureNode, {
+          backgroundColor: '#ffffff',
+          scale: captureScale,
+          useCORS: true,
+          logging: false,
+          width: sourceWidth,
+          height: sourceHeight,
+          windowWidth: sourceWidth,
+          windowHeight: sourceHeight,
+        });
+      } finally {
+        captureHost.remove();
+      }
+
+      if (!Number.isFinite(canvas.width) || !Number.isFinite(canvas.height) || canvas.width < 2 || canvas.height < 2) {
+        throw new Error('Safari no pudo crear una imagen válida del árbol.');
+      }
+
+      const pdf = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'letter' });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 12;
+      const maxWidth = pageWidth - margin * 2;
+      const maxHeight = pageHeight - margin * 2;
+      const ratio = Math.min(maxWidth / canvas.width, maxHeight / canvas.height);
+      const imageWidth = canvas.width * ratio;
+      const imageHeight = canvas.height * ratio;
+      const x = (pageWidth - imageWidth) / 2;
+      const y = (pageHeight - imageHeight) / 2;
+      const imageData = canvas.toDataURL('image/jpeg', 0.92);
+
+      if (
+        !Number.isFinite(ratio) ||
+        !Number.isFinite(imageWidth) ||
+        !Number.isFinite(imageHeight) ||
+        imageWidth <= 0 ||
+        imageHeight <= 0 ||
+        !imageData.startsWith('data:image/jpeg')
+      ) {
+        throw new Error('La imagen generada no tiene medidas válidas para el PDF.');
+      }
+
+      pdf.addImage(imageData, 'JPEG', x, y, imageWidth, imageHeight);
+
+      const fileName = 'arbol-genealogico-domenico-maria-rosa.pdf';
+      const blob = pdf.output('blob');
+      const pdfBase64 = await blobToBase64(blob);
+      const downloadResponse = await fetch('/api/sienna-tree-pdf-downloads', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_name: fileName, pdf_base64: pdfBase64 }),
+      });
+      const downloadPayload = await downloadResponse.json().catch(() => ({}));
+      if (!downloadResponse.ok || typeof downloadPayload.url !== 'string') {
+        throw new Error(downloadPayload.message || 'No se pudo preparar la descarga del PDF.');
+      }
+
+      const link = document.createElement('a');
+      link.href = downloadPayload.url;
+      link.download = fileName;
+      link.rel = 'noopener';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error) {
+      toast({
+        title: 'No se pudo generar el PDF',
+        description: error instanceof Error ? error.message : 'Error desconocido',
         variant: 'destructive',
       });
-      return;
     }
-
-    const printableTree = treeWorld.cloneNode(true) as HTMLElement;
-    printableTree.removeAttribute('style');
-    printableTree.style.transform = 'none';
-    printableTree.style.position = 'relative';
-    printableTree.style.left = 'auto';
-    printableTree.style.top = 'auto';
-    printableTree.style.width = 'max-content';
-    printableTree.style.maxWidth = 'none';
-    printableTree.style.overflow = 'visible';
-
-    const styles = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
-      .map((node) => node.outerHTML)
-      .join('\n');
-
-    printWindow.document.write(`
-      <!doctype html>
-      <html lang="es">
-        <head>
-          <meta charset="utf-8" />
-          <title>Árbol del caso Alessandro</title>
-          ${styles}
-          <style>
-            @page { size: A3 landscape; margin: 8mm; }
-            html, body { margin: 0; background: #fff; color: #173f73; }
-            body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-            .print-toolbar {
-              position: sticky;
-              top: 0;
-              z-index: 20;
-              display: flex;
-              justify-content: flex-end;
-              gap: 8px;
-              border-bottom: 1px solid #d8b45d;
-              background: #fffdf8;
-              padding: 10px 14px;
-            }
-            .print-toolbar button {
-              cursor: pointer;
-              border: 1px solid #173f73;
-              border-radius: 6px;
-              background: #ffffff;
-              color: #173f73;
-              font-size: 12px;
-              font-weight: 700;
-              padding: 7px 10px;
-            }
-            .print-toolbar .primary {
-              border-color: #d8b45d;
-              background: #d8b45d;
-              color: #ffffff;
-            }
-            .print-page { width: calc(420mm - 16mm); padding: 0; overflow: visible; }
-            .print-header {
-              display: flex;
-              align-items: flex-end;
-              justify-content: space-between;
-              gap: 12px;
-              margin-bottom: 6mm;
-              border-bottom: 1px solid #d8b45d;
-              padding-bottom: 3mm;
-            }
-            .print-title { margin: 0; font-size: 18px; color: #173f73; }
-            .print-meta { margin: 1mm 0 0; font-size: 10px; color: #5f6f86; }
-            .print-canvas { width: 100%; overflow: visible; }
-            .print-fit { transform-origin: top left; overflow: visible; }
-            .classic-family-tree,
-            .tree-world {
-              position: relative !important;
-              left: auto !important;
-              top: auto !important;
-              width: max-content !important;
-              max-width: none !important;
-              overflow: visible !important;
-              transform: none !important;
-              padding: 0 !important;
-              will-change: auto !important;
-            }
-            .classic-tree-root,
-            .classic-tree-children {
-              min-width: max-content !important;
-              page-break-inside: avoid;
-              break-inside: avoid;
-            }
-            .rounded-md, .shadow-sm, .shadow-md, .shadow-lg { box-shadow: none !important; }
-            @media print { .print-toolbar { display: none !important; } }
-          </style>
-        </head>
-        <body>
-          <nav class="print-toolbar" aria-label="Acciones de impresión">
-            <button type="button" onclick="window.print()">Imprimir otra vez</button>
-            <button type="button" class="primary" onclick="returnToTree()">Volver al árbol</button>
-          </nav>
-          <main class="print-page">
-            <header class="print-header">
-              <div>
-                <h1 class="print-title">Árbol Genealógico del caso Alessandro</h1>
-                <p class="print-meta">Vista completa del árbol · ${members.length} miembros · ${presentationStats.finalHeirs} herederos finales</p>
-              </div>
-              <p class="print-meta">${new Date().toLocaleString('es-DO')}</p>
-            </header>
-            <section class="print-canvas">
-              <div class="print-fit">
-                ${printableTree.outerHTML}
-              </div>
-            </section>
-          </main>
-          <script>
-            const returnToTree = () => {
-              if (window.opener && !window.opener.closed) {
-                window.opener.focus();
-              }
-              window.close();
-            };
-            window.onafterprint = () => {
-              if (window.opener && !window.opener.closed) {
-                window.opener.focus();
-              }
-            };
-            const preparePrint = async () => {
-              const canvas = document.querySelector('.print-canvas');
-              const fit = document.querySelector('.print-fit');
-              const tree = document.querySelector('.classic-family-tree');
-              if (canvas && fit && tree) {
-                const treeWidth = Math.max(tree.scrollWidth, tree.getBoundingClientRect().width);
-                const treeHeight = Math.max(tree.scrollHeight, tree.getBoundingClientRect().height);
-                const availableWidth = canvas.clientWidth || treeWidth;
-                const scale = Math.min(1, availableWidth / treeWidth);
-                fit.style.transform = 'scale(' + scale + ')';
-                fit.style.width = treeWidth + 'px';
-                canvas.style.height = Math.ceil(treeHeight * scale) + 'px';
-              }
-
-              const images = Array.from(document.images || []);
-              await Promise.allSettled(images.map((image) => {
-                if (image.complete) return Promise.resolve();
-                return new Promise((resolve) => {
-                  image.onload = resolve;
-                  image.onerror = resolve;
-                  setTimeout(resolve, 1200);
-                });
-              }));
-
-              setTimeout(() => {
-                window.focus();
-                window.print();
-              }, 250);
-            };
-            window.onload = () => { preparePrint(); };
-          </script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
   };
 
   return (
+    <>
+      {isPrintPreviewOpen && (
+        <section
+          ref={printPreviewRef}
+          className="sienna-tree-print-preview"
+          style={{
+            '--print-scale': printScale,
+            '--print-tree-width': printTreeSize.width,
+            '--print-tree-height': printTreeSize.height,
+            '--print-tree-scaled-width': Math.ceil(printTreeSize.width * printScale),
+            '--print-tree-scaled-height': Math.ceil(printTreeSize.height * printScale),
+          } as React.CSSProperties}
+        >
+          <div className="print-preview-toolbar">
+            <Button type="button" variant="outline" size="sm" onClick={() => setIsPrintPreviewOpen(false)}>
+              Volver al árbol
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              className="bg-legal-blue text-white hover:bg-legal-blue/90"
+              onClick={generateTreePdf}
+            >
+              <Printer className="mr-2 h-4 w-4" />
+              Descargar PDF
+            </Button>
+          </div>
+
+          <main className="print-tree-sheet">
+            <header className="print-tree-header screen-only-print-header">
+              <div>
+                <h1>Árbol genealógico de la descendencia de Domenico y María Rosa</h1>
+                <p>
+                  {selectedBranchLabel} · Recuerdo familiar · {familyStats.members} miembros · {familyStats.branches} ramas · {familyStats.generations} generaciones
+                </p>
+              </div>
+            </header>
+            <section className="print-tree-canvas">
+              <div className="print-tree-frame">
+                <div className="print-tree-scale">
+                  <div className="tree-world classic-family-tree print-tree-world">
+                    {visibleForest.length > 1 && (
+                      <p className="mb-3 text-xs text-amber-700">
+                        Hay {visibleForest.length} raíces en el árbol. Revise vínculos parentales si espera una sola raíz familiar.
+                      </p>
+                    )}
+                    <ul className="classic-tree-root">
+                      {visibleForest.map((root) => (
+                        <ClassicNode
+                          key={root.id}
+                          member={root}
+                          heirsByMemberId={heirsByMemberId}
+                          heirsByName={heirsByName}
+                          photoLookup={photoLookup}
+                          membersById={membersById}
+                          allMembers={members}
+                          genealogy={genealogy}
+                          onOpenMember={setDetailMemberId}
+                          isRoot
+                        />
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </section>
+            <footer className="print-tree-footer screen-only-print-footer">
+              <span>Legado familiar Sangiovanni</span>
+              <span>Vista genealógica conmemorativa</span>
+            </footer>
+          </main>
+        </section>
+      )}
+
     <div
       ref={treeScreenRef}
-      className={`app-shell py-8 ${isPresentationMode ? 'max-w-none px-2 sm:px-3 lg:px-4' : ''} ${isFullscreen ? 'bg-legal-beige' : ''}`}
+      className={'app-shell py-8 ' + (isPresentationMode ? 'max-w-none px-2 sm:px-3 lg:px-4 ' : '') + (isFullscreen ? 'bg-legal-beige' : '')}
     >
       <BackButton />
 
       <DocumentHeader
-        title="Árbol Genealógico de Alessandro"
-        subtitle="Visualización clásica dinámica con herederos, foto y monto heredado"
+        title="Árbol genealógico de la descendencia de Domenico y María Rosa"
+        subtitle="Memoria visual familiar, organizada por generaciones y vínculos de descendencia."
         helpKey="sienna-arbol"
       />
       <SoftLoadingIndicator active={loading} message={loadingMessage} />
@@ -1042,14 +934,6 @@ const ArbolGenealogicoSienna = () => {
         <Button variant={isPresentationMode ? 'default' : 'outline'} size="sm" onClick={() => setIsPresentationMode((current) => !current)}>
           {isPresentationMode ? 'Salir modo exposición' : 'Modo exposición'}
         </Button>
-        {canOpenHeirExplanation && (
-          <Button variant="outline" size="sm" asChild>
-            <Link to="/sienna/explicacion-herederos">
-              <FileText className="mr-2 h-4 w-4" />
-              Explicación para herederos
-            </Link>
-          </Button>
-        )}
         {canOpenMemberAdmin && (
           <Button variant="outline" size="sm" asChild>
             <Link to="/sienna/miembros-arbol">Administrar miembros</Link>
@@ -1058,17 +942,6 @@ const ArbolGenealogicoSienna = () => {
       </div>
 
       <div className="space-y-6">
-        <details className="rounded-md border border-legal-gold/20 bg-white">
-          <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-legal-blue">
-            Criterio automático del caso Alessandro
-          </summary>
-          <div className="border-t border-legal-blue/10 p-4">
-            <p className="text-sm leading-relaxed text-gray-700">
-              {legalCriterionText}
-            </p>
-          </div>
-        </details>
-
         {orphanMembers.length > 0 && (
           <Card className="border border-amber-300 bg-amber-50">
             <CardContent className="p-4">
@@ -1076,48 +949,10 @@ const ArbolGenealogicoSienna = () => {
                 Hay miembros sin conexión válida al árbol ({orphanMembers.length}).
               </p>
               <p className="mt-1 text-xs text-amber-700">
-                Revise en “Miembros del Árbol” los nodos cuyo superior no existe (parent_id inválido) para que vuelvan a conectarse visualmente.
+                Revise en “Miembros del Árbol” los nodos cuyo superior no existe para recuperar su conexión visual.
               </p>
             </CardContent>
           </Card>
-        )}
-
-        <div className="rounded-md border border-legal-blue/10 bg-white px-4 py-3">
-          <p className="text-xs uppercase tracking-wide text-legal-gray">Cálculo del caso en vivo</p>
-          <p className="mt-1 text-sm text-legal-blue">
-              {isFetchingCalculation
-                ? 'La API está recalculando con la data actual...'
-                : realtimeCalculation?.generated_at
-                  ? `API recalculada: ${new Date(realtimeCalculation.generated_at).toLocaleString('es-DO')}`
-                  : 'La API calculará con los miembros actuales al cargar los parámetros.'}
-          </p>
-        </div>
-
-        {dualLineageRows.length > 0 && (
-          <details className="rounded-md border border-legal-blue/20 bg-white">
-            <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-legal-blue">
-              Cruces de ramas ({dualLineageRows.length})
-            </summary>
-            <div className="grid gap-3 border-t border-legal-blue/10 p-4 sm:grid-cols-2 xl:grid-cols-3">
-              {dualLineageRows.map((row) => (
-                <div key={row.memberId} className="rounded-md border border-legal-blue/15 bg-white p-3">
-                  <p className="font-semibold text-legal-blue">{row.memberName}</p>
-                  <p className="mt-1 text-xs text-legal-gray">Ramas activas: {row.sources}</p>
-                  <p className="mt-1 text-xs text-legal-gray">
-                    Padre/Madre base visual: {row.baseParentName}
-                    {row.linkedParentName !== 'No definido' ? ' · Segundo progenitor formal: ' + row.linkedParentName : ''}
-                  </p>
-                  <div className="mt-2 space-y-1">
-                    {row.routes.map((route) => (
-                      <p key={route} className="text-xs leading-relaxed text-legal-gray">
-                        {route}
-                      </p>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </details>
         )}
 
         <div className="grid gap-4 md:grid-cols-4">
@@ -1125,18 +960,8 @@ const ArbolGenealogicoSienna = () => {
             <CardContent className="flex items-center gap-3 p-5">
               <Users className="h-9 w-9 text-legal-blue" />
               <div>
-                <p className="text-sm text-legal-gray">Miembros visibles</p>
-                <p className="text-2xl font-bold text-legal-blue">{members.length}</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border border-legal-gold/20">
-            <CardContent className="flex items-center gap-3 p-5">
-              <Landmark className="h-9 w-9 text-legal-blue" />
-              <div>
-                <p className="text-sm text-legal-gray">Herederos finales</p>
-                <p className="text-2xl font-bold text-legal-blue">{presentationStats.finalHeirs}</p>
+                <p className="text-sm text-legal-gray">Miembros familiares</p>
+                <p className="text-2xl font-bold text-legal-blue">{familyStats.members}</p>
               </div>
             </CardContent>
           </Card>
@@ -1145,223 +970,118 @@ const ArbolGenealogicoSienna = () => {
             <CardContent className="flex items-center gap-3 p-5">
               <GitBranch className="h-9 w-9 text-legal-blue" />
               <div>
-                <p className="text-sm text-legal-gray">Enlaces explicativos</p>
-                <p className="text-2xl font-bold text-legal-blue">{presentationStats.connectors}</p>
+                <p className="text-sm text-legal-gray">Ramas visibles</p>
+                <p className="text-2xl font-bold text-legal-blue">{familyStats.branches}</p>
               </div>
             </CardContent>
           </Card>
 
           <Card className="border border-legal-gold/20">
             <CardContent className="flex items-center gap-3 p-5">
-              <ClipboardCheck className="h-9 w-9 text-legal-blue" />
+              <Sparkles className="h-9 w-9 text-legal-blue" />
               <div>
-                <p className="text-sm text-legal-gray">Pendientes</p>
-                <p className="text-2xl font-bold text-legal-blue">{presentationStats.pending}</p>
+                <p className="text-sm text-legal-gray">Generaciones</p>
+                <p className="text-2xl font-bold text-legal-blue">{familyStats.generations}</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border border-legal-gold/20">
+            <CardContent className="flex items-center gap-3 p-5">
+              <Camera className="h-9 w-9 text-legal-blue" />
+              <div>
+                <p className="text-sm text-legal-gray">Fotos familiares</p>
+                <p className="text-2xl font-bold text-legal-blue">{familyStats.photos}</p>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        <Card className="border border-legal-gold/20">
-          <CardContent className="p-0">
-            <details className="rounded-md bg-white open:bg-legal-blue/[0.02]">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-sm font-semibold text-legal-blue [&::-webkit-details-marker]:hidden">
-                <span className="flex items-center gap-2">
-                  <Calculator className="h-5 w-5 text-legal-gold" />
-                  Cálculo aplicado desde la API
-                </span>
-                <span className="text-xs font-normal text-legal-gray">
-                  Cálculo de Monto a Heredar · {hasPendingCalculationChanges ? 'cambios pendientes de aplicar' : `${calculatedPayments.length} herederos calculados`}
-                </span>
-              </summary>
-              <div className="space-y-4 border-t border-legal-blue/10 p-6">
-                <h3 className="font-serif text-base font-bold text-legal-blue">Cálculo de Monto a Heredar</h3>
-            <div className="grid gap-4 md:grid-cols-[1fr_220px_auto] md:items-end">
-              <div>
-                <Label>Monto bruto de la herencia</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={estateAmount}
-                  onChange={(event) => setEstateAmount(event.target.value)}
-                  placeholder="0.00"
-                />
-              </div>
-              <div>
-                <Label>% firma de abogados</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="0.01"
-                  value={lawyerFeePercentage}
-                  onChange={(event) => setLawyerFeePercentage(event.target.value)}
-                  placeholder="0"
-                />
-                <p className="mt-1 text-xs text-legal-gray">
-                  % sobre el bruto. El default global se cambia solo en Settings.
-                </p>
-              </div>
-              <Button onClick={applyEstateCalculation} disabled={isFetchingCalculation} className="bg-legal-gold hover:bg-legal-gold/90 text-white">
-                <RefreshCw className="mr-2 h-4 w-4" />
-                {isFetchingCalculation ? 'Calculando...' : 'Actualizar cálculo'}
-              </Button>
-            </div>
+        {hasComplexLinks && (
+          <details className="rounded-md border border-legal-blue/20 bg-white">
+            <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-legal-blue">
+              Vínculos familiares complejos
+            </summary>
+            <p className="border-t border-legal-blue/10 p-4 text-sm leading-relaxed text-legal-gray">
+              Algunas personas tienen más de un vínculo parental documentado. El árbol los conserva como memoria familiar y los marca en la ficha para que la historia no pierda precisión.
+            </p>
+          </details>
+        )}
 
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className="rounded-md border border-legal-blue/15 bg-white p-3">
-                <p className="text-xs uppercase text-legal-gray">Monto bruto</p>
-                <p className="font-bold text-legal-blue">{formatMoney(estateAmountNumber)}</p>
-              </div>
-              <div className="rounded-md border border-legal-blue/15 bg-white p-3">
-                <p className="text-xs uppercase text-legal-gray">Firma de abogados</p>
-                <p className="font-bold text-legal-blue">{formatMoney(lawyerFeeAmount)}</p>
-                <p className="text-xs text-legal-gray">{formatPercent(lawyerFeePercentageNumber)}</p>
-              </div>
-              <div className="rounded-md border border-legal-blue/15 bg-white p-3">
-                <p className="text-xs uppercase text-legal-gray">Neto a distribuir</p>
-                <p className="font-bold text-legal-blue">{formatMoney(distributableEstateAmount)}</p>
-              </div>
-            </div>
-            <div className="grid gap-3 rounded-md border border-legal-blue/15 bg-white p-3 md:grid-cols-5">
-                {calculatedPayments.map(({ heir, share, amount }) => (
-                  <div key={share.member.id} className="rounded-md border border-legal-blue/15 bg-white p-3">
-                    <div className="flex items-center gap-2">
-                      <MemberPhoto
-                        name={heir?.heir_name || share.member.name}
-                        memberId={share.member.id}
-                        photoData={resolveConfirmedHeirPhotoData(heir)}
-                        size="xs"
-                        verificationStatus={heir?.status === 'confirmado' ? 'verified' : 'pending'}
-                      />
-                      <p className="text-xs font-semibold leading-tight text-legal-blue">
-                        {heir?.heir_name || share.member.name}
-                      </p>
-                    </div>
-                    <p className="mt-2 text-sm font-bold text-legal-blue">{formatMoney(amount)}</p>
-                    <p className="text-xs text-legal-gray">{formatPercent(share.share)}</p>
-                  </div>
-                ))}
-              </div>
-
-            {inheritancePlan.activeHeirs.length > 0 && (
-              <details className="rounded-md border border-legal-gold/25 bg-legal-gold/[0.04] open:bg-legal-gold/[0.06]">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-legal-blue [&::-webkit-details-marker]:hidden">
-                  <span className="flex items-center gap-2">
-                    <Route className="h-4 w-4 text-legal-gold" />
-                    Por qué heredan (resumen)
-                  </span>
-                  <span className="text-xs font-normal text-legal-gray">{inheritancePlan.activeHeirs.length} herederos</span>
-                </summary>
-                <div className="grid gap-3 border-t border-legal-gold/20 p-3 sm:grid-cols-2 xl:grid-cols-3">
-                  {inheritancePlan.activeHeirs.map((share) => {
-                    const amount =
-                      Number(realtimeCalculation?.active_heirs.find((row) => row.member_id === share.member.id)?.amount || 0);
-                    return (
-                      <div key={share.member.id} className="rounded-md border border-legal-gold/25 bg-legal-gold/5 p-3">
-                        <div className="flex items-center gap-2">
-                          <MemberPhoto
-                            name={share.member.name}
-                            memberId={share.member.id}
-                            photoData={resolveConfirmedHeirPhotoData(
-                              heirsByMemberId.get(share.member.id) || heirsByName.get(normalizeName(share.member.name))
-                            )}
-                            size="sm"
-                            verificationStatus={
-                              (heirsByMemberId.get(share.member.id) || heirsByName.get(normalizeName(share.member.name)))?.status === 'confirmado'
-                                ? 'verified'
-                                : 'pending'
-                            }
-                          />
-                          <p className="font-medium text-legal-blue">{share.member.name}</p>
-                        </div>
-                        <p className="mt-1 text-xs text-legal-gray">
-                          {formatPercentExplain(share.share)} · {formatMoneyExplain(amount)}
-                        </p>
-                        <p className="mt-2 line-clamp-4 text-xs leading-relaxed text-gray-700">
-                          {buildWhyIInheritText(share, share.share, amount)}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </details>
-            )}
-              </div>
-            </details>
-          </CardContent>
-        </Card>
-
-        <Card>
+        <Card className="overflow-hidden border border-legal-gold/20">
           <CardContent className="p-6">
-            <div className="mb-6 rounded-md bg-white p-4 shadow">
+            <div className="mb-6 rounded-md border border-legal-gold/20 bg-white/95 p-4 shadow-sm">
               <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
-                <h3 className="text-lg font-medium text-legal-blue">Vista clásica dinámica</h3>
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="flex items-center gap-1 rounded-md border border-legal-blue/20 bg-white px-2 py-1">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 px-2"
-                    onClick={() => nudgeZoom(-0.1)}
-                  >
-                    <ZoomOut className="h-4 w-4" />
-                  </Button>
-                  <span className="min-w-[52px] text-center text-xs font-semibold text-legal-blue">
-                    {Math.round(zoomLevel * 100)}%
-                  </span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 px-2"
-                    onClick={() => nudgeZoom(0.1)}
-                  >
-                    <ZoomIn className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 px-2"
-                    onClick={fitTreeToScreen}
-                    title="Ajustar a pantalla"
-                  >
-                    Fit
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 px-2"
-                    onClick={() => {
-                      setZoomLevel(1);
-                      window.requestAnimationFrame(() => centerTree(1));
-                    }}
-                    title="Centrar al 100%"
-                  >
-                    <RotateCcw className="h-4 w-4" />
-                  </Button>
+                <div>
+                  <h3 className="font-serif text-lg font-semibold text-legal-blue">Descendencia familiar</h3>
+                  <p className="mt-1 max-w-3xl text-sm leading-relaxed text-legal-gray">
+                    Vista conmemorativa del linaje de Domenico Sangiovanni y María Rosa Grisolia, organizada para lectura familiar, presentación e impresión.
+                  </p>
                 </div>
-                <Button type="button" variant="outline" size="sm" onClick={printTree}>
-                  <Printer className="mr-2 h-4 w-4" />
-                  Imprimir árbol
-                </Button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-1 rounded-md border border-legal-blue/20 bg-white px-2 py-1">
+                    <Button type="button" variant="ghost" size="sm" className="h-7 px-2" onClick={() => nudgeZoom(-0.1)} title="Alejar">
+                      <ZoomOut className="h-4 w-4" />
+                    </Button>
+                    <span className="min-w-[52px] text-center text-xs font-semibold text-legal-blue">
+                      {Math.round(zoomLevel * 100)}%
+                    </span>
+                    <Button type="button" variant="ghost" size="sm" className="h-7 px-2" onClick={() => nudgeZoom(0.1)} title="Acercar">
+                      <ZoomIn className="h-4 w-4" />
+                    </Button>
+                    <Button type="button" variant="ghost" size="sm" className="h-7 px-2" onClick={fitTreeToScreen} title="Ajustar a pantalla">
+                      Fit
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2"
+                      onClick={() => {
+                        setZoomLevel(1);
+                        window.requestAnimationFrame(() => centerTree(1));
+                      }}
+                      title="Centrar al 100%"
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <Button type="button" variant="outline" size="sm" onClick={printTree}>
+                    <Printer className="mr-2 h-4 w-4" />
+                    Imprimir árbol
+                  </Button>
                 </div>
               </div>
-              <p className="mb-2 text-gray-700">
-                El árbol se arma desde los miembros guardados en base de datos. Al agregar una persona y seleccionar su nodo superior, la rama se reacomoda automáticamente.
-              </p>
-              <p className="text-sm text-legal-gray">
-                <strong>Neto usado en pantalla:</strong> {formatMoney(distributableEstateAmount)}. Miembros en árbol: {members.length}.
-              </p>
+              {branchOptions.length > 1 && (
+                <div className="mt-4 flex flex-wrap gap-2 border-t border-legal-blue/10 pt-4">
+                  <Button
+                    type="button"
+                    variant={selectedBranchId === 'all' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setSelectedBranchId('all')}
+                    className={selectedBranchId === 'all' ? 'bg-legal-blue text-white hover:bg-legal-blue/90' : ''}
+                  >
+                    Árbol completo
+                  </Button>
+                  {branchOptions.map((branch) => (
+                    <Button
+                      key={branch.id}
+                      type="button"
+                      variant={selectedBranchId === branch.id ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setSelectedBranchId(branch.id)}
+                      className={selectedBranchId === branch.id ? 'bg-legal-gold text-white hover:bg-legal-gold/90' : ''}
+                    >
+                      {branch.name}
+                    </Button>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div
               ref={treeViewportRef}
-              className={`tree-viewport w-full rounded-md bg-legal-beige/20 select-none ${isPanningTree ? 'cursor-grabbing' : 'cursor-grab'}`}
+              className={'tree-viewport family-memory-viewport w-full rounded-md select-none ' + (isPanningTree ? 'cursor-grabbing' : 'cursor-grab')}
               onWheel={onTreeWheel}
               onMouseDown={onTreeMouseDown}
               onMouseMove={onTreeMouseMove}
@@ -1372,36 +1092,33 @@ const ArbolGenealogicoSienna = () => {
               onTouchEnd={stopTreePan}
             >
               {loading ? (
-                <div className="p-8 text-center text-legal-gray">Cargando árbol...</div>
+                <div className="p-8 text-center text-legal-gray">Cargando árbol familiar...</div>
               ) : (
                 <div
                   ref={treeWorldRef}
                   className="tree-world classic-family-tree"
                   style={{
-                    transform: `translate(${treePan.x}px, ${treePan.y}px) scale(${zoomLevel})`,
+                    transform: 'translate(' + treePan.x + 'px, ' + treePan.y + 'px) scale(' + zoomLevel + ')',
                   }}
                 >
-                  {forest.length > 1 && (
+                  {visibleForest.length > 1 && (
                     <p className="mb-3 text-xs text-amber-700">
-                      Hay {forest.length} raíces en el árbol. Revise vínculos parentales en Miembros del Árbol si espera una sola raíz.
+                      Hay {visibleForest.length} raíces en el árbol. Revise vínculos parentales si espera una sola raíz familiar.
                     </p>
                   )}
                   <ul className="classic-tree-root">
-                    {forest.map((root) => (
+                    {visibleForest.map((root) => (
                       <ClassicNode
                         key={root.id}
                         member={root}
                         heirsByMemberId={heirsByMemberId}
                         heirsByName={heirsByName}
                         photoLookup={photoLookup}
-                        inheritancePlan={inheritancePlan}
-                        calculationAmountsByMemberId={calculationAmountsByMemberId}
-                        total={total}
-                        estateAmount={distributableEstateAmount}
                         membersById={membersById}
                         allMembers={members}
                         genealogy={genealogy}
                         onOpenMember={setDetailMemberId}
+                        isRoot
                       />
                     ))}
                   </ul>
@@ -1417,10 +1134,12 @@ const ArbolGenealogicoSienna = () => {
         genealogy={genealogy}
         heirs={heirs}
         documents={workspace?.documents ?? []}
+        photoLookup={photoLookup}
         open={Boolean(detailMember)}
         onOpenChange={(open) => !open && setDetailMemberId(null)}
       />
     </div>
+    </>
   );
 };
 

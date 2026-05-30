@@ -480,6 +480,15 @@
   overscroll-behavior: contain;
 }
 
+.family-memory-viewport {
+  min-height: 640px;
+  border: 1px solid rgb(22 63 115 / 0.12);
+  background:
+    linear-gradient(180deg, rgb(255 253 248 / 0.94), rgb(247 250 252 / 0.94)),
+    repeating-linear-gradient(0deg, transparent 0 138px, rgb(22 63 115 / 0.045) 138px 139px);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.9), 0 22px 55px rgb(15 47 89 / 0.08);
+}
+
 .tree-world {
   position: absolute;
   left: 0;
@@ -505,8 +514,8 @@
   flex-direction: row;
   flex-wrap: nowrap;
   justify-content: center;
-  gap: 1rem;
-  padding-top: 1.5rem;
+  gap: 1.35rem;
+  padding-top: 2.05rem;
   min-width: max-content;
   position: relative;
 }
@@ -516,20 +525,22 @@
   position: absolute;
   left: 50%;
   top: 0;
-  height: 1.5rem;
+  height: 2.05rem;
   width: 3px;
   transform: translateX(-50%);
-  background: #0a2463;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #c8a24d, #365f8e);
 }
 
 .classic-tree-children.has-multiple::after {
   content: '';
   position: absolute;
-  left: 8%;
-  right: 8%;
+  left: 9.5rem;
+  right: 9.5rem;
   top: 0;
   height: 3px;
-  background: #0a2463;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgb(54 95 142 / 0), #365f8e 12%, #365f8e 88%, rgb(54 95 142 / 0));
 }
 
 .classic-tree-children > li {
@@ -540,11 +551,110 @@
   content: '';
   position: absolute;
   left: 50%;
-  top: -1.5rem;
-  height: 1.5rem;
+  top: -2.05rem;
+  height: 2.05rem;
   width: 3px;
   transform: translateX(-50%);
-  background: #0a2463;
+  border-radius: 999px;
+  background: #365f8e;
+}
+
+.tree-marriage-group {
+  position: relative;
+  align-items: stretch;
+}
+
+.tree-marriage-group:has(.sienna-family-card-spouse)::before {
+  content: '';
+  position: absolute;
+  left: calc(50% - 2.6rem);
+  right: calc(50% - 2.6rem);
+  top: 50%;
+  height: 4px;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: #c8a24d;
+  z-index: 0;
+}
+
+.sienna-family-card {
+  z-index: 1;
+  width: 248px;
+  min-height: 138px;
+  border: 1px solid rgb(22 63 115 / 0.20);
+  border-radius: 6px;
+  background: rgb(255 255 255 / 0.98);
+  padding: 0.95rem 0.9rem 0.75rem;
+  box-shadow: 0 16px 34px rgb(15 47 89 / 0.11);
+}
+
+.sienna-family-card-founder,
+.sienna-family-card-spouse {
+  border-color: rgb(200 162 77 / 0.62);
+  background: linear-gradient(180deg, #fffdf8, #fff8e8);
+}
+
+.sienna-tree-print-root {
+  display: none;
+}
+
+.sienna-tree-print-preview {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  overflow: auto;
+  padding: calc(4.5rem + env(safe-area-inset-top, 0px)) 0.75rem 0.75rem;
+  background: #f6f2e8;
+  scroll-padding-top: calc(4.5rem + env(safe-area-inset-top, 0px));
+  -webkit-overflow-scrolling: touch;
+}
+
+.print-preview-toolbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1002;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: calc(0.5rem + env(safe-area-inset-top, 0px)) 0.75rem 0.75rem;
+  background: linear-gradient(180deg, #f6f2e8 78%, rgb(246 242 232 / 0.96));
+  box-shadow: 0 10px 24px rgb(64 50 22 / 0.12);
+}
+
+.sienna-tree-print-preview .sienna-family-card button,
+.sienna-tree-print-preview .tree-context-note button {
+  display: none !important;
+}
+
+body.sienna-tree-print-active {
+  overflow: hidden;
+}
+
+.print-tree-sheet {
+  box-sizing: border-box;
+}
+
+.tree-context-note {
+  display: flex;
+  max-width: 520px;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem;
+  border: 1px solid rgb(22 63 115 / 0.12);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.86);
+  padding: 0.35rem 0.65rem;
+  color: #5f6f86;
+  font-size: 0.68rem;
+  box-shadow: 0 8px 20px rgb(15 47 89 / 0.06);
+}
+
+.tree-context-note span:not(:last-child)::after {
+  content: '·';
+  margin-left: 0.35rem;
+  color: rgb(200 162 77 / 0.85);
 }
 
 .deceased-ribbon-badge {
@@ -656,6 +766,153 @@
 @media (min-width: 1536px) {
   .classic-tree-root {
     gap: 2.5rem;
+  }
+}
+
+@media print {
+  @page {
+    size: letter landscape;
+    margin: 1mm;
+  }
+
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  body.sienna-tree-print-active {
+    margin: 0 !important;
+    background: #f6f2e8 !important;
+  }
+
+  body.sienna-tree-print-active .app-shell {
+    display: none !important;
+  }
+
+  body.sienna-tree-print-active .sienna-tree-print-preview {
+    display: block !important;
+    position: static !important;
+    inset: auto !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    background: #f6f2e8 !important;
+  }
+
+  .print-preview-toolbar {
+    display: none !important;
+  }
+
+  .print-tree-sheet {
+    min-height: auto;
+    padding: 8px 10px 12px;
+    border: 1px solid rgb(200 155 45 / 0.34);
+    background:
+      linear-gradient(90deg, rgb(200 155 45 / 0.10), transparent 18%, transparent 82%, rgb(34 58 94 / 0.08)),
+      linear-gradient(180deg, #fffdf8, #f4efe4);
+    break-inside: avoid;
+  }
+
+  .print-tree-header {
+    display: block;
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgb(200 155 45 / 0.42);
+  }
+
+  .print-tree-header h1 {
+    margin: 0;
+    color: #18375f;
+    font-family: 'Cormorant Garamond', 'DM Serif Display', serif;
+    font-size: 24px;
+    line-height: 1.04;
+    text-align: center;
+  }
+
+  .print-tree-header p {
+    margin: 5px 0 0;
+    color: #637084;
+    font-size: 10px;
+    text-align: center;
+  }
+
+  .print-tree-canvas {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    margin-top: 8px;
+    overflow: visible;
+  }
+
+  .print-tree-scale {
+    zoom: var(--print-scale);
+    transform: none;
+    transform-origin: top center;
+  }
+
+  .print-tree-scale .tree-world,
+  .print-tree-world {
+    position: relative !important;
+    left: auto !important;
+    top: auto !important;
+    transform: none !important;
+    padding: 0 !important;
+  }
+
+  .print-tree-scale .sienna-family-card button,
+  .print-tree-scale .tree-context-note button {
+    display: none !important;
+  }
+
+  .print-tree-scale .sienna-family-card {
+    box-shadow: 0 9px 18px rgb(15 47 89 / 0.10) !important;
+  }
+
+  .print-tree-footer {
+    margin-top: 6px;
+    display: flex;
+    justify-content: space-between;
+    color: #738094;
+    font-size: 8px;
+  }
+
+  .screen-only-print-header,
+  .screen-only-print-footer {
+    display: none !important;
+  }
+
+  .print-tree-sheet {
+    width: max-content !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+  }
+
+  .print-tree-canvas {
+    margin: 0 !important;
+    display: block !important;
+  }
+
+  .print-tree-frame {
+    width: calc(var(--print-tree-scaled-width) * 1px) !important;
+    height: calc(var(--print-tree-scaled-height) * 1px) !important;
+    max-width: 10.9in !important;
+    max-height: 8.35in !important;
+    overflow: visible !important;
+  }
+
+  .print-tree-scale {
+    display: block !important;
+    width: calc(var(--print-tree-width) * 1px) !important;
+    height: calc(var(--print-tree-height) * 1px) !important;
+    overflow: visible !important;
+    transform: scale(var(--print-scale)) !important;
+    transform-origin: top left !important;
+  }
+
+  .print-tree-scale .classic-tree-root {
+    padding: 0 !important;
   }
 }
 
