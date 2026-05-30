@@ -61,15 +61,16 @@ export const resolveMemberPhotoData = (
   memberId?: string | null,
   memberName?: string | null
 ): string | null => {
-  if (memberId && LOCAL_MEMBER_PHOTO_OVERRIDES.has(String(memberId))) {
-    return LOCAL_MEMBER_PHOTO_OVERRIDES.get(String(memberId)) || null;
-  }
-
   const heir =
     (memberId ? lookup.byMemberId.get(String(memberId)) : undefined) ||
     (memberName ? lookup.byName.get(normalizeName(memberName)) : undefined);
 
-  return resolveConfirmedHeirPhotoData(heir);
+  return (
+    resolveConfirmedHeirPhotoData(heir) ||
+    (memberId && LOCAL_MEMBER_PHOTO_OVERRIDES.has(String(memberId))
+      ? LOCAL_MEMBER_PHOTO_OVERRIDES.get(String(memberId)) || null
+      : null)
+  );
 };
 
 export const resolveMemberPhotoVerificationStatus = (
