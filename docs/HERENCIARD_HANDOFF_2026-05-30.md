@@ -66,6 +66,7 @@
 - Ajuste final de descarga local: se elimino el flujo Blob/Web Share para el boton de PDF; ahora el frontend sube temporalmente el PDF generado al backend y descarga desde `/api/sienna-tree-pdf-downloads/:id/:fileName` con `Content-Disposition: attachment`, para evitar que Safari iPhone abra el preview.
 - Fix posterior de descarga iPhone: el enlace temporal del PDF ya no se consume en la primera lectura y usa token privado en URL; el backend lo sirve como `application/octet-stream` con `nosniff` y `attachment` para evitar el preview de Safari y el error `PDF no disponible. Genérelo nuevamente.`
 - Help actualizado: `sienna-arbol` ya describe la pantalla como arbol genealogico conmemorativo de Domenico y Maria Rosa, sin montos, porcentajes ni datos de reparto; tambien documenta la descarga PDF temporal por backend para iPhone/Safari.
+- UX copy posterior: el boton `Modo exposición` fue renombrado a `Vista amplia` para aclarar que solo expande visualmente el arbol para reuniones o pantalla grande.
 - Build local validado con `pnpm run build`.
 - Capturas locales autenticadas generadas en:
   - `docs/mockups/herenciard-tree-branches-2026-05-30.png`

@@ -932,7 +932,7 @@ const ArbolGenealogicoSienna = () => {
           )}
         </Button>
         <Button variant={isPresentationMode ? 'default' : 'outline'} size="sm" onClick={() => setIsPresentationMode((current) => !current)}>
-          {isPresentationMode ? 'Salir modo exposición' : 'Modo exposición'}
+          {isPresentationMode ? 'Salir vista amplia' : 'Vista amplia'}
         </Button>
         {canOpenMemberAdmin && (
           <Button variant="outline" size="sm" asChild>

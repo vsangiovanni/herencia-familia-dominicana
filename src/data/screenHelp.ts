@@ -328,7 +328,7 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
           'El zoom ahora escala todo el canvas del árbol, no solo las tarjetas.',
           'Use +, −, Fit y reset para vista global o detalle por rama.',
           'Puede arrastrar el canvas con mouse o dedo; en móvil también puede hacer pinch zoom.',
-          'Pantalla completa y modo exposición ayudan para reuniones en monitor o TV.',
+          'Pantalla completa y Vista amplia ayudan para reuniones en monitor o TV.',
         ],
       },
       {
