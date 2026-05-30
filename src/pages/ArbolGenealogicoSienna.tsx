@@ -26,7 +26,7 @@ import { Calculator, ClipboardCheck, FileText, GitBranch, GitMerge, Landmark, Ma
 import { Link } from 'react-router-dom';
 import { buildWhyIInheritText, formatMoney as formatMoneyExplain, formatPercent as formatPercentExplain } from '@/lib/siennaHeirExplain';
 import { buildInheritancePlanFromApiRows } from '@/lib/siennaCalculation';
-import { buildMemberPhotoLookup, resolveConfirmedHeirPhotoData } from '@/lib/memberPhotos';
+import { buildMemberPhotoLookup, MemberPhotoLookup, resolveConfirmedHeirPhotoData } from '@/lib/memberPhotos';
 import { useAuth } from '@/context/AuthContext';
 
 type TreeMember = SiennaFamilyMember & { children: TreeMember[] };
@@ -147,6 +147,7 @@ const ClassicNode = ({
   member,
   heirsByMemberId,
   heirsByName,
+  photoLookup,
   inheritancePlan,
   calculationAmountsByMemberId,
   total,
@@ -159,6 +160,7 @@ const ClassicNode = ({
   member: TreeMember;
   heirsByMemberId: Map<string, ConfirmedHeir>;
   heirsByName: Map<string, ConfirmedHeir>;
+  photoLookup: MemberPhotoLookup;
   inheritancePlan: InheritancePlan;
   calculationAmountsByMemberId: Map<string, number>;
   total: number;
@@ -227,6 +229,7 @@ const ClassicNode = ({
               name={member.name}
               memberId={member.id}
               photoData={resolveConfirmedHeirPhotoData(heir)}
+              lookup={photoLookup}
               size="lg"
               rounded="xl"
               className="border-2 border-legal-gold/60 shadow-lg"
@@ -380,6 +383,7 @@ const ClassicNode = ({
                   name={spousePartner.name}
                   memberId={spousePartner.id}
                   photoData={resolveConfirmedHeirPhotoData(spouseHeir)}
+                  lookup={photoLookup}
                   size="lg"
                   rounded="xl"
                   className="border-2 border-legal-gold/60 shadow-lg"
@@ -431,6 +435,7 @@ const ClassicNode = ({
                 member={child}
                 heirsByMemberId={heirsByMemberId}
                 heirsByName={heirsByName}
+                photoLookup={photoLookup}
                 inheritancePlan={inheritancePlan}
                 calculationAmountsByMemberId={calculationAmountsByMemberId}
                 total={total}
@@ -604,6 +609,7 @@ const ArbolGenealogicoSienna = () => {
     () => new Map(heirs.filter((heir) => heir.sienna_member_id).map((heir) => [String(heir.sienna_member_id), heir])),
     [heirs]
   );
+  const photoLookup = useMemo(() => buildMemberPhotoLookup(heirs), [heirs]);
   const membersById = useMemo(
     () => new Map(members.map((member) => [normalizedMemberId(member.id), member])),
     [members]
@@ -1387,6 +1393,7 @@ const ArbolGenealogicoSienna = () => {
                         member={root}
                         heirsByMemberId={heirsByMemberId}
                         heirsByName={heirsByName}
+                        photoLookup={photoLookup}
                         inheritancePlan={inheritancePlan}
                         calculationAmountsByMemberId={calculationAmountsByMemberId}
                         total={total}
