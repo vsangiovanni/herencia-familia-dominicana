@@ -3924,6 +3924,17 @@ function sanitize_document_ai_text($value, int $max = 220): string {
   return mb_substr(trim(preg_replace('/\s+/u', ' ', (string)($value ?? ''))), 0, $max, 'UTF-8');
 }
 
+function build_inline_content_disposition($filename): string {
+  $clean = trim(str_replace(['"', "\r", "\n"], '', (string)($filename ?: 'documento')));
+  if ($clean === '') $clean = 'documento';
+  $fallback = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $clean);
+  if ($fallback === false || trim($fallback) === '') $fallback = 'documento';
+  $fallback = preg_replace('/[^\x20-\x7E]/', '_', $fallback);
+  $fallback = str_replace(['\\', '/'], '_', trim($fallback));
+  if ($fallback === '') $fallback = 'documento';
+  return 'inline; filename="' . $fallback . '"; filename*=UTF-8\'\'' . rawurlencode($clean);
+}
+
 function build_evidence_document_ai_suggestions(array $raw, array $members): array {
   $membersById = [];
   foreach ($members as $member) $membersById[normalized_member_id($member['id'] ?? '')] = $member;
@@ -5430,7 +5441,7 @@ try {
     }
     header_remove('Content-Type');
     header('Content-Type: ' . ($matches[1] ?: ($doc['file_type'] ?: 'application/octet-stream')));
-    header('Content-Disposition: inline; filename="' . str_replace(['"', "\r", "\n"], '', (string)($doc['file_name'] ?? $m[1] ?? 'documento')) . '"');
+    header('Content-Disposition: ' . build_inline_content_disposition($doc['file_name'] ?? $m[1] ?? 'documento'));
     header('Cache-Control: private, max-age=900');
     echo base64_decode($matches[2]);
     exit;

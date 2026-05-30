@@ -132,6 +132,17 @@ const mapParentLinkRow = (row) => ({
   is_inconsistent: Boolean(row.is_inconsistent),
 });
 
+const buildInlineContentDisposition = (rawFilename) => {
+  const clean = String(rawFilename || 'documento').replace(/[\r\n"]/g, '').trim() || 'documento';
+  const fallback = clean
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\x20-\x7e]/g, '_')
+    .replace(/[\\/]/g, '_')
+    .trim() || 'documento';
+  return `inline; filename="${fallback}"; filename*=UTF-8''${encodeURIComponent(clean)}`;
+};
+
 async function loadGenealogyBundle() {
   const unions = await query('SELECT * FROM family_unions ORDER BY partner_a_member_id, partner_b_member_id');
   const parentLinks = await query('SELECT * FROM member_parent_links ORDER BY child_member_id, parent_member_id');
@@ -5218,9 +5229,8 @@ app.get('/api/evidence-documents/:id/file', requireAuth, async (req, res) => {
     return res.status(404).json({ message: 'Archivo no encontrado' });
   }
 
-  const filename = String(document.file_name || req.params.id || 'documento').replace(/[\r\n"]/g, '');
   res.setHeader('Content-Type', match[1] || document.file_type || 'application/octet-stream');
-  res.setHeader('Content-Disposition', 'inline; filename="' + filename + '"');
+  res.setHeader('Content-Disposition', buildInlineContentDisposition(document.file_name || req.params.id || 'documento'));
   res.setHeader('Cache-Control', 'private, max-age=900');
   res.send(Buffer.from(match[2], 'base64'));
 });
