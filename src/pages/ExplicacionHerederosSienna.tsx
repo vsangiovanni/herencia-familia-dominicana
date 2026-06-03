@@ -164,8 +164,10 @@ const ExplicacionHerederosSienna = () => {
     [workspace]
   );
   const [estateAmount, setEstateAmount] = useState('');
+  const [managementFeePercentage, setManagementFeePercentage] = useState('0');
   const [lawyerFeePercentage, setLawyerFeePercentage] = useState('0');
   const [appliedEstateAmount, setAppliedEstateAmount] = useState('');
+  const [appliedManagementFeePercentage, setAppliedManagementFeePercentage] = useState('0');
   const [appliedLawyerFeePercentage, setAppliedLawyerFeePercentage] = useState('0');
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [isPresentationMode, setIsPresentationMode] = useState(false);
@@ -177,10 +179,13 @@ const ExplicacionHerederosSienna = () => {
 
     applySiennaCaseConfig(workspace.settings.sienna_case_config);
     const defaultEstateAmount = String(workspace.settings.estate_amount ?? 0);
+    const defaultManagementFeePercentage = String(workspace.settings.management_fee_percentage ?? 0);
     const defaultLawyerFeePercentage = String(workspace.settings.lawyer_fee_percentage ?? 0);
     setEstateAmount(defaultEstateAmount);
+    setManagementFeePercentage(defaultManagementFeePercentage);
     setLawyerFeePercentage(defaultLawyerFeePercentage);
     setAppliedEstateAmount(defaultEstateAmount);
+    setAppliedManagementFeePercentage(defaultManagementFeePercentage);
     setAppliedLawyerFeePercentage(defaultLawyerFeePercentage);
     setWorkspaceInitialized(true);
   }, [workspace, workspaceInitialized]);
@@ -203,11 +208,15 @@ const ExplicacionHerederosSienna = () => {
 
   const { data: realtimeCalculationData, isFetching: isFetchingCalculation, refetch: refetchCalculation } = useSiennaCalculation(
     appliedEstateAmount,
+    appliedManagementFeePercentage,
     appliedLawyerFeePercentage
   );
   const realtimeCalculation = realtimeCalculationData?.calculation;
   const {
     grossAmount = 0,
+    managementFeePercentage: managementPercentage = 0,
+    managementFeeAmount: managementFee = 0,
+    amountAfterManagement = 0,
     lawyerFeePercentage: feePercentage = 0,
     lawyerFeeAmount: lawyerFee = 0,
     distributableAmount: netAmount = 0,
@@ -277,14 +286,19 @@ const ExplicacionHerederosSienna = () => {
     [briefs]
   );
   const hasPendingSimulationChanges =
-    estateAmount !== appliedEstateAmount || lawyerFeePercentage !== appliedLawyerFeePercentage;
+    estateAmount !== appliedEstateAmount ||
+    managementFeePercentage !== appliedManagementFeePercentage ||
+    lawyerFeePercentage !== appliedLawyerFeePercentage;
 
   const saveCalculationSettings = async () => {
     setSettingsSaving(true);
     try {
       const shouldRefetchCalculation =
-        estateAmount === appliedEstateAmount && lawyerFeePercentage === appliedLawyerFeePercentage;
+        estateAmount === appliedEstateAmount &&
+        managementFeePercentage === appliedManagementFeePercentage &&
+        lawyerFeePercentage === appliedLawyerFeePercentage;
       setAppliedEstateAmount(estateAmount);
+      setAppliedManagementFeePercentage(managementFeePercentage);
       setAppliedLawyerFeePercentage(lawyerFeePercentage);
       await refetch();
       if (shouldRefetchCalculation) {
@@ -422,7 +436,7 @@ const ExplicacionHerederosSienna = () => {
           </CardHeader>
           <CardContent className="space-y-4 p-6">
             <p className="text-sm leading-relaxed text-gray-700">{legalCriterionText}</p>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[1fr_180px_180px_auto] lg:items-end">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[1fr_160px_160px_180px_auto] lg:items-end">
               <div>
                 <Label>Monto bruto del caso</Label>
                 <Input
@@ -435,6 +449,20 @@ const ExplicacionHerederosSienna = () => {
                 />
               </div>
               <div>
+                <Label>% gestión</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value={managementFeePercentage}
+                  onChange={(event) => setManagementFeePercentage(event.target.value)}
+                />
+                <p className="mt-1 text-xs text-legal-gray">
+                  Sobre el bruto.
+                </p>
+              </div>
+              <div>
                 <Label>% firma de abogados</Label>
                 <Input
                   type="number"
@@ -445,13 +473,15 @@ const ExplicacionHerederosSienna = () => {
                   onChange={(event) => setLawyerFeePercentage(event.target.value)}
                 />
                 <p className="mt-1 text-xs text-legal-gray">
-                  Sobre el bruto. El default global se cambia solo en Settings.
+                  Sobre el saldo después de gestión.
                 </p>
               </div>
               <div className="rounded-md border border-legal-blue/15 bg-white p-3">
                 <p className="text-xs uppercase text-legal-gray">Neto a repartir</p>
                 <p className="font-bold text-legal-blue">{formatMoney(netAmount)}</p>
-                <p className="text-xs text-legal-gray">Firma: {formatMoney(lawyerFee)}</p>
+                <p className="text-xs text-legal-gray">
+                  Gestión: {formatMoney(managementFee)} · Base abogados: {formatMoney(amountAfterManagement)} · Firma: {formatMoney(lawyerFee)}
+                </p>
               </div>
               <Button
                 variant="outline"
@@ -747,10 +777,15 @@ const ExplicacionHerederosSienna = () => {
           <TabsContent value="resumen">
             <Card className="border border-legal-gold/20">
               <CardContent className="space-y-4 p-6">
-                <div className="grid gap-3 md:grid-cols-3">
+                <div className="grid gap-3 md:grid-cols-4">
                   <div className="rounded-md border p-4">
                     <p className="text-xs uppercase text-legal-gray">Bruto</p>
                     <p className="text-xl font-bold text-legal-blue">{formatMoney(grossAmount)}</p>
+                  </div>
+                  <div className="rounded-md border p-4">
+                    <p className="text-xs uppercase text-legal-gray">Gestión ({formatPercent(managementPercentage)})</p>
+                    <p className="text-xl font-bold text-legal-blue">{formatMoney(managementFee)}</p>
+                    <p className="text-xs text-legal-gray">Saldo: {formatMoney(amountAfterManagement)}</p>
                   </div>
                   <div className="rounded-md border p-4">
                     <p className="text-xs uppercase text-legal-gray">Firma ({formatPercent(feePercentage)})</p>

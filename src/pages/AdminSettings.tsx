@@ -24,6 +24,7 @@ const AdminSettings = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [estateAmount, setEstateAmount] = useState('0');
+  const [managementFeePercentage, setManagementFeePercentage] = useState('0');
   const [lawyerFeePercentage, setLawyerFeePercentage] = useState('0');
   const [caseConfig, setCaseConfig] = useState<SiennaCaseConfig>(emptyCaseConfig());
   const [advancedJson, setAdvancedJson] = useState('');
@@ -33,8 +34,10 @@ const AdminSettings = () => {
     try {
       const settingsResponse = await api.getSettings();
       const amount = Number(settingsResponse.settings.estate_amount ?? 0);
+      const managementFee = Number(settingsResponse.settings.management_fee_percentage ?? 0);
       const fee = Number(settingsResponse.settings.lawyer_fee_percentage ?? 0);
       setEstateAmount(String(amount));
+      setManagementFeePercentage(String(managementFee));
       setLawyerFeePercentage(String(fee));
       applySiennaCaseConfig(settingsResponse.settings.sienna_case_config);
       const config = getSiennaCaseConfig();
@@ -85,16 +88,19 @@ const AdminSettings = () => {
     const parsedConfig = caseConfig;
 
     const amount = Math.max(0, Number(estateAmount || 0));
+    const managementFee = Math.min(100, Math.max(0, Number(managementFeePercentage || 0)));
     const fee = Math.min(100, Math.max(0, Number(lawyerFeePercentage || 0)));
     setSaving(true);
     try {
       await api.updateSettings({
         estate_amount: amount,
+        management_fee_percentage: managementFee,
         lawyer_fee_percentage: fee,
         sienna_case_config: parsedConfig,
       });
       applySiennaCaseConfig(parsedConfig);
       setEstateAmount(String(amount));
+      setManagementFeePercentage(String(managementFee));
       setLawyerFeePercentage(String(fee));
       syncAdvancedJsonFromForm(parsedConfig);
       toast({
@@ -131,7 +137,7 @@ const AdminSettings = () => {
           <CardTitle className="text-legal-blue">Settings (DB)</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 p-4 sm:p-6">
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-3">
             <div>
               <Label>Monto bruto default de la herencia</Label>
               <Input
@@ -148,6 +154,21 @@ const AdminSettings = () => {
               </p>
             </div>
             <div>
+              <Label>% gestión</Label>
+              <Input
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                value={managementFeePercentage}
+                onChange={(event) => setManagementFeePercentage(event.target.value)}
+                disabled={loading}
+              />
+              <p className="mt-1 text-xs text-legal-gray">
+                Se descuenta primero sobre el monto bruto.
+              </p>
+            </div>
+            <div>
               <Label>% firma de abogados</Label>
               <Input
                 type="number"
@@ -159,7 +180,7 @@ const AdminSettings = () => {
                 disabled={loading}
               />
               <p className="mt-1 text-xs text-legal-gray">
-                Default global aplicado sobre el monto bruto.
+                Se aplica sobre el saldo después de gestión.
               </p>
             </div>
           </div>

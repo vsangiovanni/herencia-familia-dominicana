@@ -181,14 +181,17 @@ try {
     ['Rama Pedro Pablo']
   );
 
-  const amounts = resolveEstateAmounts(1000000, 15);
+  const amounts = resolveEstateAmounts(1000000, 30, 20);
   assert.deepEqual(amounts, {
     grossAmount: 1000000,
-    lawyerFeePercentage: 15,
-    lawyerFeeAmount: 150000,
-    distributableAmount: 850000,
+    managementFeePercentage: 30,
+    managementFeeAmount: 300000,
+    amountAfterManagement: 700000,
+    lawyerFeePercentage: 20,
+    lawyerFeeAmount: 140000,
+    distributableAmount: 560000,
   });
-  assert.equal(calculateHeirAmount(25, amounts.distributableAmount), 212500);
+  assert.equal(calculateHeirAmount(25, amounts.distributableAmount), 140000);
 
   console.log('Sienna inheritance checks passed');
 } finally {

@@ -349,12 +349,23 @@ const normalizeSiennaName = (value) =>
 
 const roundMoney = (value) => Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
 
-const resolveEstateAmounts = (grossInput, lawyerFeeInput) => {
+const resolveEstateAmounts = (grossInput, managementFeeInput, lawyerFeeInput) => {
   const grossAmount = Math.max(0, Number(grossInput || 0));
+  const managementFeePercentage = Math.min(100, Math.max(0, Number(managementFeeInput || 0)));
   const lawyerFeePercentage = Math.min(100, Math.max(0, Number(lawyerFeeInput || 0)));
-  const lawyerFeeAmount = grossAmount > 0 ? roundMoney(grossAmount * (lawyerFeePercentage / 100)) : 0;
-  const distributableAmount = grossAmount > 0 ? roundMoney(Math.max(0, grossAmount - lawyerFeeAmount)) : 0;
-  return { grossAmount, lawyerFeePercentage, lawyerFeeAmount, distributableAmount };
+  const managementFeeAmount = grossAmount > 0 ? roundMoney(grossAmount * (managementFeePercentage / 100)) : 0;
+  const amountAfterManagement = grossAmount > 0 ? roundMoney(Math.max(0, grossAmount - managementFeeAmount)) : 0;
+  const lawyerFeeAmount = amountAfterManagement > 0 ? roundMoney(amountAfterManagement * (lawyerFeePercentage / 100)) : 0;
+  const distributableAmount = amountAfterManagement > 0 ? roundMoney(Math.max(0, amountAfterManagement - lawyerFeeAmount)) : 0;
+  return {
+    grossAmount,
+    managementFeePercentage,
+    managementFeeAmount,
+    amountAfterManagement,
+    lawyerFeePercentage,
+    lawyerFeeAmount,
+    distributableAmount,
+  };
 };
 
 const isChildRelationship = (member) =>
@@ -579,12 +590,13 @@ const buildCalculationRows = (activeHeirs, distributableAmount) => {
   return rows;
 };
 
-async function buildSiennaRealtimeCalculation({ estateAmount, lawyerFeePercentage } = {}) {
+async function buildSiennaRealtimeCalculation({ estateAmount, managementFeePercentage, lawyerFeePercentage } = {}) {
   const family = await loadSiennaFamilyBundle();
   const settings = await loadAppSettings();
   const grossInput = estateAmount ?? settings.estate_amount ?? 0;
+  const managementFeeInput = managementFeePercentage ?? settings.management_fee_percentage ?? 0;
   const feeInput = lawyerFeePercentage ?? settings.lawyer_fee_percentage ?? 0;
-  const estate = resolveEstateAmounts(grossInput, feeInput);
+  const estate = resolveEstateAmounts(grossInput, managementFeeInput, feeInput);
   const plan = buildApiInheritancePlan(family.members, { unions: family.unions, parent_links: family.parent_links }, settings);
   const rows = buildCalculationRows(plan.activeHeirs, estate.distributableAmount);
   return {
@@ -3236,6 +3248,11 @@ async function ensureSchemaMigrations() {
   );
   await query(
     `INSERT INTO app_settings (setting_key, setting_value)
+     VALUES ('management_fee_percentage', '0')
+     ON DUPLICATE KEY UPDATE setting_key = setting_key`
+  );
+  await query(
+    `INSERT INTO app_settings (setting_key, setting_value)
      VALUES ('estate_amount', '0')
      ON DUPLICATE KEY UPDATE setting_key = setting_key`
   );
@@ -3517,6 +3534,17 @@ app.put('/api/settings', requireAuth, requireAdmin, async (req, res) => {
       { value: String(lawyerFeePercentage), updatedBy: req.user.id }
     );
     resultSettings.lawyer_fee_percentage = lawyerFeePercentage;
+  }
+  if ('management_fee_percentage' in (req.body || {})) {
+    const rawFee = Number(req.body?.management_fee_percentage || 0);
+    const managementFeePercentage = Math.min(100, Math.max(0, rawFee));
+    await query(
+      `INSERT INTO app_settings (setting_key, setting_value, updated_by)
+       VALUES ('management_fee_percentage', :value, :updatedBy)
+       ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_by = VALUES(updated_by)`,
+      { value: String(managementFeePercentage), updatedBy: req.user.id }
+    );
+    resultSettings.management_fee_percentage = managementFeePercentage;
   }
   if ('sienna_case_config' in (req.body || {})) {
     if (!req.body.sienna_case_config || typeof req.body.sienna_case_config !== 'object' || Array.isArray(req.body.sienna_case_config)) {
@@ -4992,10 +5020,15 @@ app.get('/api/sienna-storybook-dedication', requireAuth, async (req, res) => {
 app.get('/api/sienna-calculation', requireAuth, async (req, res) => {
   const response = await getCachedSiennaResponse(
     'calculation',
-    { estateAmount: req.query.estate_amount, lawyerFeePercentage: req.query.lawyer_fee_percentage },
+    {
+      estateAmount: req.query.estate_amount,
+      managementFeePercentage: req.query.management_fee_percentage,
+      lawyerFeePercentage: req.query.lawyer_fee_percentage,
+    },
     async () => ({
       calculation: await buildSiennaRealtimeCalculation({
         estateAmount: req.query.estate_amount,
+        managementFeePercentage: req.query.management_fee_percentage,
         lawyerFeePercentage: req.query.lawyer_fee_percentage,
       }),
     })

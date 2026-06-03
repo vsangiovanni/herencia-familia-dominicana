@@ -316,16 +316,19 @@ Ayuda en pantalla: icono **?** (`sienna-miembros`, `sienna-miembros-agregar`) e 
 | PDF por heredero | Botón en cada ficha |
 | Resumen en árbol | Árbol → «Por qué heredan» |
 
-## Honorarios de abogados (% firma)
+## Gestión y honorarios de abogados
 
-- Configuración global: `app_settings.lawyer_fee_percentage` (Settings → admin).
+- Configuración global: `app_settings.management_fee_percentage` y `app_settings.lawyer_fee_percentage` (Settings → admin).
 - **Fórmula única** (`resolveEstateAmounts` en `siennaCalculation.ts`):
-  - Firma = bruto × (% / 100)
-  - Neto repartible = bruto − firma
+  - Gestión = bruto × (% gestión / 100)
+  - Base firma = bruto − gestión
+  - Firma = base firma × (% firma / 100)
+  - Neto repartible = base firma − firma
 - **Árbol del caso**, **Explicación a herederos** y **Cálculo por filiación** usan la misma función; los montos por heredero = neto × % sucesorio real.
 - Al abrir cada pantalla se leen Settings y el cálculo vigente desde la API.
 - Las simulaciones de monto se aplican manualmente con `Actualizar cálculo` / `Actualizar esta vista`; escribir en el campo no recalcula hasta pulsar el botón.
 - Los montos heredados no se guardan en `confirmed_heirs`. `confirmed_heirs.inheritance_amount` queda como columna legacy sin uso operativo hasta una limpieza de DB autorizada.
+- Ajuste 2026-06-03: el setting nuevo `management_fee_percentage` se crea con valor `0` si no existe. No requiere columna nueva ni migración destructiva.
 
 ## Linaje fundacional Doménico / María Rosa
 

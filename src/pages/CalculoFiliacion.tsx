@@ -100,9 +100,11 @@ const CalculoFiliacion = () => {
   const parentLinks = workspace?.parent_links ?? [];
   const [estateAmount, setEstateAmount] = useState(0);
   const [appliedEstateAmount, setAppliedEstateAmount] = useState(0);
+  const managementFeePercentage = Number(workspace?.settings?.management_fee_percentage || 0);
   const lawyerFeePercentage = Number(workspace?.settings?.lawyer_fee_percentage || 0);
   const { data: realtimeCalculationData, isFetching: isFetchingCalculation } = useSiennaCalculation(
     appliedEstateAmount,
+    managementFeePercentage,
     lawyerFeePercentage
   );
   const realtimeCalculation = realtimeCalculationData?.calculation;
@@ -321,7 +323,7 @@ const CalculoFiliacion = () => {
                 <p className="text-sm text-legal-gray">Total neto calculado</p>
                 <p className="text-2xl font-bold text-legal-blue">{formatMoney(totalAmount)}</p>
                 <p className="text-xs text-legal-gray">
-                  Firma: {formatPercent(lawyerFeePercentage)}
+                  Gestión: {formatPercent(managementFeePercentage)} · Firma: {formatPercent(lawyerFeePercentage)}
                   {isFetchingCalculation ? ' · recalculando...' : ''}
                   {hasPendingCalculationChanges ? ' · cambios pendientes de aplicar' : ''}
                 </p>

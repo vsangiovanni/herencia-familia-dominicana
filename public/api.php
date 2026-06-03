@@ -1143,13 +1143,19 @@ function round_money($value): float {
   return round((float)($value ?? 0), 2);
 }
 
-function resolve_estate_amounts($grossInput, $lawyerFeeInput): array {
+function resolve_estate_amounts($grossInput, $managementFeeInput, $lawyerFeeInput): array {
   $grossAmount = max(0, (float)($grossInput ?? 0));
+  $managementFeePercentage = min(100, max(0, (float)($managementFeeInput ?? 0)));
   $lawyerFeePercentage = min(100, max(0, (float)($lawyerFeeInput ?? 0)));
-  $lawyerFeeAmount = $grossAmount > 0 ? round_money($grossAmount * ($lawyerFeePercentage / 100)) : 0.0;
-  $distributableAmount = $grossAmount > 0 ? round_money(max(0, $grossAmount - $lawyerFeeAmount)) : 0.0;
+  $managementFeeAmount = $grossAmount > 0 ? round_money($grossAmount * ($managementFeePercentage / 100)) : 0.0;
+  $amountAfterManagement = $grossAmount > 0 ? round_money(max(0, $grossAmount - $managementFeeAmount)) : 0.0;
+  $lawyerFeeAmount = $amountAfterManagement > 0 ? round_money($amountAfterManagement * ($lawyerFeePercentage / 100)) : 0.0;
+  $distributableAmount = $amountAfterManagement > 0 ? round_money(max(0, $amountAfterManagement - $lawyerFeeAmount)) : 0.0;
   return [
     'grossAmount' => $grossAmount,
+    'managementFeePercentage' => $managementFeePercentage,
+    'managementFeeAmount' => $managementFeeAmount,
+    'amountAfterManagement' => $amountAfterManagement,
     'lawyerFeePercentage' => $lawyerFeePercentage,
     'lawyerFeeAmount' => $lawyerFeeAmount,
     'distributableAmount' => $distributableAmount,
@@ -1415,12 +1421,13 @@ function build_calculation_rows(array $activeHeirs, float $distributableAmount):
   return $rows;
 }
 
-function build_sienna_realtime_calculation($estateAmount = null, $lawyerFeePercentage = null): array {
+function build_sienna_realtime_calculation($estateAmount = null, $managementFeePercentage = null, $lawyerFeePercentage = null): array {
   $family = fetch_sienna_family_bundle();
   $settings = fetch_app_settings();
   $grossInput = $estateAmount ?? ($settings['estate_amount'] ?? 0);
+  $managementFeeInput = $managementFeePercentage ?? ($settings['management_fee_percentage'] ?? 0);
   $feeInput = $lawyerFeePercentage ?? ($settings['lawyer_fee_percentage'] ?? 0);
-  $estate = resolve_estate_amounts($grossInput, $feeInput);
+  $estate = resolve_estate_amounts($grossInput, $managementFeeInput, $feeInput);
   $genealogy = ['unions' => $family['unions'], 'parent_links' => $family['parent_links']];
   $plan = build_api_inheritance_plan($family['members'], $genealogy, $settings);
   $rows = build_calculation_rows($plan['activeHeirs'], (float)$estate['distributableAmount']);
@@ -4456,6 +4463,11 @@ function ensure_schema(): void {
      VALUES ('lawyer_fee_percentage', '0')
      ON DUPLICATE KEY UPDATE setting_key = setting_key"
   );
+  exec_sql(
+    "INSERT INTO app_settings (setting_key, setting_value)
+     VALUES ('management_fee_percentage', '0')
+     ON DUPLICATE KEY UPDATE setting_key = setting_key"
+  );
 
   if (can_seed_case_data()) {
     $heirs = [
@@ -4789,6 +4801,18 @@ try {
         ['value' => (string)$fee, 'updatedBy' => $user['id']]
       );
       $resultSettings['lawyer_fee_percentage'] = $fee;
+    }
+
+    if (array_key_exists('management_fee_percentage', $request)) {
+      $rawFee = (float)($request['management_fee_percentage'] ?? 0);
+      $fee = min(100, max(0, $rawFee));
+      exec_sql(
+        "INSERT INTO app_settings (setting_key, setting_value, updated_by)
+         VALUES ('management_fee_percentage', :value, :updatedBy)
+         ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_by = VALUES(updated_by)",
+        ['value' => (string)$fee, 'updatedBy' => $user['id']]
+      );
+      $resultSettings['management_fee_percentage'] = $fee;
     }
 
     if (array_key_exists('sienna_case_config', $request)) {
@@ -5136,11 +5160,13 @@ try {
     require_user();
     $params = [
       'estate_amount' => $_GET['estate_amount'] ?? null,
+      'management_fee_percentage' => $_GET['management_fee_percentage'] ?? null,
       'lawyer_fee_percentage' => $_GET['lawyer_fee_percentage'] ?? null,
     ];
     json_response(sienna_cache_remember('calculation', $params, function () use ($params) {
       return ['calculation' => build_sienna_realtime_calculation(
         $params['estate_amount'],
+        $params['management_fee_percentage'],
         $params['lawyer_fee_percentage']
       )];
     }));

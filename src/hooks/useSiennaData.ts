@@ -14,8 +14,8 @@ export const siennaQueryKeys = {
   workspace: (includeMedia = false) => ['sienna-workspace', { includeMedia }] as const,
   storybook: (includeMedia = false, aiNarrative = false) => ['sienna-storybook', { includeMedia, aiNarrative, version: SIENNA_STORYBOOK_VERSION }] as const,
   storybookDedication: (nonce?: string | number) => ['sienna-storybook-dedication', { nonce }] as const,
-  calculation: (estateAmount?: number | string, lawyerFeePercentage?: number | string) =>
-    ['sienna-calculation', { estateAmount, lawyerFeePercentage }] as const,
+  calculation: (estateAmount?: number | string, managementFeePercentage?: number | string, lawyerFeePercentage?: number | string) =>
+    ['sienna-calculation', { estateAmount, managementFeePercentage, lawyerFeePercentage }] as const,
   analysisSummary: ['sienna-analysis-summary'] as const,
   findings: ['sienna-findings'] as const,
   aiCuriosities: ['sienna-ai-curiosities'] as const,
@@ -79,10 +79,14 @@ export const useSiennaStorybookDedication = (nonce?: string | number, enabled = 
     refetchOnWindowFocus: false,
   });
 
-export const useSiennaCalculation = (estateAmount?: number | string, lawyerFeePercentage?: number | string) =>
+export const useSiennaCalculation = (
+  estateAmount?: number | string,
+  managementFeePercentage?: number | string,
+  lawyerFeePercentage?: number | string
+) =>
   useQuery({
-    queryKey: siennaQueryKeys.calculation(estateAmount, lawyerFeePercentage),
-    queryFn: () => api.getSiennaCalculation({ estateAmount, lawyerFeePercentage }),
+    queryKey: siennaQueryKeys.calculation(estateAmount, managementFeePercentage, lawyerFeePercentage),
+    queryFn: () => api.getSiennaCalculation({ estateAmount, managementFeePercentage, lawyerFeePercentage }),
     staleTime: 0,
   });
 

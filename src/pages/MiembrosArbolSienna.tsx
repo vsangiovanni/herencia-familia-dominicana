@@ -187,6 +187,7 @@ const MiembrosArbolSienna = () => {
   const { data: heirsWithPhotos } = useConfirmedHeirs(false);
   const { data: realtimeCalculationData } = useSiennaCalculation(
     workspace?.settings?.estate_amount ?? 0,
+    workspace?.settings?.management_fee_percentage ?? 0,
     workspace?.settings?.lawyer_fee_percentage ?? 0
   );
   const realtimeCalculation = realtimeCalculationData?.calculation;

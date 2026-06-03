@@ -78,6 +78,7 @@ export interface EvidenceDocument {
 export interface SiennaCalculationSnapshot {
   id: string;
   estate_amount: number;
+  management_fee_percentage?: number;
   lawyer_fee_percentage: number;
   distributable_amount: number;
   members_hash?: string | null;
@@ -101,6 +102,9 @@ export interface SiennaRealtimeCalculationRow {
 export interface SiennaRealtimeCalculation {
   estate: {
     grossAmount: number;
+    managementFeePercentage: number;
+    managementFeeAmount: number;
+    amountAfterManagement: number;
     lawyerFeePercentage: number;
     lawyerFeeAmount: number;
     distributableAmount: number;
@@ -557,7 +561,7 @@ export const api = {
     request<{ visits: PageVisit[] }>("/api/page-visits"),
   getSettings: () =>
     request<{ settings: Record<string, string | number | boolean | SiennaCaseConfig | null> }>("/api/settings"),
-  updateSettings: (data: { estate_amount?: number; lawyer_fee_percentage?: number; sienna_case_config?: SiennaCaseConfig }) =>
+  updateSettings: (data: { estate_amount?: number; management_fee_percentage?: number; lawyer_fee_percentage?: number; sienna_case_config?: SiennaCaseConfig }) =>
     request<{ ok: boolean; settings: Record<string, string | number | boolean | SiennaCaseConfig | null> }>("/api/settings", {
       method: "PUT",
       body: JSON.stringify(data),
@@ -627,9 +631,10 @@ export const api = {
     const query = params.toString();
     return request<SiennaStorybookDedicationResponse>("/api/sienna-storybook-dedication" + (query ? "?" + query : ""));
   },
-  getSiennaCalculation: (options?: { estateAmount?: number | string; lawyerFeePercentage?: number | string }) => {
+  getSiennaCalculation: (options?: { estateAmount?: number | string; managementFeePercentage?: number | string; lawyerFeePercentage?: number | string }) => {
     const params = new URLSearchParams();
     if (options?.estateAmount !== undefined) params.set("estate_amount", String(options.estateAmount));
+    if (options?.managementFeePercentage !== undefined) params.set("management_fee_percentage", String(options.managementFeePercentage));
     if (options?.lawyerFeePercentage !== undefined) params.set("lawyer_fee_percentage", String(options.lawyerFeePercentage));
     const query = params.toString();
     return request<{ calculation: SiennaRealtimeCalculation }>("/api/sienna-calculation" + (query ? "?" + query : ""));

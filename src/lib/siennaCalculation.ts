@@ -3,6 +3,9 @@ import type { SiennaFamilyMember, SiennaRealtimeCalculationRow } from '@/lib/api
 
 export type EstateAmountBreakdown = {
   grossAmount: number;
+  managementFeePercentage: number;
+  managementFeeAmount: number;
+  amountAfterManagement: number;
   lawyerFeePercentage: number;
   lawyerFeeAmount: number;
   distributableAmount: number;
@@ -13,18 +16,25 @@ const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100)
 export const calculateHeirAmount = (sharePercent: number | string | null | undefined, distributableAmount: number) =>
   roundMoney(Math.max(0, Number(distributableAmount || 0)) * (Math.max(0, Number(sharePercent || 0)) / 100));
 
-/** Bruto − honorarios de abogados (% sobre bruto) = neto repartible. Usado en árbol y explicación. */
+/** Bruto − gestión; luego saldo − honorarios de abogados = neto repartible. */
 export const resolveEstateAmounts = (
   grossInput: number | string | null | undefined,
+  managementFeeInput: number | string | null | undefined,
   lawyerFeeInput: number | string | null | undefined
 ): EstateAmountBreakdown => {
   const grossAmount = Math.max(0, Number(grossInput || 0));
+  const managementFeePercentage = Math.min(100, Math.max(0, Number(managementFeeInput || 0)));
   const lawyerFeePercentage = Math.min(100, Math.max(0, Number(lawyerFeeInput || 0)));
-  const lawyerFeeAmount = grossAmount > 0 ? roundMoney(grossAmount * (lawyerFeePercentage / 100)) : 0;
-  const distributableAmount = grossAmount > 0 ? roundMoney(Math.max(0, grossAmount - lawyerFeeAmount)) : 0;
+  const managementFeeAmount = grossAmount > 0 ? roundMoney(grossAmount * (managementFeePercentage / 100)) : 0;
+  const amountAfterManagement = grossAmount > 0 ? roundMoney(Math.max(0, grossAmount - managementFeeAmount)) : 0;
+  const lawyerFeeAmount = amountAfterManagement > 0 ? roundMoney(amountAfterManagement * (lawyerFeePercentage / 100)) : 0;
+  const distributableAmount = amountAfterManagement > 0 ? roundMoney(Math.max(0, amountAfterManagement - lawyerFeeAmount)) : 0;
 
   return {
     grossAmount,
+    managementFeePercentage,
+    managementFeeAmount,
+    amountAfterManagement,
     lawyerFeePercentage,
     lawyerFeeAmount,
     distributableAmount,

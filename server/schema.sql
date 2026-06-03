@@ -206,5 +206,9 @@ VALUES ('lawyer_fee_percentage', '0')
 ON DUPLICATE KEY UPDATE setting_key = setting_key;
 
 INSERT INTO app_settings (setting_key, setting_value)
+VALUES ('management_fee_percentage', '0')
+ON DUPLICATE KEY UPDATE setting_key = setting_key;
+
+INSERT INTO app_settings (setting_key, setting_value)
 VALUES ('estate_amount', '0')
 ON DUPLICATE KEY UPDATE setting_key = setting_key;
