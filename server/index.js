@@ -3238,9 +3238,16 @@ async function ensureSchemaMigrations() {
      ON DUPLICATE KEY UPDATE name = VALUES(name), description = VALUES(description)`,
     { id: randomUUID() }
   );
+  await query(
+    `INSERT INTO pages (id, name, path, description)
+     VALUES (:id, 'Laboratorio de Compensación Familiar', '/sienna/laboratorio-compensacion', 'Simulador de reembolsos y compensaciones familiares sin afectar el reparto oficial')
+     ON DUPLICATE KEY UPDATE name = VALUES(name), description = VALUES(description)`,
+    { id: randomUUID() }
+  );
   await syncRegularUserPageAccess('/sienna/dobles-linajes');
   await syncRegularUserPageAccess('/sienna/asistente');
   await syncRegularUserPageAccess('/sienna/legado-game');
+  await syncRegularUserPageAccess('/sienna/laboratorio-compensacion');
   await query(
     `INSERT INTO app_settings (setting_key, setting_value)
      VALUES ('lawyer_fee_percentage', '0')

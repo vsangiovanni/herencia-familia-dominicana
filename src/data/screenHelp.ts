@@ -559,6 +559,35 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
       },
     ],
   },
+  'sienna-laboratorio-compensacion': {
+    title: 'Laboratorio de compensación familiar',
+    intro: 'Simulador experimental para probar reembolsos y reconocimientos de gestión sin modificar el cálculo oficial.',
+    sections: [
+      {
+        title: 'Alcance',
+        items: [
+          'La pantalla no guarda datos ni modifica Settings.',
+          'La base oficial viene de la API de cálculo Sienna en modo solo lectura.',
+          'Los escenarios viven en memoria del navegador y se pierden al salir o recargar.',
+        ],
+      },
+      {
+        title: 'Escenarios',
+        items: [
+          'Reembolso de gastos permite sumar gastos comprobables de Joselyn.',
+          'Compensación por gestión permite asignar monto fijo o porcentaje del neto a Joselyn, Bernardo y Víctor.',
+          'El método de prorrateo define quién asume el costo y en qué proporción.',
+        ],
+      },
+      {
+        title: 'Comparación',
+        items: [
+          'La tabla muestra monto original, aporte, compensación recibida, monto simulado y diferencia neta.',
+          'Use esta pantalla para conversar alternativas; no representa una decisión legal ni definitiva.',
+        ],
+      },
+    ],
+  },
 };
 
 export const getScreenHelp = (key: string): ScreenHelpContent | undefined => SCREEN_HELP[key];

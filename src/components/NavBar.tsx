@@ -4,6 +4,7 @@ import {
   BookOpen,
   Bot,
   FileText,
+  FlaskConical,
   GitMerge,
   History,
   Landmark,
@@ -38,6 +39,7 @@ const siennaLinks: SidebarLink[] = [
   { label: 'Miembros', path: '/sienna/miembros', icon: Users },
   { label: 'Explicación', path: '/sienna/explicacion', icon: BookOpen },
   { label: 'Filiación', path: '/sienna/filiacion', icon: Network },
+  { label: 'Laboratorio', path: '/sienna/laboratorio-compensacion', icon: FlaskConical },
   { label: 'Sienna', path: '/sienna/asistente', icon: Bot },
   { label: 'Recuento Legado', path: '/sienna/legado-game', icon: ScrollText },
 ];

@@ -73,12 +73,54 @@
   - `docs/mockups/herenciard-tree-branch-focus-2026-05-30.png`
 - Este cambio aun no ha sido subido a GitHub ni desplegado a Hostinger salvo autorizacion posterior de Victor.
 
+## Cambio local posterior - postal Dia de las Madres 2026-05-31
+
+- Victor pidio una postal digna para WhatsApp por el Dia de las Madres en Republica Dominicana.
+- Se identificaron madres registradas usando HerenciaRD local como fuente operativa.
+- Se genero un fondo animado con Veo3 y una postal final estatica con texto controlado para evitar texto deformado por IA.
+- La postal final y el fondo Veo3 se copiaron al proyecto para preservar contexto:
+  - `docs/mockups/postal-dia-madres-sangiovanni-2026-05-31.jpg`
+  - `docs/mockups/postal-dia-madres-sangiovanni-veo3-bg-2026-05-31.mp4`
+- Documento detallado creado:
+  - `docs/HERENCIARD_DIA_MADRES_2026-05-31.md`
+- Entrega realizada por Telegram:
+  - primer corte de fondo animado Veo3;
+  - postal final JPG lista para WhatsApp;
+  - lista de madres registradas.
+- Criterio usado: mujeres/personas femeninas en `sienna_family_members` con hijos directos en el arbol, mas `Maria Rosa Grisolia Di Vanna` como matriarca raiz registrada como conyuge de Domenico.
+- Advertencia importante: `member_parent_links.parent_role` local mostro inconsistencias de roles cruzados, por lo que no debe usarse como unica verdad para futuras listas de madres sin auditoria previa.
+- No se hizo deploy a Hostinger, no se hizo push a GitHub y no se tocaron datos de produccion.
+
+### Madres registradas reportadas
+
+1. María Rosa Grisolia Di Vanna
+2. María Magdalena Sangiovanni
+3. María Rosa Sangiovanni Pérez
+4. Milagros Lucía Sangiovanni Gesualdo
+5. Yolanda Providencia Sangiovanni Gesualdo
+6. María Amparo Sangiovanni Gesualdo
+7. Gilda Altagracia Sangiovanni Gesualdo
+8. Irma Mercedes Sangiovanni Gesualdo
+9. Fulvia Sangiovanni Sangiovanni
+10. Rosa Julia Sangiovanni Rodríguez
+11. María José Sangiovanni
+12. Arleen Sangiovanni Montás
+
 
 ## Fotos y miembros trabajados
 
 - Se trabajo la asignacion/validacion de fotos recientes indicadas por Victor para miembros del arbol.
 - La fuente operativa debe seguir siendo backend/API y datos reales; evitar volver a introducir mapeos duros en frontend.
 - En produccion, la lectura visual debe validarse desde las pantallas Sienna correspondientes despues de cualquier nueva carga de foto.
+
+## Ajuste local 2026-06-03 - gestion + honorarios
+
+- Settings ahora separa `% gestion` de `% firma de abogados`.
+- Calculo secuencial: bruto -> descuento gestion -> saldo base abogados -> descuento abogados -> monto distribuible.
+- API local validada con simulacion `100,000,000 / 30% gestion / 20% abogados = 56,000,000` distribuible.
+- API local validada con monto real `412,300,000 / 30% gestion / 20% abogados = 230,888,000` distribuible.
+- No se guardan montos por heredero en `confirmed_heirs`; las paginas Sienna consumen `/api/sienna-calculation`.
+- El nuevo setting `management_fee_percentage` se crea como fila de `app_settings` con valor `0` si no existe; no requiere columna nueva.
 
 ## Commits relevantes recientes
 

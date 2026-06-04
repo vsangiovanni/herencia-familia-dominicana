@@ -4333,6 +4333,7 @@ function ensure_schema(): void {
     ['Análisis de Dobles Linajes', '/sienna/dobles-linajes', 'Consola visual de auditoría y validación de dobles linajes'],
     ['Sienna contigo', '/sienna/asistente', 'Guía natural sobre pantallas, documentos, hallazgos y reparto'],
     ['Narrativa del Legado Sangiovanni', '/sienna/legado-game', 'Storyteller cinematográfico del linaje Sangiovanni construido desde el árbol real'],
+    ['Laboratorio de Compensación Familiar', '/sienna/laboratorio-compensacion', 'Simulador de reembolsos y compensaciones familiares sin afectar el reparto oficial'],
   ];
 
   foreach ($pages as [$name, $path, $description]) {
@@ -4347,6 +4348,7 @@ function ensure_schema(): void {
   sync_regular_user_page_access('/sienna/dobles-linajes');
   sync_regular_user_page_access('/sienna/asistente');
   sync_regular_user_page_access('/sienna/legado-game');
+  sync_regular_user_page_access('/sienna/laboratorio-compensacion');
 
   if (!column_exists('profiles', 'can_edit')) {
     db()->exec('ALTER TABLE profiles ADD COLUMN can_edit BOOLEAN NOT NULL DEFAULT FALSE AFTER is_approved');

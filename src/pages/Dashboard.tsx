@@ -16,6 +16,7 @@ import {
   Calculator,
   CheckCircle2,
   FileText,
+  FlaskConical,
   GitMerge,
   Landmark,
   ScrollText,
@@ -272,6 +273,14 @@ const HEIR_LINKS: DashboardLink[] = [
     path: '/sienna/asistente',
     icon: Bot,
     cta: 'Preguntar',
+    primary: true,
+  },
+  {
+    title: 'Laboratorio familiar',
+    description: 'Simula compensaciones familiares sin tocar el reparto oficial.',
+    path: '/sienna/laboratorio-compensacion',
+    icon: FlaskConical,
+    cta: 'Simular',
     primary: true,
   },
   {

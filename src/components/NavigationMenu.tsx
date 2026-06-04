@@ -55,7 +55,7 @@ const NavigationMenu = () => {
           </Link>
           )}
 
-          {(can('/sienna/documentos') || can('/sienna/miembros') || can('/sienna/explicacion') || can('/sienna/filiacion')) && (
+          {(can('/sienna/documentos') || can('/sienna/miembros') || can('/sienna/explicacion') || can('/sienna/filiacion') || can('/sienna/laboratorio-compensacion')) && (
           <>
             {can('/sienna/documentos') && (
             <Link
@@ -87,6 +87,14 @@ const NavigationMenu = () => {
               className="rounded-md px-3 py-2 text-sm font-medium text-gray-900 transition-colors hover:bg-legal-beige/70 hover:text-legal-blue"
             >
               Filiación
+            </Link>
+            )}
+            {can('/sienna/laboratorio-compensacion') && (
+            <Link
+              to="/sienna/laboratorio-compensacion"
+              className="rounded-md px-3 py-2 text-sm font-medium text-gray-900 transition-colors hover:bg-legal-beige/70 hover:text-legal-blue"
+            >
+              Laboratorio
             </Link>
             )}
           </>
