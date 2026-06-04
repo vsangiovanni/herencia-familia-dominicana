@@ -40,6 +40,7 @@ const siennaLinks: SidebarLink[] = [
   { label: 'Explicación', path: '/sienna/explicacion', icon: BookOpen },
   { label: 'Filiación', path: '/sienna/filiacion', icon: Network },
   { label: 'Laboratorio', path: '/sienna/laboratorio-compensacion', icon: FlaskConical },
+  { label: 'No participación', path: '/sienna/declaraciones-no-participacion', icon: FileText },
   { label: 'Sienna', path: '/sienna/asistente', icon: Bot },
   { label: 'Recuento Legado', path: '/sienna/legado-game', icon: ScrollText },
 ];

@@ -17,6 +17,17 @@
 - Luego Victor pidio trabajarlo en local primero y finalmente indico dejarlo como estaba.
 - Nueva solicitud posterior 2026-06-04: antes de crear una pantalla nueva para documentos de no participacion/declinacion de herederos confirmados, verificar GitHub y documentacion, respaldar cambios recientes y no iniciar implementacion hasta dejar el proyecto claro.
 - Plan tecnico/funcional de la nueva pantalla documentado en docs/HERENCIARD_DECLINACIONES_PLAN_2026-06-04.md.
+- Implementacion local posterior: pantalla /sienna/declaraciones-no-participacion creada para los herederos calculados por la API sucesoral, no para miembros generales del arbol ni para la tabla manual de herederos.
+- Validacion local posterior: 46 filas en /api/sienna-declaration-documents, coincidiendo con active_heirs de /api/sienna-calculation; build OK; ruta Vite 200; generacion QA probada y limpiada.
+- Ajuste posterior solicitado por Victor: la tabla de declaraciones muestra monto y porcentaje calculados por API; los botones quedaron como Generar registro, Descargar PDF e Imprimir; Descargar PDF usa endpoint backend attachment para evitar que solo se abra en pantalla.
+- Ajuste de relacion/calidad: backend entrega compact_relationship para celular, ejemplo "Vincenzo · Gen. 4", y compact_relationship_desktop para escritorio, ejemplo "Representacion Vincenzo · Gen. 4". La tabla muestra el formato segun breakpoint y mantiene el detalle completo en el title.
+- Deploy Hostinger autorizado por Victor 2026-06-04: se subio codigo/frontend/PHP por FTP quirurgico, sin subir .env, sin migraciones y sin scripts SQL. Produccion valida /api/health OK, ruta /sienna/declaraciones-no-participacion 200 y assets principales 200.
+- Restriccion de DB produccion: durante la primera ventana de subida se creo la tabla heir_declaration_documents, pero verificacion read-only confirmo 0 filas y 0 cedulas/pasaportes guardados. public/api.php remoto fue corregido para no crear automaticamente esa tabla y para mantener persistencia documental deshabilitada en produccion aunque la tabla exista. La pantalla puede listar/generar PDF en modo prueba sin guardar; guardar estados/documentos en produccion requiere autorizacion aparte.
+- Autorizacion posterior de Victor 2026-06-04: activar almacenamiento documental porque la tabla ya existe. Se subio solo api.php con heir_declaration_document_persistence_enabled() en true. Verificacion remota: PHP responde con persistencia activa, no contiene CREATE TABLE de declaraciones, /api/health OK, ruta 200, tabla existe y sigue con 0 filas antes de pruebas de usuarios.
+- Ajuste posterior 2026-06-04: en Administracion de Usuarios > Permisos de usuario, las paginas se agrupan visualmente en "Sienna / expediente Alessandro" y "Sistema general", con conteos seleccionados/total por grupo. Cambio frontend solamente, desplegado a Hostinger con assets e index.html; /api/health, /admin-users, AdminUsers asset, main bundle y CSS respondieron 200.
+- Correccion posterior: el grupo se amplio a "Expediente Alessandro / Sienna" para incluir tambien rutas del expediente que no empiezan con /sienna: /dashboard, /arbol-genealogico, /arbol-genealogico-clasico, /lineas-familiares, /determinacion-herederos, /calculo-herencias, /hallazgos, /calculo-filiacion y /documentos-probatorios. Desplegado solo frontend; checks produccion OK.
+- Correccion final del agrupado de permisos: Victor pidio dividir igual que el menu lateral. El dialogo de permisos ahora usa grupos equivalentes al sidebar: Navegacion principal, Caso, Legacy, Admin y Otros para rutas no contempladas. Incluye aliases historicos para mapear rutas antiguas a su bloque visual. Desplegado solo frontend; /api/health, /admin-users, AdminUsers asset, main bundle y CSS 200.
+- Ajuste posterior: la tabla principal de usuarios y el filtro de usuarios de auditoria se ordenan alfabeticamente por nombre visible y luego email. Desplegado solo frontend; checks produccion OK.
 
 ## Cambios locales presentes
 
@@ -43,6 +54,10 @@
   - docs/HERENCIARD_DIA_MADRES_2026-05-31.md
 - Archivo de plan para declaraciones/no participacion creado:
   - docs/HERENCIARD_DECLINACIONES_PLAN_2026-06-04.md
+- Nueva pantalla local creada:
+  - src/pages/DeclaracionesNoParticipacion.tsx
+  - Ruta: /sienna/declaraciones-no-participacion
+  - Proposito: generar y dar seguimiento a PDFs de no participacion/declinacion de gestion para herederos registrados sin incluir montos.
 - Assets de postal guardados en:
   - docs/mockups/postal-dia-madres-sangiovanni-2026-05-31.jpg
   - docs/mockups/postal-dia-madres-sangiovanni-veo3-bg-2026-05-31.mp4

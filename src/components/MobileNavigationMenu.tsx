@@ -43,6 +43,7 @@ const MobileNavigationMenu = () => {
     can('/sienna/explicacion') ||
     can('/sienna/filiacion') ||
     can('/sienna/laboratorio-compensacion') ||
+    can('/sienna/declaraciones-no-participacion') ||
     can('/sienna/asistente') ||
     can('/sienna/legado-game');
   const showLegacy =
@@ -107,6 +108,11 @@ const MobileNavigationMenu = () => {
           {can('/sienna/laboratorio-compensacion') && (
             <DropdownMenuItem onClick={() => navigate('/sienna/laboratorio-compensacion')}>
               Laboratorio compensación
+            </DropdownMenuItem>
+          )}
+          {can('/sienna/declaraciones-no-participacion') && (
+            <DropdownMenuItem onClick={() => navigate('/sienna/declaraciones-no-participacion')}>
+              No participación
             </DropdownMenuItem>
           )}
           {can('/sienna/asistente') && (

@@ -55,7 +55,7 @@ const NavigationMenu = () => {
           </Link>
           )}
 
-          {(can('/sienna/documentos') || can('/sienna/miembros') || can('/sienna/explicacion') || can('/sienna/filiacion') || can('/sienna/laboratorio-compensacion')) && (
+          {(can('/sienna/documentos') || can('/sienna/miembros') || can('/sienna/explicacion') || can('/sienna/filiacion') || can('/sienna/laboratorio-compensacion') || can('/sienna/declaraciones-no-participacion')) && (
           <>
             {can('/sienna/documentos') && (
             <Link
@@ -95,6 +95,14 @@ const NavigationMenu = () => {
               className="rounded-md px-3 py-2 text-sm font-medium text-gray-900 transition-colors hover:bg-legal-beige/70 hover:text-legal-blue"
             >
               Laboratorio
+            </Link>
+            )}
+            {can('/sienna/declaraciones-no-participacion') && (
+            <Link
+              to="/sienna/declaraciones-no-participacion"
+              className="rounded-md px-3 py-2 text-sm font-medium text-gray-900 transition-colors hover:bg-legal-beige/70 hover:text-legal-blue"
+            >
+              No participación
             </Link>
             )}
           </>

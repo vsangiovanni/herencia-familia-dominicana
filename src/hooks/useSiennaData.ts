@@ -9,6 +9,7 @@ export const siennaQueryKeys = {
   heirs: (includeMedia = false) => ['confirmed-heirs', { includeMedia }] as const,
   documents: (includeMedia = false) => ['evidence-documents', { includeMedia }] as const,
   document: (id: string) => ['evidence-document', id] as const,
+  declarationDocuments: ['sienna-declaration-documents'] as const,
   settings: ['app-settings'] as const,
   snapshot: ['sienna-calculation-snapshot-latest'] as const,
   workspace: (includeMedia = false) => ['sienna-workspace', { includeMedia }] as const,
@@ -48,6 +49,13 @@ export const useEvidenceDocument = (id: string | null, enabled = true) =>
     queryKey: siennaQueryKeys.document(id || ''),
     queryFn: () => api.getEvidenceDocument(id!),
     enabled: Boolean(id) && enabled,
+    staleTime: SIENNA_STALE_MS,
+  });
+
+export const useHeirDeclarationDocuments = () =>
+  useQuery({
+    queryKey: siennaQueryKeys.declarationDocuments,
+    queryFn: () => api.listHeirDeclarationDocuments(),
     staleTime: SIENNA_STALE_MS,
   });
 
@@ -117,6 +125,7 @@ export const invalidateSiennaData = (queryClient: ReturnType<typeof useQueryClie
   queryClient.invalidateQueries({ queryKey: ['confirmed-heirs'] });
   queryClient.invalidateQueries({ queryKey: ['evidence-documents'] });
   queryClient.invalidateQueries({ queryKey: ['evidence-document'] });
+  queryClient.invalidateQueries({ queryKey: ['sienna-declaration-documents'] });
   queryClient.invalidateQueries({ queryKey: ['app-settings'] });
   queryClient.invalidateQueries({ queryKey: ['sienna-calculation-snapshot-latest'] });
   queryClient.invalidateQueries({ queryKey: ['sienna-workspace'] });

@@ -588,6 +588,35 @@ export const SCREEN_HELP: Record<string, ScreenHelpContent> = {
       },
     ],
   },
+  'sienna-declaraciones-no-participacion': {
+    title: 'Declaraciones de no participación',
+    intro: 'Pantalla independiente para generar y dar seguimiento a documentos individuales de herederos calculados por la API sucesoral que no desean involucrarse en gestiones del proceso.',
+    sections: [
+      {
+        title: 'Alcance',
+        items: [
+          'Lista los herederos calculados por la API/backend, sin traer miembros generales del arbol ni depender de la tabla manual de herederos.',
+          'No modifica cálculos, porcentajes, distribución, herederos ni base legal.',
+          'Los PDF no incluyen montos, deducciones ni detalles económicos de la herencia.',
+        ],
+      },
+      {
+        title: 'Estados',
+        items: [
+          'Pendiente indica que todavía no existe documento generado.',
+          'Generado, entregado, firmado, recibido y anulado permiten seguimiento operativo del papel físico o digital.',
+          'Cambiar estados requiere permiso de edición.',
+        ],
+      },
+      {
+        title: 'Documento',
+        items: [
+          'El PDF usa el nombre del heredero, relacion/calidad disponible, fecha y codigo interno.',
+          'La plantilla es una base de prueba y debe revisarse legalmente antes de usarse como renuncia formal de derechos.',
+        ],
+      },
+    ],
+  },
 };
 
 export const getScreenHelp = (key: string): ScreenHelpContent | undefined => SCREEN_HELP[key];

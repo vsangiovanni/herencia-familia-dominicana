@@ -35,6 +35,7 @@ const MiembrosArbolSienna = lazy(() => import('./pages/MiembrosArbolSienna'));
 const ExplicacionHerederosSienna = lazy(() => import('./pages/ExplicacionHerederosSienna'));
 const AnalisisDoblesLinajesSienna = lazy(() => import('./pages/AnalisisDoblesLinajesSienna'));
 const LaboratorioCompensacionFamiliar = lazy(() => import('./pages/LaboratorioCompensacionFamiliar'));
+const DeclaracionesNoParticipacion = lazy(() => import('./pages/DeclaracionesNoParticipacion'));
 const DocumentosProbatorios = lazy(() => import('./pages/DocumentosProbatorios'));
 const AsistenteIA = lazy(() => import('./pages/AsistenteIA'));
 const LegadoSangiovanniGame = lazy(() => import('./pages/LegadoSangiovanniGame'));
@@ -305,6 +306,14 @@ const AppContent = () => {
                 element={
                   <ProtectedRoute>
                     <LaboratorioCompensacionFamiliar />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/sienna/declaraciones-no-participacion"
+                element={
+                  <ProtectedRoute>
+                    <DeclaracionesNoParticipacion />
                   </ProtectedRoute>
                 }
               />

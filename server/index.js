@@ -290,6 +290,96 @@ async function loadConfirmedHeirById(id, includeMedia = false) {
   };
 }
 
+const HEIR_DECLARATION_STATUSES = ['pendiente', 'generado', 'entregado', 'firmado', 'recibido', 'anulado'];
+
+const normalizeHeirDeclarationStatus = (value) =>
+  HEIR_DECLARATION_STATUSES.includes(value) ? value : 'pendiente';
+
+const buildHeirDeclarationCode = () => {
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  return `HRD-NP-${date}-${randomUUID().slice(0, 8).toUpperCase()}`;
+};
+
+const buildCompactHeirRelationship = (heir) => {
+  const sources = Array.isArray(heir.sources) ? heir.sources.filter(Boolean) : [];
+  const mobileBranch = sources.length > 1
+    ? 'Doble rama'
+    : sources[0]?.includes('Vincenzo')
+      ? 'Vincenzo'
+      : sources[0]?.includes('Paolo')
+        ? 'Paolo'
+        : 'Representación';
+  const desktopBranch = sources.length > 1
+    ? 'Doble rama'
+    : sources[0]?.includes('Vincenzo')
+      ? 'Representación Vincenzo'
+      : sources[0]?.includes('Paolo')
+        ? 'Representación Paolo'
+        : 'Representación';
+  const routeDepths = String(heir.route || '')
+    .split('|')
+    .map((route) => route.split('->').map((node) => node.trim()).filter(Boolean).length)
+    .filter((depth) => depth > 0);
+  const generation = routeDepths.length ? Math.max(...routeDepths) : null;
+  return {
+    mobile: generation ? `${mobileBranch} · Gen. ${generation}` : mobileBranch,
+    desktop: generation ? `${desktopBranch} · Gen. ${generation}` : desktopBranch,
+  };
+};
+
+async function loadHeirDeclarationRows() {
+  const calculation = await buildSiennaRealtimeCalculation();
+  const documents = await query(
+    `SELECT *
+     FROM heir_declaration_documents
+     WHERE document_type = 'no_participacion'
+     ORDER BY created_at DESC`
+  );
+  const documentByHeirId = new Map();
+  documents.forEach((document) => {
+    if (!documentByHeirId.has(document.heir_id)) documentByHeirId.set(document.heir_id, document);
+  });
+
+  return calculation.active_heirs
+    .map((heir) => {
+      const document = documentByHeirId.get(heir.member_id) || {};
+      const compactRelationship = buildCompactHeirRelationship(heir);
+      return {
+        heir_id: heir.member_id,
+        member_id: heir.member_id,
+        heir_name: heir.heir_name,
+        relationship_summary: heir.reason || heir.route || heir.payment_basis || null,
+        compact_relationship: compactRelationship.mobile,
+        compact_relationship_desktop: compactRelationship.desktop,
+        share_percent: Number(heir.share_percent || 0),
+        amount: Number(heir.amount || 0),
+        heir_status: 'calculado_api',
+        document_id: document.id || null,
+        document_code: document.document_code || null,
+        document_status: document.status || 'pendiente',
+        document_type: document.document_type || null,
+        template_version: document.template_version || null,
+        heir_name_snapshot: document.heir_name_snapshot || null,
+        identity_document_snapshot: document.identity_document_snapshot || null,
+        relationship_snapshot: document.relationship_snapshot || null,
+        generated_at: document.generated_at || null,
+        delivered_at: document.delivered_at || null,
+        signed_at: document.signed_at || null,
+        received_at: document.received_at || null,
+        annulled_at: document.annulled_at || null,
+        notes: document.notes || null,
+        document_created_at: document.created_at || null,
+        document_updated_at: document.updated_at || null,
+      };
+    })
+    .sort((left, right) => left.heir_name.localeCompare(right.heir_name, 'es'));
+}
+
+async function loadHeirDeclarationDocumentById(id) {
+  const rows = await query('SELECT * FROM heir_declaration_documents WHERE id = :id LIMIT 1', { id });
+  return rows[0] || null;
+}
+
 async function loadEvidenceDocuments(includeMedia = false) {
   const select = includeMedia
     ? `SELECT *`
@@ -3195,6 +3285,39 @@ async function ensureSchemaMigrations() {
        updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
      )`
   );
+  await query(
+    `CREATE TABLE IF NOT EXISTS heir_declaration_documents (
+       id CHAR(36) PRIMARY KEY,
+       heir_id VARCHAR(120) NOT NULL,
+       member_id VARCHAR(120) NULL,
+       document_code VARCHAR(80) NOT NULL UNIQUE,
+       document_type VARCHAR(80) NOT NULL DEFAULT 'no_participacion',
+       status ENUM('pendiente', 'generado', 'entregado', 'firmado', 'recibido', 'anulado') NOT NULL DEFAULT 'pendiente',
+       template_version VARCHAR(40) NOT NULL DEFAULT 'no-participacion-v1',
+       heir_name_snapshot VARCHAR(255) NOT NULL,
+       identity_document_snapshot VARCHAR(120) NULL,
+       relationship_snapshot TEXT NULL,
+       generated_at TIMESTAMP NULL,
+       delivered_at TIMESTAMP NULL,
+       signed_at TIMESTAMP NULL,
+       received_at TIMESTAMP NULL,
+       annulled_at TIMESTAMP NULL,
+       notes TEXT NULL,
+       created_by CHAR(36) NULL,
+       updated_by CHAR(36) NULL,
+       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+       updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+       INDEX idx_heir_declaration_heir (heir_id),
+       INDEX idx_heir_declaration_status (status),
+       INDEX idx_heir_declaration_member (member_id)
+     )`
+  );
+  try {
+    await query('ALTER TABLE heir_declaration_documents DROP FOREIGN KEY fk_heir_declaration_heir');
+  } catch {}
+  try {
+    await query('ALTER TABLE heir_declaration_documents MODIFY heir_id VARCHAR(120) NOT NULL');
+  } catch {}
 
   await query(
     `INSERT INTO pages (id, name, path, description)
@@ -3244,10 +3367,17 @@ async function ensureSchemaMigrations() {
      ON DUPLICATE KEY UPDATE name = VALUES(name), description = VALUES(description)`,
     { id: randomUUID() }
   );
+  await query(
+    `INSERT INTO pages (id, name, path, description)
+     VALUES (:id, 'Declaraciones de No Participación', '/sienna/declaraciones-no-participacion', 'Gestión de documentos de no participación para herederos calculados por API')
+     ON DUPLICATE KEY UPDATE name = VALUES(name), description = VALUES(description)`,
+    { id: randomUUID() }
+  );
   await syncRegularUserPageAccess('/sienna/dobles-linajes');
   await syncRegularUserPageAccess('/sienna/asistente');
   await syncRegularUserPageAccess('/sienna/legado-game');
   await syncRegularUserPageAccess('/sienna/laboratorio-compensacion');
+  await syncRegularUserPageAccess('/sienna/declaraciones-no-participacion');
   await query(
     `INSERT INTO app_settings (setting_key, setting_value)
      VALUES ('lawyer_fee_percentage', '0')
@@ -3785,6 +3915,108 @@ app.get('/api/confirmed-heirs/:id/photo', requireAuth, async (req, res) => {
   res.setHeader('Content-Type', match[1] || rows[0]?.photo_file_type || 'image/jpeg');
   res.setHeader('Cache-Control', 'private, max-age=600');
   res.send(Buffer.from(match[2], 'base64'));
+});
+
+app.get('/api/sienna-declaration-documents', requireAuth, async (_req, res) => {
+  res.json({ rows: await loadHeirDeclarationRows() });
+});
+
+app.post('/api/sienna-declaration-documents/:heirId/generate', requireAuth, requireEditor, async (req, res) => {
+  const calculation = await buildSiennaRealtimeCalculation();
+  const heir = calculation.active_heirs.find((row) => row.member_id === req.params.heirId);
+  if (!heir) return res.status(404).json({ message: 'Heredero no encontrado.' });
+  const relationshipSummary = heir.reason || heir.route || heir.payment_basis || null;
+
+  const existingRows = await query(
+    `SELECT * FROM heir_declaration_documents
+     WHERE heir_id = :heirId AND document_type = 'no_participacion'
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    { heirId: heir.member_id }
+  );
+  const existing = existingRows[0];
+  const notes = typeof req.body?.notes === 'string' ? req.body.notes.trim() : '';
+  const identityDocument = typeof req.body?.identity_document === 'string' ? req.body.identity_document.trim() : '';
+
+  if (existing) {
+    await query(
+      `UPDATE heir_declaration_documents
+       SET status = 'generado',
+           member_id = :memberId,
+           heir_name_snapshot = :heirName,
+           identity_document_snapshot = :identityDocument,
+           relationship_snapshot = :relationshipSummary,
+           generated_at = COALESCE(generated_at, CURRENT_TIMESTAMP),
+           notes = :notes,
+           updated_by = :updatedBy
+       WHERE id = :id`,
+      {
+        id: existing.id,
+        memberId: heir.member_id,
+        heirName: heir.heir_name,
+        identityDocument: identityDocument || existing.identity_document_snapshot || null,
+        relationshipSummary,
+        notes: notes || existing.notes || null,
+        updatedBy: req.user.id,
+      }
+    );
+    return res.status(200).json({ ok: true, document: await loadHeirDeclarationDocumentById(existing.id) });
+  }
+
+  const id = randomUUID();
+  await query(
+    `INSERT INTO heir_declaration_documents (
+       id, heir_id, member_id, document_code, document_type, status, template_version,
+       heir_name_snapshot, identity_document_snapshot, relationship_snapshot, generated_at, notes, created_by, updated_by
+     ) VALUES (
+       :id, :heirId, :memberId, :documentCode, 'no_participacion', 'generado', 'no-participacion-v1',
+       :heirName, :identityDocument, :relationshipSummary, CURRENT_TIMESTAMP, :notes, :createdBy, :updatedBy
+     )`,
+    {
+      id,
+      heirId: heir.member_id,
+      memberId: heir.member_id,
+      documentCode: buildHeirDeclarationCode(),
+      heirName: heir.heir_name,
+      identityDocument: identityDocument || null,
+      relationshipSummary,
+      notes: notes || null,
+      createdBy: req.user.id,
+      updatedBy: req.user.id,
+    }
+  );
+  res.status(201).json({ ok: true, document: await loadHeirDeclarationDocumentById(id) });
+});
+
+app.patch('/api/sienna-declaration-documents/:documentId/status', requireAuth, requireEditor, async (req, res) => {
+  const status = normalizeHeirDeclarationStatus(req.body?.status);
+  const notes = typeof req.body?.notes === 'string' ? req.body.notes.trim() : null;
+  const existing = await loadHeirDeclarationDocumentById(req.params.documentId);
+  if (!existing) return res.status(404).json({ message: 'Documento no encontrado.' });
+
+  await query(
+    `UPDATE heir_declaration_documents
+     SET status = :status,
+         delivered_at = CASE WHEN :deliveredStatus = 'entregado' THEN COALESCE(delivered_at, CURRENT_TIMESTAMP) ELSE delivered_at END,
+         signed_at = CASE WHEN :signedStatus = 'firmado' THEN COALESCE(signed_at, CURRENT_TIMESTAMP) ELSE signed_at END,
+         received_at = CASE WHEN :receivedStatus = 'recibido' THEN COALESCE(received_at, CURRENT_TIMESTAMP) ELSE received_at END,
+         annulled_at = CASE WHEN :annulledStatus = 'anulado' THEN COALESCE(annulled_at, CURRENT_TIMESTAMP) ELSE annulled_at END,
+         notes = :notes,
+         updated_by = :updatedBy
+     WHERE id = :id`,
+    {
+      id: existing.id,
+      status,
+      deliveredStatus: status,
+      signedStatus: status,
+      receivedStatus: status,
+      annulledStatus: status,
+      notes: (notes ?? existing.notes) || null,
+      updatedBy: req.user.id,
+    }
+  );
+
+  res.json({ ok: true, document: await loadHeirDeclarationDocumentById(existing.id) });
 });
 
 app.post('/api/confirmed-heirs/bulk-amounts', requireAuth, requireEditor, async (req, res) => {

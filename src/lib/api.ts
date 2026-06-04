@@ -46,6 +46,59 @@ export interface ConfirmedHeir {
   evidence_count?: number;
 }
 
+export type HeirDeclarationStatus = "pendiente" | "generado" | "entregado" | "firmado" | "recibido" | "anulado";
+
+export interface HeirDeclarationDocument {
+  id: string;
+  heir_id: string;
+  member_id?: string | null;
+  document_code: string;
+  document_type: string;
+  status: HeirDeclarationStatus;
+  template_version: string;
+  heir_name_snapshot: string;
+  identity_document_snapshot?: string | null;
+  relationship_snapshot?: string | null;
+  generated_at?: string | null;
+  delivered_at?: string | null;
+  signed_at?: string | null;
+  received_at?: string | null;
+  annulled_at?: string | null;
+  notes?: string | null;
+  created_by?: string | null;
+  updated_by?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface HeirDeclarationRow {
+  heir_id: string;
+  member_id?: string | null;
+  heir_name: string;
+  relationship_summary?: string | null;
+  compact_relationship?: string | null;
+  compact_relationship_desktop?: string | null;
+  share_percent?: number | null;
+  amount?: number | null;
+  heir_status: ConfirmedHeir["status"] | "calculado_api";
+  document_id?: string | null;
+  document_code?: string | null;
+  document_status: HeirDeclarationStatus;
+  document_type?: string | null;
+  template_version?: string | null;
+  heir_name_snapshot?: string | null;
+  identity_document_snapshot?: string | null;
+  relationship_snapshot?: string | null;
+  generated_at?: string | null;
+  delivered_at?: string | null;
+  signed_at?: string | null;
+  received_at?: string | null;
+  annulled_at?: string | null;
+  notes?: string | null;
+  document_created_at?: string | null;
+  document_updated_at?: string | null;
+}
+
 export interface EvidenceDocument {
   id?: string;
   title: string;
@@ -582,6 +635,18 @@ export const api = {
   updateConfirmedHeir: (id: string, data: Partial<ConfirmedHeir>) =>
     request<{ ok: boolean }>(`/api/confirmed-heirs/${id}`, {
       method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  listHeirDeclarationDocuments: () =>
+    request<{ rows: HeirDeclarationRow[] }>("/api/sienna-declaration-documents"),
+  generateHeirDeclarationDocument: (heirId: string, data?: { notes?: string | null; identity_document?: string | null }) =>
+    request<{ ok: boolean; document: HeirDeclarationDocument }>(`/api/sienna-declaration-documents/${heirId}/generate`, {
+      method: "POST",
+      body: JSON.stringify(data || {}),
+    }),
+  updateHeirDeclarationStatus: (documentId: string, data: { status: HeirDeclarationStatus; notes?: string | null }) =>
+    request<{ ok: boolean; document: HeirDeclarationDocument }>(`/api/sienna-declaration-documents/${documentId}/status`, {
+      method: "PATCH",
       body: JSON.stringify(data),
     }),
   listEvidenceDocuments: (options?: { includeMedia?: boolean }) =>

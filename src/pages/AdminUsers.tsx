@@ -72,6 +72,77 @@ interface PageVisit {
 type RoleFilter = 'all' | 'admin' | 'regular';
 type StatusFilter = 'all' | 'approved' | 'pending';
 
+const PERMISSION_MENU_GROUPS = [
+  {
+    key: 'main',
+    title: 'Navegación principal',
+    description: 'Mismas pantallas principales del menú lateral del expediente.',
+    tone: 'border-amber-200 bg-amber-50/70',
+    badge: 'bg-amber-100 text-amber-800 border-amber-200',
+    paths: [
+      ['/sienna', '/dashboard'],
+      ['/sienna/arbol', '/sienna/arbol-genealogico', '/arbol-genealogico'],
+      ['/sienna/hallazgos', '/hallazgos'],
+      ['/sienna/linajes', '/sienna/dobles-linajes'],
+      ['/sienna/documentos', '/documentos-probatorios'],
+      ['/sienna/miembros', '/sienna/miembros-arbol'],
+      ['/sienna/explicacion', '/sienna/explicacion-herederos'],
+      ['/sienna/filiacion', '/calculo-filiacion'],
+      ['/sienna/laboratorio-compensacion'],
+      ['/sienna/declaraciones-no-participacion'],
+      ['/sienna/asistente'],
+      ['/sienna/legado-game', '/sienna/juego'],
+    ],
+  },
+  {
+    key: 'case',
+    title: 'Caso',
+    description: 'Bloque Caso del menú lateral.',
+    tone: 'border-blue-200 bg-blue-50/60',
+    badge: 'bg-blue-100 text-blue-800 border-blue-200',
+    paths: [['/caso/determinacion-herederos', '/determinacion-herederos']],
+  },
+  {
+    key: 'legacy',
+    title: 'Legacy',
+    description: 'Herramientas anteriores agrupadas igual que en el menú lateral.',
+    tone: 'border-zinc-200 bg-zinc-50/80',
+    badge: 'bg-zinc-100 text-zinc-700 border-zinc-200',
+    paths: [
+      ['/legacy/arbol-genealogico', '/arbol-genealogico'],
+      ['/legacy/arbol-clasico', '/arbol-genealogico-clasico'],
+      ['/legacy/lineas-familiares', '/lineas-familiares'],
+    ],
+  },
+  {
+    key: 'admin',
+    title: 'Admin',
+    description: 'Administración, configuración y herramientas técnicas.',
+    tone: 'border-slate-200 bg-slate-50/80',
+    badge: 'bg-slate-100 text-slate-700 border-slate-200',
+    paths: [
+      ['/admin/usuarios', '/admin-users'],
+      ['/admin/settings'],
+      ['/admin/calculo-herencias', '/calculo-herencias'],
+    ],
+  },
+] as const;
+
+const pageMenuIndex = new Map<string, { groupKey: string; order: number }>();
+PERMISSION_MENU_GROUPS.forEach((group) => {
+  group.paths.forEach((aliases, order) => {
+    aliases.forEach((path) => pageMenuIndex.set(path, { groupKey: group.key, order }));
+  });
+});
+
+const getPageMenuInfo = (page: PageData) => pageMenuIndex.get(page.path) || { groupKey: 'other', order: 999 };
+
+const userDisplayName = (user: Pick<UserData, 'full_name' | 'email'>) => (user.full_name || user.email || '').trim();
+
+const compareUsersAlphabetically = (left: Pick<UserData, 'full_name' | 'email'>, right: Pick<UserData, 'full_name' | 'email'>) =>
+  userDisplayName(left).localeCompare(userDisplayName(right), 'es', { sensitivity: 'base' }) ||
+  (left.email || '').localeCompare(right.email || '', 'es', { sensitivity: 'base' });
+
 const formatDateTime = (value?: string | null) => {
   return formatDominicanDateTime(value);
 };
@@ -121,7 +192,7 @@ const AdminUsers = () => {
 
   const fetchUsers = async () => {
     const { users } = await api.listUsers();
-    setUsers(users as UserData[]);
+    setUsers([...(users as UserData[])].sort(compareUsersAlphabetically));
   };
 
   const fetchPages = async () => {
@@ -338,6 +409,30 @@ const AdminUsers = () => {
     );
   };
 
+  const permissionPageGroups = useMemo(
+    () => [
+      ...PERMISSION_MENU_GROUPS.map((group) => ({
+        ...group,
+        pages: pages
+          .filter((page) => getPageMenuInfo(page).groupKey === group.key)
+          .sort((left, right) => {
+            const leftInfo = getPageMenuInfo(left);
+            const rightInfo = getPageMenuInfo(right);
+            return leftInfo.order - rightInfo.order || left.name.localeCompare(right.name, 'es', { sensitivity: 'base' });
+          }),
+      })),
+      {
+        key: 'other',
+        title: 'Otros',
+        description: 'Pantallas registradas que no aparecen actualmente en el menú lateral.',
+        tone: 'border-rose-200 bg-rose-50/70',
+        badge: 'bg-rose-100 text-rose-800 border-rose-200',
+        pages: pages.filter((page) => getPageMenuInfo(page).groupKey === 'other'),
+      },
+    ].filter((group) => group.pages.length > 0),
+    [pages]
+  );
+
   const savePermissions = async () => {
     if (!selectedUser) return;
     try {
@@ -401,12 +496,7 @@ const AdminUsers = () => {
 
   const usersById = useMemo(() => new Map(users.map((user) => [user.id, user])), [users]);
   const usersForAuditFilter = useMemo(
-    () =>
-      [...users].sort((left, right) =>
-        (left.full_name || left.email).localeCompare(right.full_name || right.email, 'es', {
-          sensitivity: 'base',
-        })
-      ),
+    () => [...users].sort(compareUsersAlphabetically),
     [users]
   );
 
@@ -440,8 +530,7 @@ const AdminUsers = () => {
         };
       })
       .sort((left, right) => {
-        if (right.totalVisits !== left.totalVisits) return right.totalVisits - left.totalVisits;
-        return left.user.email.localeCompare(right.user.email, 'es');
+        return compareUsersAlphabetically(left.user, right.user);
       });
   }, [users, visitsByUserId]);
 
@@ -955,23 +1044,43 @@ const AdminUsers = () => {
       </div>
 
       <Dialog open={permissionsDialogOpen} onOpenChange={setPermissionsDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Permisos de usuario</DialogTitle>
             <DialogDescription>
               {selectedUser && `Configurar acceso por páginas para ${selectedUser.email}`}
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-3 py-3 max-h-[45vh] overflow-y-auto">
-            {pages.map((page) => (
-              <div key={page.id} className="flex items-center justify-between rounded border p-2">
-                <div>
-                  <p className="font-medium">{page.name}</p>
-                  <p className="text-xs text-gray-500">{page.path}</p>
-                </div>
-                <Switch checked={page.selected || false} onCheckedChange={() => togglePagePermission(page.id)} />
-              </div>
-            ))}
+          <div className="space-y-4 py-3 max-h-[58vh] overflow-y-auto pr-1">
+            {permissionPageGroups.map((group) => {
+              const selectedCount = group.pages.filter((page) => page.selected).length;
+              return (
+                <section key={group.key} className={`rounded-lg border p-3 ${group.tone}`}>
+                  <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-sm font-semibold text-gray-900">{group.title}</h3>
+                        <Badge variant="outline" className={group.badge}>
+                          {selectedCount}/{group.pages.length}
+                        </Badge>
+                      </div>
+                      <p className="mt-1 text-xs text-gray-600">{group.description}</p>
+                    </div>
+                  </div>
+                  <div className="grid gap-2">
+                    {group.pages.map((page) => (
+                      <div key={page.id} className="flex items-center justify-between gap-3 rounded-md border bg-white/85 p-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-gray-900">{page.name}</p>
+                          <p className="truncate text-xs text-gray-500">{page.path}</p>
+                        </div>
+                        <Switch checked={page.selected || false} onCheckedChange={() => togglePagePermission(page.id)} />
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              );
+            })}
           </div>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setPermissionsDialogOpen(false)}>

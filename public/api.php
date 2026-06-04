@@ -225,6 +225,122 @@ function fetch_confirmed_heir_by_id(string $id, bool $includeMedia = false): ?ar
   return $heir;
 }
 
+const HEIR_DECLARATION_STATUSES = ['pendiente', 'generado', 'entregado', 'firmado', 'recibido', 'anulado'];
+
+function normalize_heir_declaration_status($value): string {
+  return in_array($value, HEIR_DECLARATION_STATUSES, true) ? $value : 'pendiente';
+}
+
+function build_heir_declaration_code(): string {
+  return 'HRD-NP-' . gmdate('Ymd') . '-' . strtoupper(substr(str_replace('-', '', uuid()), 0, 8));
+}
+
+function build_compact_heir_relationship(array $heir): array {
+  $sources = array_values(array_filter(is_array($heir['sources'] ?? null) ? $heir['sources'] : []));
+  if (count($sources) > 1) {
+    $mobileBranch = 'Doble rama';
+    $desktopBranch = 'Doble rama';
+  } elseif (isset($sources[0]) && str_contains((string)$sources[0], 'Vincenzo')) {
+    $mobileBranch = 'Vincenzo';
+    $desktopBranch = 'Representación Vincenzo';
+  } elseif (isset($sources[0]) && str_contains((string)$sources[0], 'Paolo')) {
+    $mobileBranch = 'Paolo';
+    $desktopBranch = 'Representación Paolo';
+  } else {
+    $mobileBranch = 'Representación';
+    $desktopBranch = 'Representación';
+  }
+  $depths = [];
+  foreach (explode('|', (string)($heir['route'] ?? '')) as $route) {
+    $nodes = array_values(array_filter(array_map('trim', explode('->', $route))));
+    if (count($nodes) > 0) $depths[] = count($nodes);
+  }
+  $generation = $depths ? max($depths) : null;
+  return $generation
+    ? ['mobile' => $mobileBranch . ' · Gen. ' . $generation, 'desktop' => $desktopBranch . ' · Gen. ' . $generation]
+    : ['mobile' => $mobileBranch, 'desktop' => $desktopBranch];
+}
+
+function heir_declaration_documents_table_exists(): bool {
+  static $exists = null;
+  if ($exists !== null) {
+    return $exists;
+  }
+  try {
+    $row = query_one(
+      "SELECT COUNT(*) AS count
+       FROM information_schema.TABLES
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME = 'heir_declaration_documents'"
+    );
+    $exists = ((int)($row['count'] ?? 0)) > 0;
+  } catch (Throwable $e) {
+    $exists = false;
+  }
+  return $exists;
+}
+
+function heir_declaration_document_persistence_enabled(): bool {
+  return true;
+}
+
+function fetch_heir_declaration_rows(): array {
+  $calculation = build_sienna_realtime_calculation();
+  $documents = heir_declaration_document_persistence_enabled() && heir_declaration_documents_table_exists()
+    ? query_all("SELECT * FROM heir_declaration_documents WHERE document_type = 'no_participacion' ORDER BY created_at DESC")
+    : [];
+  $documentByHeirId = [];
+  foreach ($documents as $document) {
+    $heirId = (string)($document['heir_id'] ?? '');
+    if ($heirId !== '' && !isset($documentByHeirId[$heirId])) {
+      $documentByHeirId[$heirId] = $document;
+    }
+  }
+
+  $rows = [];
+  foreach (($calculation['active_heirs'] ?? []) as $heir) {
+    $heirId = (string)($heir['member_id'] ?? '');
+    $document = $documentByHeirId[$heirId] ?? [];
+    $compactRelationship = build_compact_heir_relationship($heir);
+    $rows[] = [
+      'heir_id' => $heirId,
+      'member_id' => $heirId,
+      'heir_name' => $heir['heir_name'] ?? '',
+      'relationship_summary' => $heir['reason'] ?? ($heir['route'] ?? ($heir['payment_basis'] ?? null)),
+      'compact_relationship' => $compactRelationship['mobile'],
+      'compact_relationship_desktop' => $compactRelationship['desktop'],
+      'share_percent' => (float)($heir['share_percent'] ?? 0),
+      'amount' => (float)($heir['amount'] ?? 0),
+      'heir_status' => 'calculado_api',
+      'document_id' => $document['id'] ?? null,
+      'document_code' => $document['document_code'] ?? null,
+      'document_status' => $document['status'] ?? 'pendiente',
+      'document_type' => $document['document_type'] ?? null,
+      'template_version' => $document['template_version'] ?? null,
+      'heir_name_snapshot' => $document['heir_name_snapshot'] ?? null,
+      'identity_document_snapshot' => $document['identity_document_snapshot'] ?? null,
+      'relationship_snapshot' => $document['relationship_snapshot'] ?? null,
+      'generated_at' => $document['generated_at'] ?? null,
+      'delivered_at' => $document['delivered_at'] ?? null,
+      'signed_at' => $document['signed_at'] ?? null,
+      'received_at' => $document['received_at'] ?? null,
+      'annulled_at' => $document['annulled_at'] ?? null,
+      'notes' => $document['notes'] ?? null,
+      'document_created_at' => $document['created_at'] ?? null,
+      'document_updated_at' => $document['updated_at'] ?? null,
+    ];
+  }
+  usort($rows, fn($left, $right) => strcasecmp((string)$left['heir_name'], (string)$right['heir_name']));
+  return $rows;
+}
+
+function fetch_heir_declaration_document_by_id(string $id): ?array {
+  if (!heir_declaration_document_persistence_enabled() || !heir_declaration_documents_table_exists()) {
+    return null;
+  }
+  return query_one('SELECT * FROM heir_declaration_documents WHERE id = :id LIMIT 1', ['id' => $id]);
+}
+
 function fetch_evidence_documents(bool $includeMedia = false): array {
   $select = $includeMedia
     ? 'SELECT *'
@@ -4334,6 +4450,7 @@ function ensure_schema(): void {
     ['Sienna contigo', '/sienna/asistente', 'Guía natural sobre pantallas, documentos, hallazgos y reparto'],
     ['Narrativa del Legado Sangiovanni', '/sienna/legado-game', 'Storyteller cinematográfico del linaje Sangiovanni construido desde el árbol real'],
     ['Laboratorio de Compensación Familiar', '/sienna/laboratorio-compensacion', 'Simulador de reembolsos y compensaciones familiares sin afectar el reparto oficial'],
+    ['Declaraciones de No Participación', '/sienna/declaraciones-no-participacion', 'Gestión de documentos de no participación para herederos calculados por API'],
   ];
 
   foreach ($pages as [$name, $path, $description]) {
@@ -4349,6 +4466,7 @@ function ensure_schema(): void {
   sync_regular_user_page_access('/sienna/asistente');
   sync_regular_user_page_access('/sienna/legado-game');
   sync_regular_user_page_access('/sienna/laboratorio-compensacion');
+  sync_regular_user_page_access('/sienna/declaraciones-no-participacion');
 
   if (!column_exists('profiles', 'can_edit')) {
     db()->exec('ALTER TABLE profiles ADD COLUMN can_edit BOOLEAN NOT NULL DEFAULT FALSE AFTER is_approved');
@@ -5057,6 +5175,146 @@ try {
       exit;
     }
     json_response(['message' => 'Formato de foto no soportado'], 415);
+  }
+
+  if ($method === 'GET' && $path === '/sienna-declaration-documents') {
+    require_user();
+    json_response(['rows' => fetch_heir_declaration_rows()]);
+  }
+
+  if (preg_match('#^/sienna-declaration-documents/([^/]+)/generate$#', $path, $m) && $method === 'POST') {
+    $user = require_user();
+    require_editor($user);
+    $data = body();
+    $calculation = build_sienna_realtime_calculation();
+    $heir = null;
+    foreach (($calculation['active_heirs'] ?? []) as $candidate) {
+      if (($candidate['member_id'] ?? '') === $m[1]) {
+        $heir = $candidate;
+        break;
+      }
+    }
+    if (!$heir) {
+      json_response(['message' => 'Heredero no encontrado.'], 404);
+    }
+    $relationshipSummary = $heir['reason'] ?? ($heir['route'] ?? ($heir['payment_basis'] ?? null));
+    $notes = trim((string)($data['notes'] ?? ''));
+    $identityDocument = trim((string)($data['identity_document'] ?? ''));
+
+    if (!heir_declaration_document_persistence_enabled() || !heir_declaration_documents_table_exists()) {
+      json_response([
+        'ok' => true,
+        'document' => [
+          'id' => null,
+          'heir_id' => $heir['member_id'],
+          'member_id' => $heir['member_id'],
+          'document_code' => build_heir_declaration_code(),
+          'document_type' => 'no_participacion',
+          'status' => 'generado',
+          'template_version' => 'no-participacion-v1',
+          'heir_name_snapshot' => $heir['heir_name'],
+          'identity_document_snapshot' => $identityDocument !== '' ? $identityDocument : null,
+          'relationship_snapshot' => $relationshipSummary,
+          'generated_at' => gmdate('c'),
+          'notes' => $notes !== '' ? $notes : null,
+        ],
+        'persistence' => 'disabled',
+      ]);
+    }
+
+    $existing = query_one(
+      "SELECT * FROM heir_declaration_documents
+       WHERE heir_id = :heirId AND document_type = 'no_participacion'
+       ORDER BY created_at DESC
+       LIMIT 1",
+      ['heirId' => $heir['member_id']]
+    );
+
+    if ($existing) {
+      exec_sql(
+        "UPDATE heir_declaration_documents
+         SET status = 'generado',
+             member_id = :memberId,
+             heir_name_snapshot = :heirName,
+             identity_document_snapshot = :identityDocument,
+             relationship_snapshot = :relationshipSummary,
+             generated_at = COALESCE(generated_at, CURRENT_TIMESTAMP),
+             notes = :notes,
+             updated_by = :updatedBy
+         WHERE id = :id",
+        [
+          'id' => $existing['id'],
+          'memberId' => $heir['member_id'],
+          'heirName' => $heir['heir_name'],
+          'identityDocument' => $identityDocument !== '' ? $identityDocument : ($existing['identity_document_snapshot'] ?? null),
+          'relationshipSummary' => $relationshipSummary,
+          'notes' => $notes !== '' ? $notes : ($existing['notes'] ?? null),
+          'updatedBy' => $user['id'],
+        ]
+      );
+      json_response(['ok' => true, 'document' => fetch_heir_declaration_document_by_id($existing['id'])]);
+    }
+
+    $id = uuid();
+    exec_sql(
+      "INSERT INTO heir_declaration_documents (
+         id, heir_id, member_id, document_code, document_type, status, template_version,
+         heir_name_snapshot, identity_document_snapshot, relationship_snapshot, generated_at, notes, created_by, updated_by
+       ) VALUES (
+         :id, :heirId, :memberId, :documentCode, 'no_participacion', 'generado', 'no-participacion-v1',
+         :heirName, :identityDocument, :relationshipSummary, CURRENT_TIMESTAMP, :notes, :createdBy, :updatedBy
+      )",
+      [
+        'id' => $id,
+        'heirId' => $heir['member_id'],
+        'memberId' => $heir['member_id'],
+        'documentCode' => build_heir_declaration_code(),
+        'heirName' => $heir['heir_name'],
+        'identityDocument' => $identityDocument !== '' ? $identityDocument : null,
+        'relationshipSummary' => $relationshipSummary,
+        'notes' => $notes !== '' ? $notes : null,
+        'createdBy' => $user['id'],
+        'updatedBy' => $user['id'],
+      ]
+    );
+    json_response(['ok' => true, 'document' => fetch_heir_declaration_document_by_id($id)], 201);
+  }
+
+  if (preg_match('#^/sienna-declaration-documents/([^/]+)/status$#', $path, $m) && $method === 'PATCH') {
+    $user = require_user();
+    require_editor($user);
+    if (!heir_declaration_document_persistence_enabled() || !heir_declaration_documents_table_exists()) {
+      json_response(['message' => 'El seguimiento de estado requiere habilitar almacenamiento documental en produccion.'], 409);
+    }
+    $data = body();
+    $status = normalize_heir_declaration_status($data['status'] ?? null);
+    $existing = fetch_heir_declaration_document_by_id($m[1]);
+    if (!$existing) {
+      json_response(['message' => 'Documento no encontrado.'], 404);
+    }
+    $notes = array_key_exists('notes', $data) ? trim((string)$data['notes']) : ($existing['notes'] ?? null);
+    exec_sql(
+      "UPDATE heir_declaration_documents
+       SET status = :status,
+           delivered_at = CASE WHEN :deliveredStatus = 'entregado' THEN COALESCE(delivered_at, CURRENT_TIMESTAMP) ELSE delivered_at END,
+           signed_at = CASE WHEN :signedStatus = 'firmado' THEN COALESCE(signed_at, CURRENT_TIMESTAMP) ELSE signed_at END,
+           received_at = CASE WHEN :receivedStatus = 'recibido' THEN COALESCE(received_at, CURRENT_TIMESTAMP) ELSE received_at END,
+           annulled_at = CASE WHEN :annulledStatus = 'anulado' THEN COALESCE(annulled_at, CURRENT_TIMESTAMP) ELSE annulled_at END,
+           notes = :notes,
+           updated_by = :updatedBy
+       WHERE id = :id",
+      [
+        'id' => $existing['id'],
+        'status' => $status,
+        'deliveredStatus' => $status,
+        'signedStatus' => $status,
+        'receivedStatus' => $status,
+        'annulledStatus' => $status,
+        'notes' => $notes !== '' ? $notes : null,
+        'updatedBy' => $user['id'],
+      ]
+    );
+    json_response(['ok' => true, 'document' => fetch_heir_declaration_document_by_id($existing['id'])]);
   }
 
   if (preg_match('#^/confirmed-heirs/([^/]+)$#', $path, $m) && $method === 'PUT') {

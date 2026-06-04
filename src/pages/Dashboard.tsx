@@ -284,6 +284,14 @@ const HEIR_LINKS: DashboardLink[] = [
     primary: true,
   },
   {
+    title: 'No participación',
+    description: 'Genera y da seguimiento a declaraciones individuales sin montos ni cambios al reparto.',
+    path: '/sienna/declaraciones-no-participacion',
+    icon: FileText,
+    cta: 'Gestionar',
+    primary: true,
+  },
+  {
     title: 'Determinación formal',
     description: 'Salida legal del caso, separada de la experiencia principal del legado.',
     path: '/caso/determinacion-herederos',
