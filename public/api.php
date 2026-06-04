@@ -296,16 +296,24 @@ function fetch_heir_declaration_rows(): array {
       $documentByHeirId[$heirId] = $document;
     }
   }
+  $contactRows = query_all('SELECT id, phone, email FROM sienna_family_members');
+  $contactByMemberId = [];
+  foreach ($contactRows as $member) {
+    $contactByMemberId[(string)($member['id'] ?? '')] = $member;
+  }
 
   $rows = [];
   foreach (($calculation['active_heirs'] ?? []) as $heir) {
     $heirId = (string)($heir['member_id'] ?? '');
     $document = $documentByHeirId[$heirId] ?? [];
+    $contact = $contactByMemberId[$heirId] ?? [];
     $compactRelationship = build_compact_heir_relationship($heir);
     $rows[] = [
       'heir_id' => $heirId,
       'member_id' => $heirId,
       'heir_name' => $heir['heir_name'] ?? '',
+      'member_phone' => $contact['phone'] ?? null,
+      'member_email' => $contact['email'] ?? null,
       'relationship_summary' => $heir['reason'] ?? ($heir['route'] ?? ($heir['payment_basis'] ?? null)),
       'compact_relationship' => $compactRelationship['mobile'],
       'compact_relationship_desktop' => $compactRelationship['desktop'],
@@ -474,7 +482,7 @@ function enrich_sienna_members_with_effective_inheritance(array $members, array 
 
 function fetch_sienna_family_bundle(): array {
   $members = query_all(
-    'SELECT sfm.id, sfm.parent_id, sfm.relationship_to_parent, sfm.name, sfm.birth, sfm.death, sfm.spouse_member_id, sfm.spouse, sfm.spouse_birth,
+    'SELECT sfm.id, sfm.parent_id, sfm.relationship_to_parent, sfm.name, sfm.phone, sfm.email, sfm.birth, sfm.death, sfm.spouse_member_id, sfm.spouse, sfm.spouse_birth,
             sfm.inheritance_status, sfm.inheritance_reason, sfm.is_highlighted_ancestor, sfm.sort_order,
             sfm.created_by, sfm.updated_by, sfm.created_at, sfm.updated_at,
             creator.email AS created_by_email, creator.full_name AS created_by_name,
@@ -4403,6 +4411,8 @@ function ensure_schema(): void {
       parent_id VARCHAR(120) NULL,
       relationship_to_parent ENUM('hijo', 'hija', 'conyuge', 'padre', 'madre', 'otro') NULL,
       name VARCHAR(255) NOT NULL,
+      phone VARCHAR(80) NULL,
+      email VARCHAR(255) NULL,
       birth VARCHAR(50) NULL,
       death VARCHAR(50) NULL,
       spouse_member_id VARCHAR(120) NULL,
@@ -4513,6 +4523,8 @@ function ensure_schema(): void {
 
   $memberMigrations = [
     ['relationship_to_parent', "ALTER TABLE sienna_family_members ADD COLUMN relationship_to_parent ENUM('hijo', 'hija', 'conyuge', 'padre', 'madre', 'otro') NULL AFTER parent_id"],
+    ['phone', 'ALTER TABLE sienna_family_members ADD COLUMN phone VARCHAR(80) NULL AFTER name'],
+    ['email', 'ALTER TABLE sienna_family_members ADD COLUMN email VARCHAR(255) NULL AFTER phone'],
     ['spouse_member_id', 'ALTER TABLE sienna_family_members ADD COLUMN spouse_member_id VARCHAR(120) NULL AFTER death'],
     ['inheritance_status', "ALTER TABLE sienna_family_members ADD COLUMN inheritance_status ENUM('posible_heredero', 'no_hereda', 'requiere_revision', 'confirmado') NOT NULL DEFAULT 'requiere_revision' AFTER spouse_birth"],
     ['inheritance_reason', 'ALTER TABLE sienna_family_members ADD COLUMN inheritance_reason TEXT NULL AFTER inheritance_status'],
@@ -5588,14 +5600,16 @@ try {
       }
     }
     exec_sql(
-      'INSERT INTO sienna_family_members (id, parent_id, relationship_to_parent, name, birth, death, spouse_member_id, spouse, spouse_birth, inheritance_status, inheritance_reason, is_highlighted_ancestor, sort_order, created_by, updated_by)
-       VALUES (:id, :parentId, :relationshipToParent, :name, :birth, :death, :spouseMemberId, :spouse, :spouseBirth, :inheritanceStatus, :inheritanceReason, :highlighted, :sortOrder, :createdBy, :updatedBy)
-       ON DUPLICATE KEY UPDATE parent_id = VALUES(parent_id), relationship_to_parent = VALUES(relationship_to_parent), name = VALUES(name), birth = VALUES(birth), death = VALUES(death), spouse_member_id = VALUES(spouse_member_id), spouse = VALUES(spouse), spouse_birth = VALUES(spouse_birth), inheritance_status = VALUES(inheritance_status), inheritance_reason = VALUES(inheritance_reason), is_highlighted_ancestor = VALUES(is_highlighted_ancestor), sort_order = VALUES(sort_order), updated_by = VALUES(updated_by)',
+      'INSERT INTO sienna_family_members (id, parent_id, relationship_to_parent, name, phone, email, birth, death, spouse_member_id, spouse, spouse_birth, inheritance_status, inheritance_reason, is_highlighted_ancestor, sort_order, created_by, updated_by)
+       VALUES (:id, :parentId, :relationshipToParent, :name, :phone, :email, :birth, :death, :spouseMemberId, :spouse, :spouseBirth, :inheritanceStatus, :inheritanceReason, :highlighted, :sortOrder, :createdBy, :updatedBy)
+       ON DUPLICATE KEY UPDATE parent_id = VALUES(parent_id), relationship_to_parent = VALUES(relationship_to_parent), name = VALUES(name), phone = VALUES(phone), email = VALUES(email), birth = VALUES(birth), death = VALUES(death), spouse_member_id = VALUES(spouse_member_id), spouse = VALUES(spouse), spouse_birth = VALUES(spouse_birth), inheritance_status = VALUES(inheritance_status), inheritance_reason = VALUES(inheritance_reason), is_highlighted_ancestor = VALUES(is_highlighted_ancestor), sort_order = VALUES(sort_order), updated_by = VALUES(updated_by)',
       [
         'id' => $id,
         'parentId' => $data['parent_id'] ?? null,
         'relationshipToParent' => $relationshipToParent,
         'name' => $data['name'],
+        'phone' => $data['phone'] ?? null,
+        'email' => $data['email'] ?? null,
         'birth' => $data['birth'] ?? null,
         'death' => $data['death'] ?? null,
         'spouseMemberId' => $spouseMemberId,

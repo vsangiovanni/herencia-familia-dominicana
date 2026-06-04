@@ -82,6 +82,8 @@ type MemberForm = {
   parent_id: string;
   relationship_to_parent: 'hijo' | 'hija' | 'conyuge' | 'padre' | 'madre' | 'otro';
   name: string;
+  phone: string;
+  email: string;
   birth: string;
   death: string;
   spouse_member_id: string;
@@ -100,6 +102,8 @@ const emptyForm: MemberForm = {
   parent_id: 'root',
   relationship_to_parent: 'hijo',
   name: '',
+  phone: '',
+  email: '',
   birth: '',
   death: '',
   spouse_member_id: '',
@@ -165,6 +169,8 @@ const toForm = (
     parent_id: member.parent_id || 'root',
     relationship_to_parent: (member.relationship_to_parent as MemberForm['relationship_to_parent']) || 'hijo',
     name: member.name || '',
+    phone: member.phone || '',
+    email: member.email || '',
     birth: member.birth || '',
     death: member.death || '',
     spouse_member_id: member.spouse_member_id || '',
@@ -434,6 +440,8 @@ const MiembrosArbolSienna = () => {
       const haystack = [
         member.name,
         member.id,
+        member.phone,
+        member.email,
         member.spouse_member_id,
         member.spouse,
         context?.parentalLine,
@@ -471,6 +479,8 @@ const MiembrosArbolSienna = () => {
       parent_id: form.parent_id === 'root' ? null : form.parent_id,
       relationship_to_parent: form.parent_id === 'root' ? null : form.relationship_to_parent,
       name: form.name.trim() || 'Miembro sin nombre',
+      phone: form.phone || null,
+      email: form.email || null,
       birth: form.birth || null,
       death: form.death || null,
       spouse_member_id: form.spouse_member_id || null,
@@ -493,6 +503,8 @@ const MiembrosArbolSienna = () => {
       parent_id: form.parent_id === 'root' ? null : form.parent_id,
       relationship_to_parent: form.parent_id === 'root' ? null : form.relationship_to_parent,
       name: form.name.trim() || 'Borrador',
+      phone: form.phone || null,
+      email: form.email || null,
       birth: form.birth || null,
       death: form.death || null,
       spouse_member_id: form.spouse_member_id || null,
@@ -545,6 +557,8 @@ const MiembrosArbolSienna = () => {
         parent_id: form.parent_id === 'root' ? null : form.parent_id,
         relationship_to_parent: form.parent_id === 'root' ? null : form.relationship_to_parent,
         name: memberName,
+        phone: form.phone || null,
+        email: form.email || null,
         birth: form.birth || null,
         death: form.death || null,
         spouse_member_id: form.spouse_member_id || null,
@@ -807,6 +821,23 @@ const MiembrosArbolSienna = () => {
             <div className="md:col-span-2">
               <Label>Nombre</Label>
               <Input value={form.name} onChange={(event) => updateForm('name', event.target.value)} />
+            </div>
+            <div>
+              <Label>Teléfono</Label>
+              <Input
+                value={form.phone}
+                onChange={(event) => updateForm('phone', event.target.value)}
+                placeholder="Teléfono o WhatsApp"
+              />
+            </div>
+            <div>
+              <Label>Email</Label>
+              <Input
+                type="email"
+                value={form.email}
+                onChange={(event) => updateForm('email', event.target.value)}
+                placeholder="correo@dominio.com"
+              />
             </div>
             <div className="md:col-span-2">
               <Label>Foto del miembro</Label>
@@ -1183,6 +1214,12 @@ const MiembrosArbolSienna = () => {
                               <p className="mt-1 text-xs text-legal-gray">
                                 {member.birth || 'Sin nacimiento'}{member.death ? ' · † ' + member.death : ''}
                               </p>
+                              {(member.phone || member.email) && (
+                                <div className="mt-1 space-y-0.5 text-xs text-legal-gray">
+                                  {member.phone && <p className="truncate">Tel: {member.phone}</p>}
+                                  {member.email && <p className="truncate">Email: {member.email}</p>}
+                                </div>
+                              )}
                               {member.is_highlighted_ancestor && (
                                 <Badge className="mt-1" variant="outline">
                                   Destacado

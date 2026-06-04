@@ -75,6 +75,8 @@ export interface HeirDeclarationRow {
   heir_id: string;
   member_id?: string | null;
   heir_name: string;
+  member_phone?: string | null;
+  member_email?: string | null;
   relationship_summary?: string | null;
   compact_relationship?: string | null;
   compact_relationship_desktop?: string | null;
@@ -327,6 +329,8 @@ export interface SiennaFamilyMember {
   parent_id?: string | null;
   relationship_to_parent?: "hijo" | "hija" | "conyuge" | "padre" | "madre" | "otro" | null;
   name: string;
+  phone?: string | null;
+  email?: string | null;
   birth?: string | null;
   death?: string | null;
   spouse_member_id?: string | null;

@@ -28,6 +28,9 @@
 - Correccion posterior: el grupo se amplio a "Expediente Alessandro / Sienna" para incluir tambien rutas del expediente que no empiezan con /sienna: /dashboard, /arbol-genealogico, /arbol-genealogico-clasico, /lineas-familiares, /determinacion-herederos, /calculo-herencias, /hallazgos, /calculo-filiacion y /documentos-probatorios. Desplegado solo frontend; checks produccion OK.
 - Correccion final del agrupado de permisos: Victor pidio dividir igual que el menu lateral. El dialogo de permisos ahora usa grupos equivalentes al sidebar: Navegacion principal, Caso, Legacy, Admin y Otros para rutas no contempladas. Incluye aliases historicos para mapear rutas antiguas a su bloque visual. Desplegado solo frontend; /api/health, /admin-users, AdminUsers asset, main bundle y CSS 200.
 - Ajuste posterior: la tabla principal de usuarios y el filtro de usuarios de auditoria se ordenan alfabeticamente por nombre visible y luego email. Desplegado solo frontend; checks produccion OK.
+- Trabajo local posterior, no desplegado/no push: se agregaron campos opcionales phone y email a sienna_family_members, al tipo SiennaFamilyMember, API Node/PHP y formulario/tabla de Miembros. Prueba local con miembro temporal QA confirmo guardado/lectura de telefono/email y borrado posterior; calculo sucesoral quedo igual: 46 herederos activos y total_share 99.999998 antes/despues.
+- Ajuste local posterior, no desplegado/no push: Declaraciones de No Participacion ahora consume phone/email del miembro calculado y muestra columna Contacto con botones WhatsApp y Email. Prueba local con heredero calculado temporalmente actualizado confirmo que la tabla recibe member_phone/member_email; luego se restauro el miembro. Calculo sucesoral quedo igual: 46 herederos activos y total_share 99.999998 antes/despues.
+- Aclaracion/ajuste local posterior: WhatsApp por URL y mailto no pueden adjuntar automaticamente PDFs generados; solo preparan texto. Se renombraron como Mensaje WA/Mensaje email y se agrego accion Compartir PDF con Web Share API para adjuntar el PDF en dispositivos/navegadores compatibles; fallback descarga el PDF para adjuntar manualmente.
 
 ## Cambios locales presentes
 
@@ -88,6 +91,21 @@ Estado observado con git status --short antes de este handoff:
 - Build local ejecutado despues de crear este handoff:
   - pnpm run build
   - Resultado: OK, Vite built in 13.45s.
+- Ajustes locales posteriores en no participacion:
+  - La tabla de declaraciones quedo simplificada a tres acciones visibles: Descargar PDF, Enviar WA y Enviar email.
+  - Enviar WA / Enviar email generan o actualizan el documento antes de construir el PDF cuando el documento no esta cerrado.
+  - Si el navegador permite Web Share con archivos, se comparte el PDF como archivo; si no lo permite, se descarga el PDF para adjuntarlo manualmente y no se envia solo texto.
+  - Los estados Firmado y Recibido bloquean cedula/pasaporte, notas y cambio de estado; el PDF se genera desde el registro guardado para no alterar una declinacion oficial.
+  - Descargar PDF tambien genera/actualiza el documento si aun no esta Firmado o Recibido.
+- Contacto de miembros local:
+  - sienna_family_members tiene campos phone y email.
+  - Miembros permite editar telefono/email sin participar en calculos sucesorales.
+  - No participacion muestra phone/email del miembro para facilitar envio del PDF.
+- Deploy Hostinger autorizado por Victor y ejecutado el 2026-06-04 19:56 AST:
+  - Subido frontend dist/ por FTP; el primer intento corto por timeout antes de subir index.html, luego se subio index.html manualmente.
+  - Subido api.php por script especifico deploy:api despues del frontend.
+  - No se modifico contenido de DB de produccion. El API contiene solo migracion estructural necesaria para columnas phone/email si faltan.
+  - Checks produccion OK: /api/health 200, /sienna/declaraciones-no-participacion 200, /sienna/miembros-arbol 200, /admin-users 200, assets nuevos 200 con tipos JS/CSS correctos.
 - Si se retoma despues de reinicio, correr como minimo:
   - pnpm run build
   - validacion local autenticada de /sienna/laboratorio-compensacion

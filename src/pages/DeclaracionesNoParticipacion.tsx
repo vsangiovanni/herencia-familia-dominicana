@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import jsPDF from 'jspdf';
 import { useQueryClient } from '@tanstack/react-query';
-import { Download, FileText, Printer, RefreshCw, ShieldCheck } from 'lucide-react';
+import { Download, Mail, MessageCircle, RefreshCw, ShieldCheck } from 'lucide-react';
 import BackButton from '@/components/BackButton';
 import DocumentHeader from '@/components/DocumentHeader';
 import SiennaPageLayout from '@/components/sienna/SiennaPageLayout';
@@ -38,6 +38,10 @@ const statusClass: Record<HeirDeclarationStatus, string> = {
   anulado: 'border-red-200 bg-red-50 text-red-800',
 };
 
+const lockedStatuses = new Set<HeirDeclarationStatus>(['firmado', 'recibido']);
+
+const isDocumentLocked = (row: HeirDeclarationRow) => lockedStatuses.has(row.document_status);
+
 const formatDate = (value?: string | null) => {
   if (!value) return 'No generado';
   const date = new Date(value);
@@ -50,6 +54,9 @@ const formatMoney = (amount?: number | null) =>
 
 const formatPercent = (value?: number | null) =>
   new Intl.NumberFormat('es-DO', { maximumFractionDigits: 4 }).format(Number(value || 0)) + '%';
+
+const buildContactMessage = (row: HeirDeclarationRow) =>
+  'Hola ' + row.heir_name + ', le comparto el documento de declaracion de no participacion relativo a la sucesion de Alessandro de Paola Sangiovanni.';
 
 const summarizeRelationship = (row: HeirDeclarationRow, mode: 'mobile' | 'desktop' = 'mobile') => {
   if (mode === 'desktop' && row.compact_relationship_desktop) return row.compact_relationship_desktop;
@@ -173,6 +180,31 @@ const downloadPdfAsAttachment = async (pdf: jsPDF, fileName: string) => {
   link.remove();
 };
 
+const pdfToFile = (pdf: jsPDF, fileName: string) =>
+  new File([pdf.output('blob')], fileName, { type: 'application/pdf' });
+
+const documentFromRow = (row: HeirDeclarationRow): HeirDeclarationDocument | null => {
+  if (!row.document_id || !row.document_code) return null;
+  return {
+    id: row.document_id,
+    heir_id: row.heir_id,
+    member_id: row.member_id || null,
+    document_code: row.document_code,
+    document_type: row.document_type || 'declaracion_no_participacion',
+    status: row.document_status,
+    template_version: row.template_version || 'v1',
+    heir_name_snapshot: row.heir_name_snapshot || row.heir_name,
+    generated_at: row.generated_at || null,
+    delivered_at: null,
+    signed_at: null,
+    received_at: null,
+    annulled_at: null,
+    identity_document_snapshot: row.identity_document_snapshot || null,
+    relationship_snapshot: row.relationship_snapshot || null,
+    notes: row.notes || null,
+  } as HeirDeclarationDocument;
+};
+
 const DeclaracionesNoParticipacion = () => {
   const queryClient = useQueryClient();
   const { canEdit } = useAuth();
@@ -193,7 +225,7 @@ const DeclaracionesNoParticipacion = () => {
     return rows.filter((row) => {
       const matchesStatus = statusFilter === 'todos' || row.document_status === statusFilter;
       if (!normalizedSearch) return matchesStatus;
-      const haystack = [row.heir_name, row.relationship_summary, row.document_code]
+      const haystack = [row.heir_name, row.member_phone, row.member_email, row.relationship_summary, row.document_code]
         .filter(Boolean)
         .join(' ')
         .normalize('NFD')
@@ -249,16 +281,28 @@ const DeclaracionesNoParticipacion = () => {
     }
   };
 
-  const ensureDocument = async (row: HeirDeclarationRow) => {
-    if (row.document_id && row.document_code) return null;
+  const getDocumentForPdfAction = async (row: HeirDeclarationRow, actionKey: string) => {
+    if (isDocumentLocked(row)) {
+      const document = documentFromRow(row);
+      if (document) return document;
+      toast({
+        title: 'Documento bloqueado sin registro',
+        description: 'El estado está cerrado, pero no existe un código documental para generar el PDF.',
+        variant: 'destructive',
+      });
+      return null;
+    }
+    setBusyKey(actionKey);
     return generateDocument(row);
   };
 
   const downloadPdf = async (row: HeirDeclarationRow) => {
-    setBusyKey('download-' + row.heir_id);
+    const actionKey = 'download-' + row.heir_id;
+    setBusyKey(actionKey);
     try {
-      const document = await ensureDocument(row);
-      const pdf = buildPdf(row, document, identityDocuments[row.heir_id] || '');
+      const document = await getDocumentForPdfAction(row, actionKey);
+      if (!document) return;
+      const pdf = buildPdf(row, document, isDocumentLocked(row) ? '' : identityDocuments[row.heir_id] || '');
       await downloadPdfAsAttachment(pdf, 'declaracion-no-participacion-' + safeFileName(row.heir_name) + '.pdf');
     } catch (error) {
       toast({
@@ -271,14 +315,49 @@ const DeclaracionesNoParticipacion = () => {
     }
   };
 
-  const printPdf = async (row: HeirDeclarationRow) => {
-    const document = await ensureDocument(row);
-    const pdf = buildPdf(row, document, identityDocuments[row.heir_id] || '');
-    pdf.autoPrint();
-    window.open(pdf.output('bloburl'), '_blank', 'noopener,noreferrer');
+  const sharePdf = async (row: HeirDeclarationRow, channel: 'whatsapp' | 'email') => {
+    const actionKey = 'share-' + channel + '-' + row.heir_id;
+    setBusyKey(actionKey);
+    const fileName = 'declaracion-no-participacion-' + safeFileName(row.heir_name) + '.pdf';
+    try {
+      const document = await getDocumentForPdfAction(row, actionKey);
+      if (!document) return;
+      const pdf = buildPdf(row, document, isDocumentLocked(row) ? '' : identityDocuments[row.heir_id] || '');
+      const file = pdfToFile(pdf, fileName);
+      const sharePayload = {
+        title: 'Declaracion de no participacion',
+        text: buildContactMessage(row),
+        files: [file],
+      };
+      if (navigator.canShare?.(sharePayload)) {
+        await navigator.share(sharePayload);
+        return;
+      }
+      await downloadPdfAsAttachment(pdf, fileName);
+      toast({
+        title: channel === 'whatsapp' ? 'WhatsApp no permite adjuntar desde este navegador' : 'Email no permite adjuntar desde este navegador',
+        description: 'Se descargó el PDF para adjuntarlo manualmente sin enviar solo texto.',
+      });
+    } catch (error) {
+      toast({
+        title: 'No se pudo compartir',
+        description: error instanceof Error ? error.message : 'Error desconocido',
+        variant: 'destructive',
+      });
+    } finally {
+      setBusyKey('');
+    }
   };
 
   const updateStatus = async (row: HeirDeclarationRow, status: HeirDeclarationStatus) => {
+    if (isDocumentLocked(row)) {
+      toast({
+        title: 'Documento cerrado',
+        description: 'Un documento firmado o recibido queda bloqueado porque ya representa una declinación oficial.',
+        variant: 'destructive',
+      });
+      return;
+    }
     if (!row.document_id) {
       toast({
         title: 'Primero genera el documento',
@@ -397,6 +476,7 @@ const DeclaracionesNoParticipacion = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Heredero calculado</TableHead>
+                    <TableHead>Contacto</TableHead>
                     <TableHead>Monto API</TableHead>
                     <TableHead>Cédula / identificación</TableHead>
                     <TableHead>Calidad / relación</TableHead>
@@ -408,9 +488,47 @@ const DeclaracionesNoParticipacion = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredRows.map((row) => (
+                  {filteredRows.map((row) => {
+                    const locked = isDocumentLocked(row);
+                    return (
                     <TableRow key={row.heir_id}>
                       <TableCell className="min-w-[240px] font-medium text-legal-blue">{row.heir_name}</TableCell>
+                      <TableCell className="min-w-[220px] text-sm">
+                        <div className="space-y-2">
+                          <div className="space-y-0.5 text-xs text-legal-gray">
+                            <p className="truncate">{row.member_phone || 'Sin teléfono'}</p>
+                            <p className="truncate">{row.member_email || 'Sin email'}</p>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {row.member_phone && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 px-2 text-xs"
+                                onClick={() => sharePdf(row, 'whatsapp')}
+                                disabled={busyKey === 'share-whatsapp-' + row.heir_id}
+                                title="Genera el PDF y usa el compartir del dispositivo para enviarlo por WhatsApp"
+                              >
+                                <MessageCircle className="h-3.5 w-3.5" />
+                                Enviar WA
+                              </Button>
+                            )}
+                            {row.member_email && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 px-2 text-xs"
+                                onClick={() => sharePdf(row, 'email')}
+                                disabled={busyKey === 'share-email-' + row.heir_id}
+                                title="Genera el PDF y usa el compartir del dispositivo para enviarlo por email"
+                              >
+                                <Mail className="h-3.5 w-3.5" />
+                                Enviar email
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </TableCell>
                       <TableCell className="min-w-[160px]">
                         <div className="font-semibold text-legal-blue">{formatMoney(row.amount)}</div>
                         <div className="text-xs text-legal-gray">{formatPercent(row.share_percent)}</div>
@@ -422,7 +540,7 @@ const DeclaracionesNoParticipacion = () => {
                             setIdentityDocuments((current) => ({ ...current, [row.heir_id]: event.target.value }))
                           }
                           placeholder="Cédula o pasaporte"
-                          disabled={!canEdit}
+                          disabled={!canEdit || locked}
                         />
                       </TableCell>
                       <TableCell
@@ -437,10 +555,11 @@ const DeclaracionesNoParticipacion = () => {
                           <Badge variant="outline" className={statusClass[row.document_status]}>
                             {statusLabels.get(row.document_status) || row.document_status}
                           </Badge>
+                          {locked && <p className="text-xs font-medium text-green-700">Bloqueado oficialmente</p>}
                           <Select
                             value={row.document_status}
                             onValueChange={(value) => updateStatus(row, value as HeirDeclarationStatus)}
-                            disabled={!canEdit || !row.document_id || busyKey === 'status-' + row.document_id}
+                            disabled={!canEdit || locked || !row.document_id || busyKey === 'status-' + row.document_id}
                           >
                             <SelectTrigger className="h-8 w-[150px]">
                               <SelectValue />
@@ -463,20 +582,11 @@ const DeclaracionesNoParticipacion = () => {
                           onChange={(event) => setNotes((current) => ({ ...current, [row.heir_id]: event.target.value }))}
                           placeholder="Nota interna opcional"
                           className="min-h-[72px]"
-                          disabled={!canEdit}
+                          disabled={!canEdit || locked}
                         />
                       </TableCell>
-                      <TableCell className="min-w-[260px]">
+                      <TableCell className="min-w-[170px]">
                         <div className="flex justify-end gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => generateDocument(row)}
-                            disabled={!canEdit || busyKey === 'generate-' + row.heir_id}
-                          >
-                            <FileText className="mr-2 h-4 w-4" />
-                            Generar registro
-                          </Button>
                           <Button
                             size="sm"
                             variant="outline"
@@ -486,17 +596,14 @@ const DeclaracionesNoParticipacion = () => {
                             <Download className="mr-2 h-4 w-4" />
                             Descargar PDF
                           </Button>
-                          <Button size="sm" variant="outline" onClick={() => printPdf(row)}>
-                            <Printer className="mr-2 h-4 w-4" />
-                            Imprimir
-                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                   {!filteredRows.length && (
                     <TableRow>
-                      <TableCell colSpan={9} className="py-10 text-center text-sm text-legal-gray">
+                      <TableCell colSpan={10} className="py-10 text-center text-sm text-legal-gray">
                         No hay herederos calculados por la API que coincidan con el filtro.
                       </TableCell>
                     </TableRow>

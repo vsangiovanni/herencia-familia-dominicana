@@ -123,6 +123,8 @@ CREATE TABLE IF NOT EXISTS sienna_family_members (
   parent_id VARCHAR(120) NULL,
   relationship_to_parent ENUM('hijo', 'hija', 'conyuge', 'padre', 'madre', 'otro') NULL,
   name VARCHAR(255) NOT NULL,
+  phone VARCHAR(80) NULL,
+  email VARCHAR(255) NULL,
   birth VARCHAR(50) NULL,
   death VARCHAR(50) NULL,
   spouse_member_id VARCHAR(120) NULL,
