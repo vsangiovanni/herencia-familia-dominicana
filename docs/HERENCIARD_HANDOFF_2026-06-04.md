@@ -1,11 +1,39 @@
 # HerenciaRD Handoff - 2026-06-04
 
+## Cierre canonico antes de reinicio - 2026-06-04 20:05 AST
+
+- Estado final del repositorio: limpio al cierre y sincronizado con GitHub.
+- Commit funcional desplegado en `main`: `cffd4e3 Agrega contactos de miembros y simplifica no participacion`.
+- Este cierre de documentacion se guarda en un commit posterior de handoff.
+- Produccion Hostinger actualizada con autorizacion explicita de Victor.
+- No se modifico contenido de datos de produccion. Solo se habilito la estructura necesaria para guardar `phone` y `email` en `sienna_family_members` si esas columnas faltaban.
+- Deploy realizado:
+  - `dist/` subido por FTP.
+  - El primer deploy corto por timeout despues de subir casi todos los assets; se corrigio subiendo `index.html` manualmente para apuntar a los bundles nuevos.
+  - `api.php` subido despues con `pnpm run deploy:api`.
+- Validaciones finales de produccion:
+  - `https://herenciard.vmsencf.com/api/health` -> 200, MySQL/PHP OK.
+  - `/sienna/declaraciones-no-participacion` -> 200.
+  - `/sienna/miembros-arbol` -> 200.
+  - `/admin-users` -> 200.
+  - Assets nuevos verificados 200 con tipos correctos: `DeclaracionesNoParticipacion-De4eX_Vz.js`, `MiembrosArbolSienna-0-uMgjLD.js`, `index-CM_-OBv-.js`, `ui-kit-DSjE8yPm.js`, `index-CJX6f74-.css`.
+- Validaciones locales antes de deploy: `php -l public/api.php` OK, `node --check server/index.js` OK, `pnpm run build` OK.
+- Cambios funcionales cerrados:
+  - Miembros ahora permite capturar telefono y email.
+  - La API Node/PHP expone `phone` y `email` en miembros.
+  - Declaraciones de No Participacion muestra telefono/email del heredero calculado por la API.
+  - La pantalla de No Participacion se simplifico a acciones principales: `Descargar PDF`, `Enviar WA`, `Enviar email`.
+  - Esas acciones generan/actualizan el PDF cuando el documento no esta cerrado.
+  - Estados `Firmado` y `Recibido` bloquean cedula/pasaporte, notas y cambio de estado para no alterar una declinacion oficial.
+  - Si el navegador/dispositivo soporta Web Share con archivos, `Enviar WA`/`Enviar email` comparte el PDF como archivo. Si no lo soporta, descarga el PDF para adjuntarlo manualmente y evita mandar solo texto.
+- Regla importante para continuar: para envio real automatico con adjunto directo por WhatsApp o email sin depender del navegador, hace falta una integracion externa como WhatsApp Business API y/o SMTP/backend mailer. No improvisar con `mailto` o `wa.me` porque eso no adjunta archivos.
+
 ## Estado actual
 
 - Proyecto activo: HerenciaRD / Sienna, ruta local projects/herencia-familia-dominicana.
-- Ultima instruccion de Victor antes del reinicio: Dejala como esta.
-- Modo operativo vigente: trabajar en local primero. No desplegar a Hostinger, produccion ni GitHub sin autorizacion explicita nueva de Victor.
-- Hay cambios locales sin commit y archivos nuevos. No revertirlos automaticamente.
+- Ultima instruccion de Victor antes del reinicio: documentar todo y prepararse para reinicio.
+- Modo operativo vigente: trabajar en local primero salvo autorizacion explicita de Victor. El ultimo deploy Hostinger y push GitHub ya fueron autorizados y ejecutados.
+- Al cierre del handoff canonico no hay cambios locales pendientes; GitHub quedo sincronizado.
 - La regla permanente sigue vigente: backend/API es la unica fuente de informacion, calculo, validacion, clasificacion efectiva, hallazgos y media resuelta; frontend solo consume y presenta.
 
 ## Contexto de la conversacion reciente
