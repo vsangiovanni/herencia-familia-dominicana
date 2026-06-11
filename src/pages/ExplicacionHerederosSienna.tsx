@@ -435,70 +435,95 @@ const ExplicacionHerederosSienna = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 p-6">
-            <p className="text-sm leading-relaxed text-gray-700">{legalCriterionText}</p>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[1fr_160px_160px_180px_auto] lg:items-end">
-              <div>
-                <Label>Monto bruto del caso</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={estateAmount}
-                  onChange={(event) => setEstateAmount(event.target.value)}
-                  placeholder="0.00"
-                />
-              </div>
-              <div>
-                <Label>% gestión</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="0.01"
-                  value={managementFeePercentage}
-                  onChange={(event) => setManagementFeePercentage(event.target.value)}
-                />
-                <p className="mt-1 text-xs text-legal-gray">
-                  Sobre el bruto.
-                </p>
-              </div>
-              <div>
-                <Label>% firma de abogados</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="0.01"
-                  value={lawyerFeePercentage}
-                  onChange={(event) => setLawyerFeePercentage(event.target.value)}
-                />
-                <p className="mt-1 text-xs text-legal-gray">
-                  Sobre el saldo después de gestión.
-                </p>
-              </div>
-              <div className="rounded-md border border-legal-blue/15 bg-white p-3">
-                <p className="text-xs uppercase text-legal-gray">Neto a repartir</p>
-                <p className="font-bold text-legal-blue">{formatMoney(netAmount)}</p>
-                <p className="text-xs text-legal-gray">
-                  Gestión: {formatMoney(managementFee)} · Base abogados: {formatMoney(amountAfterManagement)} · Firma: {formatMoney(lawyerFee)}
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                onClick={saveCalculationSettings}
-                disabled={settingsSaving || isFetchingCalculation}
-              >
-                {settingsSaving ? 'Actualizando...' : 'Actualizar esta vista'}
-              </Button>
+            <div className="rounded-md border border-legal-blue/15 bg-legal-blue/5 p-4">
+              <p className="text-sm leading-relaxed text-legal-dark">{legalCriterionText}</p>
             </div>
-            <p className="text-xs text-legal-gray">
-              Cálculo aplicado: {isFetchingCalculation
-                ? 'actualizando desde la API...'
-                : realtimeCalculation?.generated_at
-                  ? new Date(realtimeCalculation.generated_at).toLocaleString('es-DO')
-                  : 'pendiente de respuesta de la API'}
-              {hasPendingSimulationChanges ? ' · cambios pendientes de aplicar' : ''}
-            </p>
+
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+              <div className="space-y-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-legal-gray">
+                  Parámetros del cálculo
+                </p>
+                <div className="space-y-1.5">
+                  <Label htmlFor="estate-amount">Monto bruto del caso</Label>
+                  <Input
+                    id="estate-amount"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={estateAmount}
+                    onChange={(event) => setEstateAmount(event.target.value)}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="management-fee">% gestión</Label>
+                    <Input
+                      id="management-fee"
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      value={managementFeePercentage}
+                      onChange={(event) => setManagementFeePercentage(event.target.value)}
+                    />
+                    <p className="text-xs text-legal-gray">Sobre el bruto.</p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="lawyer-fee">% firma de abogados</Label>
+                    <Input
+                      id="lawyer-fee"
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      value={lawyerFeePercentage}
+                      onChange={(event) => setLawyerFeePercentage(event.target.value)}
+                    />
+                    <p className="text-xs text-legal-gray">Sobre el saldo después de gestión.</p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2 pt-1">
+                  <Button
+                    variant="outline"
+                    onClick={saveCalculationSettings}
+                    disabled={settingsSaving || isFetchingCalculation}
+                  >
+                    {settingsSaving ? 'Actualizando...' : 'Actualizar esta vista'}
+                  </Button>
+                  <p className="text-xs text-legal-gray">
+                    Cálculo aplicado: {isFetchingCalculation
+                      ? 'actualizando desde la API...'
+                      : realtimeCalculation?.generated_at
+                        ? new Date(realtimeCalculation.generated_at).toLocaleString('es-DO')
+                        : 'pendiente de respuesta de la API'}
+                    {hasPendingSimulationChanges ? ' · cambios pendientes de aplicar' : ''}
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-md border border-legal-gold/30 bg-legal-gold/5 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-legal-gray">
+                  Neto a repartir
+                </p>
+                <p className="mt-1 text-2xl font-bold text-legal-blue">{formatMoney(netAmount)}</p>
+                <dl className="mt-4 space-y-2 border-t border-legal-gold/20 pt-3 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <dt className="text-legal-gray">Gestión</dt>
+                    <dd className="font-medium text-legal-dark">{formatMoney(managementFee)}</dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <dt className="text-legal-gray">Base abogados</dt>
+                    <dd className="font-medium text-legal-dark">{formatMoney(amountAfterManagement)}</dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <dt className="text-legal-gray">Firma de abogados</dt>
+                    <dd className="font-medium text-legal-dark">{formatMoney(lawyerFee)}</dd>
+                  </div>
+                </dl>
+              </div>
+            </div>
             {distributedTotal < 99.95 && (
               <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">
                 El cálculo reparte {formatPercent(distributedTotal)} del caudal; el resto queda sin heredero vivo en alguna
@@ -506,9 +531,9 @@ const ExplicacionHerederosSienna = () => {
               </p>
             )}
 
-            <div className="overflow-x-auto rounded-md border border-legal-blue/15">
+            <div className="max-h-[70vh] overflow-auto rounded-md border border-legal-blue/15">
               <table className="w-full min-w-[1080px] text-sm">
-                <thead className="bg-legal-blue/5 text-left text-legal-blue">
+                <thead className="text-left text-legal-blue [&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:bg-card [&_th]:shadow-[inset_0_-1px_0_hsl(var(--legal-blue)/0.15)]">
                   <tr>
                     <th className="min-w-[320px] p-3">Heredero</th>
                     <th className="p-3">%</th>
@@ -518,7 +543,7 @@ const ExplicacionHerederosSienna = () => {
                     <th className="min-w-[150px] p-3">Soporte</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="[&_td]:align-top">
                   {briefs.map((brief) => (
                     <tr key={brief.share.member.id} className="border-t border-legal-blue/10">
                       <td className="min-w-[320px] p-3">

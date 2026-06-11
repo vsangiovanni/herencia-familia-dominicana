@@ -471,9 +471,9 @@ const DeclaracionesNoParticipacion = () => {
               </div>
             </div>
 
-            <div className="overflow-x-auto rounded-md border">
-              <Table>
-                <TableHeader>
+            <div className="overflow-hidden rounded-md border">
+              <Table containerClassName="max-h-[70vh]">
+                <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:bg-card [&_th]:shadow-[inset_0_-1px_0_hsl(var(--border))]">
                   <TableRow>
                     <TableHead>Heredero calculado</TableHead>
                     <TableHead>Contacto</TableHead>
@@ -487,7 +487,7 @@ const DeclaracionesNoParticipacion = () => {
                     <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody>
+                <TableBody className="[&_td]:align-top">
                   {filteredRows.map((row) => {
                     const locked = isDocumentLocked(row);
                     return (

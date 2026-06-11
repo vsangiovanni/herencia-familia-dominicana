@@ -21,9 +21,14 @@ El subdominio apunta al mismo directorio que la raíz FTP de la cuenta (`index.h
 
 ```sh
 pnpm run build
-pnpm run deploy          # sube dist/ por FTP
+pnpm run deploy          # sube TODO dist/ por FTP (incluye dist/game/, ~180M, puede colgarse)
+pnpm run deploy:fast     # sube dist/ EXCEPTO dist/game/ (rápido; usar si no cambió el juego)
 pnpm run check:prod      # verifica health y rutas Sienna
 ```
+
+`deploy:fast` omite `dist/game/` (~175M de media inmutable del Legado, ya en el servidor). Es el
+camino recomendado para releases de frontend/backend que no tocan assets del juego; evita que el
+FTP completo se cuelgue. Si cambian assets del juego, usar `pnpm run deploy`.
 
 Ejecutar estos comandos solo después de autorización explícita de deploy.
 

@@ -12,6 +12,7 @@
     "prebuild": "bash scripts/copy-brand-assets.sh",
     "build": "vite build",
     "deploy": "python3 scripts/deploy-dist.py",
+    "deploy:fast": "python3 scripts/deploy-dist-fast.py",
     "deploy:api": "python3 scripts/deploy-api-php.py",
     "release": "bash scripts/run-release.sh",
     "check:prod": "bash scripts/post-deploy-check.sh",

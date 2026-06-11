@@ -4804,6 +4804,29 @@ function request_path(): string {
   return preg_replace('#^/api#', '', $path) ?: '/';
 }
 
+function safe_download_file_name($value): string {
+  $baseName = (string)($value ?: 'arbol-genealogico-domenico-maria-rosa.pdf');
+  $baseName = preg_replace('/[^a-zA-Z0-9._-]+/', '-', $baseName);
+  $baseName = preg_replace('/-+/', '-', (string)$baseName);
+  $baseName = trim((string)$baseName, '-');
+  if ($baseName === '') $baseName = 'arbol-genealogico';
+  return str_ends_with(strtolower($baseName), '.pdf') ? $baseName : $baseName . '.pdf';
+}
+
+function temporary_pdf_download_dir(): string {
+  $dir = rtrim(sys_get_temp_dir(), '/\\') . '/herenciard_pdf_downloads';
+  if (!is_dir($dir)) @mkdir($dir, 0700, true);
+  return $dir;
+}
+
+function cleanup_temporary_pdf_downloads(): void {
+  $now = time();
+  foreach (glob(temporary_pdf_download_dir() . '/*.pdf') ?: [] as $file) {
+    $mtime = @filemtime($file);
+    if ($mtime === false || ($now - $mtime) > 600) @unlink($file);
+  }
+}
+
 function respond_health(): void {
   $envPath = __DIR__ . '/.env';
   if (!is_file($envPath)) {
@@ -5187,6 +5210,57 @@ try {
       exit;
     }
     json_response(['message' => 'Formato de foto no soportado'], 415);
+  }
+
+  if ($method === 'POST' && $path === '/sienna-tree-pdf-downloads') {
+    require_user();
+    cleanup_temporary_pdf_downloads();
+    $data = body();
+    $base64 = is_string($data['pdf_base64'] ?? null)
+      ? preg_replace('#^data:application/pdf;base64,#', '', $data['pdf_base64'])
+      : '';
+    if ($base64 === '') {
+      json_response(['message' => 'PDF requerido'], 400);
+    }
+    $binary = base64_decode($base64, true);
+    if ($binary === false) {
+      json_response(['message' => 'PDF inválido'], 400);
+    }
+    if (strlen($binary) < 5 || substr($binary, 0, 5) !== '%PDF-') {
+      json_response(['message' => 'El archivo generado no es un PDF válido'], 400);
+    }
+    $id = uuid();
+    $token = uuid();
+    $fileName = safe_download_file_name($data['file_name'] ?? null);
+    $stored = temporary_pdf_download_dir() . '/' . $id . '_' . $token . '.pdf';
+    if (@file_put_contents($stored, $binary) === false) {
+      json_response(['message' => 'No se pudo preparar la descarga del PDF.'], 500);
+    }
+    json_response(
+      ['url' => '/api/sienna-tree-pdf-downloads/' . $id . '/' . $token . '/' . rawurlencode($fileName)],
+      201
+    );
+  }
+
+  if (preg_match('#^/sienna-tree-pdf-downloads/([0-9a-f-]{36})/([0-9a-f-]{36})/([^/]+)$#', $path, $m) && $method === 'GET') {
+    cleanup_temporary_pdf_downloads();
+    $stored = temporary_pdf_download_dir() . '/' . $m[1] . '_' . $m[2] . '.pdf';
+    if (!is_file($stored)) {
+      http_response_code(404);
+      header_remove('Content-Type');
+      header('Content-Type: text/plain; charset=utf-8');
+      echo 'PDF no disponible. Genérelo nuevamente.';
+      exit;
+    }
+    $fileName = safe_download_file_name(rawurldecode($m[3]));
+    header_remove('Content-Type');
+    header('Content-Type: application/octet-stream');
+    header('Content-Length: ' . (string)filesize($stored));
+    header("Content-Disposition: attachment; filename=\"{$fileName}\"; filename*=UTF-8''" . rawurlencode($fileName));
+    header('Cache-Control: no-store, max-age=0');
+    header('X-Content-Type-Options: nosniff');
+    readfile($stored);
+    exit;
   }
 
   if ($method === 'GET' && $path === '/sienna-declaration-documents') {
