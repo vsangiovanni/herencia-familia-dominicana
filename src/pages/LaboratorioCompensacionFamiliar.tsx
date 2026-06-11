@@ -345,8 +345,9 @@ const LaboratorioCompensacionFamiliar = () => {
                   </div>
                 )}
                 <p className="rounded-md bg-legal-blue/5 p-3 text-xs leading-relaxed text-legal-gray">
-                  Recomendación inicial: proporcional al monto heredado. Es el criterio más defendible porque cada
-                  heredero aporta según el beneficio económico que recibe del reparto oficial.
+                  Recomendación inicial: proporcional excluyendo compensados. Es el criterio más defendible porque los
+                  herederos ya compensados no vuelven a aportar y el resto contribuye según el beneficio económico que
+                  recibe del reparto oficial.
                 </p>
               </CardContent>
             </Card>
